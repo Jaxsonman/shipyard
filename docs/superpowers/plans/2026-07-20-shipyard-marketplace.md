@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Repo root: `/Users/jaxsonmansouri/Desktop/Projects/shipyard` (git repo already initialized on `main`, spec committed).
+- Repo root: the shipyard repository root (git repo already initialized on `main`, spec committed).
 - All plugin and marketplace names kebab-case: marketplace `shipyard`, plugin `prd`.
 - Do NOT set `version` in `plugin.json` or marketplace plugin entries — git-sourced plugins auto-update per commit only when version is omitted.
 - Component dirs (`commands/`, `skills/`) live at plugin root, NEVER inside `.claude-plugin/` (only the json manifests go there).
@@ -313,7 +313,7 @@ git commit -m "feat: add prd plugin — /prd guided PRD interview"
 - [ ] **Step 1: Add the marketplace from the local path**
 
 ```bash
-claude plugin marketplace add /Users/jaxsonmansouri/Desktop/Projects/shipyard
+claude plugin marketplace add .
 ```
 Expected: success message naming marketplace `shipyard`.
 

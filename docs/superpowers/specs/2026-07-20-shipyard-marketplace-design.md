@@ -34,7 +34,7 @@ shipyard/
 ├── plugins/
 │   └── prd/                  # first stage plugin — template for later stages
 │       ├── .claude-plugin/
-│       │   └── plugin.json   # name, description, version, author
+│       │   └── plugin.json   # name, description, author
 │       ├── commands/
 │       │   └── prd.md        # /prd slash command (thin trigger)
 │       └── skills/
@@ -49,8 +49,10 @@ shipyard/
 
 - **Trigger:** `/prd [optional idea]`.
 - **Behavior:** guided interview, one question at a time, covering: problem
-  statement, target users, success metrics, scope (in/out), functional
-  requirements, risks and open questions.
+  statement, target users, success metrics, scope (in/out), risks and open
+  questions. Functional requirements are derived from the scope-in
+  capabilities rather than asked as a separate interview question, with at
+  most one follow-up question when a capability is too vague.
 - **Output:** writes `docs/prd/YYYY-MM-DD-<slug>.md` into the user's current
   project, following a consistent PRD template defined in the skill.
 - **Split of responsibilities:** `commands/prd.md` only invokes the skill and

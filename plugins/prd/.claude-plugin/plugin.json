@@ -1,0 +1,11 @@
+{
+  "name": "prd",
+  "description": "Turn a raw idea into a structured PRD through a guided, one-question-at-a-time interview.",
+  "author": {
+    "name": "Jaxson Mansouri",
+    "email": "mansouricobusiness@gmail.com"
+  },
+  "repository": "https://github.com/Jaxsonman/shipyard",
+  "license": "MIT",
+  "keywords": ["prd", "requirements", "planning", "sdlc"]
+}

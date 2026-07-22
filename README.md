@@ -37,8 +37,9 @@ gives you its slash commands and skills.
    Repeat for any other stages you want (see the table below). Installing adds
    that plugin's slash commands and skills to your session.
 
-4. **Verify it's installed** — `/plugin` should list `prd@shipyard` as
-   installed, and `/prd` should autocomplete as a slash command.
+4. **Verify they're installed** — `/plugin` should list `prd@shipyard` and
+   `kanban@shipyard` as installed, and `/prd` and `/kanban` should
+   autocomplete as slash commands.
 
 ### Keeping it up to date
 
@@ -46,8 +47,10 @@ gives you its slash commands and skills.
 /plugin marketplace update shipyard
 ```
 
-Pulls the latest manifest and plugin content from this repo. Plugin installs
-are not auto-upgraded, so re-run this after new stages ship.
+Refreshes the marketplace manifest from this repo, so newly shipped stages
+become installable. It does not upgrade plugins you already have installed —
+re-run `/plugin install <name>@shipyard` to pick up a plugin's latest
+version.
 
 ### Removing it
 
@@ -96,9 +99,9 @@ the list and Claude creates the tickets on your board.
 
 Adding or changing a plugin? Update this README's install steps and pipeline
 stage table in the same change — a merged plugin that isn't reflected here is
-effectively undiscoverable. A pre-merge hook enforces that `README.md` is
-staged alongside any change under `plugins/` or `.claude-plugin/`; see
-`.claude/settings.json`.
+effectively undiscoverable. A Claude Code `PreToolUse` hook blocks
+`git commit` in-session when files under `plugins/` or `.claude-plugin/` are
+staged without `README.md`; see `.claude/settings.json`.
 
 ## License
 

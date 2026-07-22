@@ -1,0 +1,12 @@
+{
+  "name": "kanban",
+  "description": "Turn a PRD into vertical-slice tickets and create them on a real board (GitHub or Jira).",
+  "author": {
+    "name": "Jaxson Mansouri",
+    "email": "mansouricobusiness@gmail.com"
+  },
+  "repository": "https://github.com/Jaxsonman/shipyard",
+  "license": "MIT",
+  "mcpServers": "./.mcp.json",
+  "keywords": ["kanban", "tickets", "sdlc", "github", "jira", "agile"]
+}

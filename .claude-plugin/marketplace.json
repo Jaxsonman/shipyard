@@ -12,6 +12,13 @@
       "description": "Turn a raw idea into a structured PRD through a guided, one-question-at-a-time interview.",
       "category": "productivity",
       "keywords": ["prd", "requirements", "planning", "sdlc"]
+    },
+    {
+      "name": "kanban",
+      "source": "./plugins/kanban",
+      "description": "Turn a PRD into vertical-slice tickets and create them on a real board (GitHub or Jira).",
+      "category": "productivity",
+      "keywords": ["kanban", "tickets", "sdlc", "github", "jira", "agile"]
     }
   ]
 }

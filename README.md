@@ -49,8 +49,9 @@ gives you its slash commands and skills.
 
 Refreshes the marketplace manifest from this repo, so newly shipped stages
 become installable. It does not upgrade plugins you already have installed —
-re-run `/plugin install <name>@shipyard` to pick up a plugin's latest
-version.
+follow it with `/plugin update <name>@shipyard` to pick up a plugin's
+latest version (Shipyard doesn't pin plugin versions, so every new commit
+is an available update).
 
 ### Removing it
 

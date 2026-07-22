@@ -26,12 +26,32 @@ site hostname, read it from the tool's response).
 
 ## Create a ticket (Step 6 of SKILL.md)
 
+Issue types are project-specific — team-managed, Kanban-template, and
+non-software projects frequently lack a "Story" type. Before creating any
+tickets in this run, resolve the issue type **once** by calling
+`mcp__plugin_kanban_atlassian__getJiraProjectIssueTypesMetadata` with:
+
+```json
+{
+  "projectKey": "<TARGET>"
+}
+```
+
+From the returned issue types, pick one in this order of preference:
+
+1. "Story", if present.
+2. Otherwise "Task", if present.
+3. Otherwise the first standard (non-subtask) issue type returned.
+
+Reuse this resolved issue type for every `createJiraIssue` call in the run —
+do not re-query per ticket.
+
 Call `mcp__plugin_kanban_atlassian__createJiraIssue` with:
 
 ```json
 {
   "projectKey": "<TARGET>",
-  "issueType": "Story",
+  "issueType": "<resolved issue type>",
   "summary": "<title>",
   "description": "<body>"
 }

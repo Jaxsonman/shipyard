@@ -27,13 +27,14 @@ gives you its slash commands and skills.
 
    or open the interactive picker with `/plugin`.
 
-3. **Install a stage plugin:**
+3. **Install stage plugins:**
 
    ```
    /plugin install prd@shipyard
+   /plugin install kanban@shipyard
    ```
 
-   Repeat for any other stage you want (see the table below). Installing adds
+   Repeat for any other stages you want (see the table below). Installing adds
    that plugin's slash commands and skills to your session.
 
 4. **Verify it's installed** — `/plugin` should list `prd@shipyard` as
@@ -90,14 +91,6 @@ The first run in a project asks once which board to use (GitHub or Jira)
 and where, then Claude proposes a full breakdown of small, vertical-slice
 tickets — each one a single outcome a human can verify end-to-end. Approve
 the list and Claude creates the tickets on your board.
-
-## Install
-
-```
-/plugin marketplace add Jaxsonman/shipyard
-/plugin install prd@shipyard
-/plugin install kanban@shipyard
-```
 
 ## Contributing
 

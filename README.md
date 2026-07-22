@@ -62,7 +62,7 @@ Uninstall plugins before removing the marketplace they came from.
 | Stage | Plugin | Status | Role |
 |-------|--------|--------|------|
 | 1 | `prd` | ✅ Available | Turn a raw idea into a structured PRD via guided interview |
-| 2 | `kanban` | Planned | Turn a PRD into tickets on a board |
+| 2 | `kanban` | ✅ Available | Turn a PRD into tickets on a board |
 | 3 | `dev-crew` | Planned | Dev agents pick up tickets and implement them |
 | 4 | `qa` | Planned | Testing and review |
 | 5 | `pr-flow` | Planned | PR creation and merge |
@@ -79,6 +79,25 @@ After installing `prd`, run:
 Claude interviews you one question at a time (problem, users, success metrics,
 scope, requirements, risks) and writes the finished PRD to
 `docs/prd/YYYY-MM-DD-<slug>.md` in your project.
+
+After installing `kanban`, run:
+
+```
+/kanban docs/prd/2026-07-20-reef-tank.md
+```
+
+The first run in a project asks once which board to use (GitHub or Jira)
+and where, then Claude proposes a full breakdown of small, vertical-slice
+tickets — each one a single outcome a human can verify end-to-end. Approve
+the list and Claude creates the tickets on your board.
+
+## Install
+
+```
+/plugin marketplace add Jaxsonman/shipyard
+/plugin install prd@shipyard
+/plugin install kanban@shipyard
+```
 
 ## Contributing
 

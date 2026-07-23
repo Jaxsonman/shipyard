@@ -67,11 +67,13 @@ Uninstall plugins before removing the marketplace they came from.
 | Stage | Plugin | Status | Role |
 |-------|--------|--------|------|
 | 1 | `prd` | ✅ Available | Turn a raw idea into a structured PRD via guided interview |
-| 2 | `kanban` | ✅ Available | Turn a PRD into tickets on a board |
-| 3 | `dev-crew` | Planned | Dev agents pick up tickets and implement them |
-| 4 | `qa` | Planned | Testing and review |
-| 5 | `pr-flow` | Planned | PR creation and merge |
-| 6 | `cicd` | Planned | Pipeline monitoring and deploy help |
+| 2 | `kanban` | ✅ Available | Turn a PRD into dependency-linked tickets on a board |
+| 3 | `planning` | Planned | Per-ticket spec and implementation plan (/spec, /plan) |
+| 4 | `dev` | Planned | Autonomous dev agent implements a planned ticket |
+| 5 | `qa` | Planned | Autonomous verification of acceptance criteria |
+| 6 | `pr` | Planned | Rebase and open the PR |
+| — | `ship` | Planned | Conductor: dev ⇄ qa loop, review gates, PR handoff |
+| 7 | `cicd` | Planned | Pipeline monitoring and deploy help |
 
 ## Usage
 
@@ -93,8 +95,10 @@ After installing `kanban`, run:
 
 The first run in a project asks once which board to use (GitHub or Jira)
 and where, then Claude proposes a full breakdown of small, vertical-slice
-tickets — each one a single outcome a human can verify end-to-end. Approve
-the list and Claude creates the tickets on your board.
+tickets — each one a single outcome a human can verify end-to-end, with
+`Depends on:` links where one slice genuinely requires another. Approve
+the list and Claude creates the tickets on your board in dependency
+order.
 
 ## Contributing
 
@@ -102,7 +106,7 @@ Adding or changing a plugin? Update this README's install steps and pipeline
 stage table in the same change — a merged plugin that isn't reflected here is
 effectively undiscoverable. A Claude Code `PreToolUse` hook blocks
 `git commit` in-session when files under `plugins/` or `.claude-plugin/` are
-staged without `README.md`; see `.claude/settings.json`.
+staged without `README.md`; see `.claude/hooks/check-readme-updated.sh` (wired up in `.claude/settings.json`).
 
 ## License
 

@@ -80,6 +80,21 @@ criteria:
 - **Testable** — has concrete, checkable acceptance criteria, not vague
   intent like "improve performance."
 
+Slices may depend on each other, but only where genuinely required —
+independence remains the goal, and a dependency is the documented
+exception, not the norm. A ticket may depend on:
+
+- **A same-run sibling** — refer to it by its number in the proposed
+  list; it is resolved to the real ticket ref at creation time (Step 6).
+- **An existing board ticket** — before proposing the list, query the
+  board once for open tickets (read "List open tickets" in
+  `references/github.md` or `references/jira.md`, whichever matches
+  `config.backend`) and, where a slice plausibly builds on one, propose
+  that link using its real ref.
+
+Reject cyclic dependencies at proposal time — if two slices each depend
+on the other, re-slice until the graph is acyclic.
+
 For each slice, write a ticket using this exact template:
 
 ```
@@ -98,8 +113,17 @@ For each slice, write a ticket using this exact template:
 works end-to-end>
 
 ---
+Depends on: <ref>
 Source PRD: <slug from Step 2>
 ```
+
+`Depends on:` lines appear only when the ticket has dependencies — one
+line per dependency, never comma-separated. `<ref>` is `#<number>` on
+GitHub or the issue key (e.g. `PROJ-12`) on Jira.
+
+**Parse contract:** any body line matching `Depends on: <ref>` declares
+exactly one dependency. Downstream tooling (`/ship`) parses precisely
+this shape — do not vary it.
 
 Present the **full list** to the user in one message: each ticket's title
 plus a one-line summary (not the full body yet — that would be too long to
@@ -113,7 +137,13 @@ Proposed tickets for <slug>:
    reading and seeing it in the log list.
 2. User can view their log history
    ...
+3. User can filter log history — depends on: 2, #45 (existing)
+   ...
 ```
+
+Annotate each dependent ticket's line with `depends on:` — same-run
+siblings by their list number, existing board tickets by their real ref
+plus an `(existing)` marker.
 
 ## Step 4: Duplicate check
 
@@ -132,12 +162,29 @@ Wait for the user to approve the proposed list from Step 3, or to request
 edits (add, remove, reword slices). Only proceed to Step 6 once they approve
 the list as a whole. Do not create anything before this gate.
 
+This gate is also where the user adds, removes, or edits dependency
+links. Verify that any existing board ticket named as a dependency
+actually exists (fetch it from the board); a ref that fails verification
+is reported here and must be fixed or removed by the user before
+creation starts — never guessed at or silently dropped.
+
 ## Step 6: Create tickets (best-effort)
 
 Read `references/github.md` or `references/jira.md` (whichever matches
 `config.backend`) for the exact create command/tool call. Attempt every
 approved ticket, in order, even if an earlier one fails — do not stop the
 whole run on one failure.
+
+Create tickets in dependency order — every ticket after the tickets it
+depends on; ties keep the proposed-list order. As each ticket is
+created, record its real number/key and substitute it into the
+`Depends on:` lines of its dependents before creating them.
+
+If a ticket fails to create, do **not** create its dependents (or their
+dependents, transitively) — a dependent created without its
+`Depends on:` line would let downstream tooling start it too early.
+Record each one as skipped and continue best-effort with unrelated
+tickets.
 
 For each ticket, record whether it succeeded (with its URL) or failed (with
 the error message).
@@ -153,8 +200,12 @@ Created (<n>):
 
 Failed (<n>):
 - <title> — <error reason>
+
+Skipped (<n>):
+- <title> — dependency failed to create: <failed dep title>
 ```
 
 If anything failed, suggest the user re-run `/kanban` after fixing the
 underlying issue (e.g. re-authenticating) — re-running is safe because Step
-4's duplicate check will catch tickets that already succeeded.
+4's duplicate check will catch tickets that already succeeded, and the retry
+creates the failed and skipped remainder with correct `Depends on:` refs.

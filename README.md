@@ -93,8 +93,10 @@ After installing `kanban`, run:
 
 The first run in a project asks once which board to use (GitHub or Jira)
 and where, then Claude proposes a full breakdown of small, vertical-slice
-tickets — each one a single outcome a human can verify end-to-end. Approve
-the list and Claude creates the tickets on your board.
+tickets — each one a single outcome a human can verify end-to-end, with
+`Depends on:` links where one slice genuinely requires another. Approve
+the list and Claude creates the tickets on your board in dependency
+order.
 
 ## Contributing
 

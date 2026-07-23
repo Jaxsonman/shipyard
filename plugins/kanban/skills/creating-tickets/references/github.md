@@ -42,3 +42,13 @@ that is the URL to record for the Step 7 summary.
 
 On failure (non-zero exit), capture stderr as the error reason for the Step
 7 summary and continue to the next ticket.
+
+## List open tickets (Step 3 of SKILL.md)
+
+```bash
+gh issue list --repo <owner/repo> --state open --json number,title
+```
+
+Parse the JSON array; each entry's `number` is the ref (`#<number>`) used
+in `Depends on:` lines, and the titles are what Step 3 scans when deciding
+whether a new slice plausibly builds on existing work.

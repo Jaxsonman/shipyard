@@ -65,3 +65,17 @@ record that for the Step 7 summary.
 
 On failure, capture the tool's error message as the error reason for the
 Step 7 summary and continue to the next ticket.
+
+## List open tickets (Step 3 of SKILL.md)
+
+Call `mcp__plugin_kanban_atlassian__searchJiraIssuesUsingJql` with:
+
+```json
+{
+  "jql": "project = \"<TARGET>\" AND statusCategory != Done"
+}
+```
+
+Each returned issue's key (e.g. `PROJ-12`) is the ref used in
+`Depends on:` lines, and the summaries are what Step 3 scans when deciding
+whether a new slice plausibly builds on existing work.

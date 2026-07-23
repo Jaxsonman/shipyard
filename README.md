@@ -67,7 +67,7 @@ Uninstall plugins before removing the marketplace they came from.
 | Stage | Plugin | Status | Role |
 |-------|--------|--------|------|
 | 1 | `prd` | ✅ Available | Turn a raw idea into a structured PRD via guided interview |
-| 2 | `kanban` | ✅ Available | Turn a PRD into tickets on a board |
+| 2 | `kanban` | ✅ Available | Turn a PRD into dependency-linked tickets on a board |
 | 3 | `dev-crew` | Planned | Dev agents pick up tickets and implement them |
 | 4 | `qa` | Planned | Testing and review |
 | 5 | `pr-flow` | Planned | PR creation and merge |

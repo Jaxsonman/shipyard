@@ -68,12 +68,11 @@ Uninstall plugins before removing the marketplace they came from.
 |-------|--------|--------|------|
 | 1 | `prd` | ✅ Available | Turn a raw idea into a structured PRD via guided interview |
 | 2 | `kanban` | ✅ Available | Turn a PRD into dependency-linked tickets on a board |
-| 3 | `planning` | Planned | Per-ticket spec and implementation plan (/spec, /plan) |
-| 4 | `dev` | Planned | Autonomous dev agent implements a planned ticket |
-| 5 | `qa` | Planned | Autonomous verification of acceptance criteria |
-| 6 | `pr` | Planned | Rebase and open the PR |
-| — | `ship` | Planned | Conductor: dev ⇄ qa loop, review gates, PR handoff |
-| 7 | `cicd` | Planned | Pipeline monitoring and deploy help |
+| 3 | `planning` | 🚧 In progress | Per-ticket `/spec` + `/plan` collaborative sessions |
+| 4 | `dev` | Planned | Autonomous implementation of planned tickets |
+| 5 | `qa` | Planned | Autonomous verification — tests plus real end-to-end checks |
+| 6 | `pr` | Planned | Open PRs into your existing CI/CD |
+| — | `ship` | Planned | Conductor — runs stages 4–6 over spec'd + planned tickets |
 
 ## Usage
 

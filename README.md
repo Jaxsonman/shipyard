@@ -106,7 +106,7 @@ Adding or changing a plugin? Update this README's install steps and pipeline
 stage table in the same change — a merged plugin that isn't reflected here is
 effectively undiscoverable. A Claude Code `PreToolUse` hook blocks
 `git commit` in-session when files under `plugins/` or `.claude-plugin/` are
-staged without `README.md`; see `.claude/settings.json`.
+staged without `README.md`; see `.claude/hooks/check-readme-updated.sh` (wired up in `.claude/settings.json`).
 
 ## License
 

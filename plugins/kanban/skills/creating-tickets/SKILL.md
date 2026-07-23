@@ -164,16 +164,17 @@ the list as a whole. Do not create anything before this gate.
 
 This gate is also where the user adds, removes, or edits dependency
 links. Verify that any existing board ticket named as a dependency
-actually exists (read "Verify a ticket exists" in `references/github.md` or `references/jira.md`, whichever matches `config.backend`); a ref that fails verification
-is reported here and must be fixed or removed by the user before
-creation starts — never guessed at or silently dropped.
+actually exists (read "Verify a ticket exists" in `references/github.md` or
+`references/jira.md`, whichever matches `config.backend`); a ref that fails
+verification is reported here and must be fixed or removed by the user
+before creation starts — never guessed at or silently dropped.
 
 ## Step 6: Create tickets (best-effort)
 
 Read `references/github.md` or `references/jira.md` (whichever matches
 `config.backend`) for the exact create command/tool call. Attempt every
-approved ticket, in order, even if an earlier one fails — do not stop the
-whole run on one failure.
+approved ticket whose dependencies succeeded, in dependency order, even if
+an unrelated ticket fails — do not stop the whole run on one failure.
 
 Create tickets in dependency order — every ticket after the tickets it
 depends on; ties keep the proposed-list order. As each ticket is
@@ -191,7 +192,7 @@ the error message).
 
 ## Step 7: Summarize
 
-Report the results as two lists:
+Report the results as three lists:
 
 ```
 Created (<n>):

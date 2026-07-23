@@ -47,10 +47,10 @@ failure → report the exact error and stop.
 
 - **`docs/ship/<id>/spec.md` already exists** → present three options and
   wait: **revise** (continue to Step 3, using the existing spec.md as the
-  draft under discussion), **finish board updates** (skip to Step 7 — for
-  re-runs after a board operation failed), or **abort**.
+  draft under discussion), **finish board updates** (skip to Step 7's board
+  operations — for re-runs after a board operation failed), or **abort**.
 - **Ticket is already past this stage** (status/label is `Planned`,
-  `ship:planned`, or later) → warn that re-speccing invalidates
+  `ship:planned`, `ship-planned`, or later) → warn that re-speccing invalidates
   `plan.md` and downstream work, and require explicit confirmation before
   continuing. If the user proceeds and approves a revised spec, tell them
   `plan.md` needs revisiting and offer to reset the status to `Spec'd`.
@@ -132,6 +132,9 @@ In order:
    git add docs/ship/<id>/spec.md
    git commit docs/ship/<id>/spec.md -m "docs(ship): spec for ticket <id>"
    ```
+
+   If the artifact is already committed and unchanged (re-run recovery),
+   skip this sub-step and proceed to the board operations.
 
 2. Set status → `Spec'd` via the backend reference.
 3. Post a ticket comment via the backend reference:

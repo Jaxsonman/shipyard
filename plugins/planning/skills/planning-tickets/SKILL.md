@@ -30,9 +30,9 @@ the ticket. Fetch failure → report the exact error and stop.
 - If spec.md exists but the ticket's status isn't `Spec'd`, warn and offer
   to fix the status via the backend reference — don't block on it.
 - **`docs/ship/<id>/plan.md` already exists** → present three options and
-  wait: **revise** (continue, using the existing plan.md as the draft
-  under discussion), **finish board updates** (skip to Step 7), or
-  **abort**.
+  wait: **revise** (continue from Step 4, using the existing plan.md as the
+  draft under discussion), **finish board updates** (skip to Step 7's board
+  operations — for re-runs after a board operation failed), or **abort**.
 
 ## Step 3: Model check
 
@@ -121,6 +121,9 @@ In order:
    git add docs/ship/<id>/plan.md
    git commit docs/ship/<id>/plan.md -m "docs(ship): plan for ticket <id>"
    ```
+
+   If the artifact is already committed and unchanged (re-run recovery),
+   skip this sub-step and proceed to the board operations.
 
 2. Set status → `Planned` via the backend reference (this removes the
    `Spec'd`-stage label if present).

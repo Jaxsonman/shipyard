@@ -38,9 +38,9 @@ gives you its slash commands and skills.
    Repeat for any other stages you want (see the table below). Installing adds
    that plugin's slash commands and skills to your session.
 
-4. **Verify they're installed** — `/plugin` should list `prd@shipyard` and
-   `kanban@shipyard` as installed, and `/prd` and `/kanban` should
-   autocomplete as slash commands.
+4. **Verify they're installed** — `/plugin` should list `prd@shipyard`,
+   `kanban@shipyard`, and `planning@shipyard` as installed, and `/prd`,
+   `/kanban`, `/spec`, and `/plan` should autocomplete as slash commands.
 
 ### Keeping it up to date
 

@@ -79,3 +79,17 @@ Call `mcp__plugin_kanban_atlassian__searchJiraIssuesUsingJql` with:
 Each returned issue's key (e.g. `PROJ-12`) is the ref used in
 `Depends on:` lines, and the summaries are what Step 3 scans when deciding
 whether a new slice plausibly builds on existing work.
+
+## Verify a ticket exists (Step 5 of SKILL.md)
+
+Call `mcp__plugin_kanban_atlassian__searchJiraIssuesUsingJql` with:
+
+```json
+{
+  "jql": "key = \"<KEY>\""
+}
+```
+
+A non-empty result confirms the ref exists; any status counts — a
+dependency on a Done ticket is already satisfied. An empty result means
+the ref is wrong and must be fixed or removed at the gate.

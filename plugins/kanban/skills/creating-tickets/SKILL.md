@@ -164,7 +164,7 @@ the list as a whole. Do not create anything before this gate.
 
 This gate is also where the user adds, removes, or edits dependency
 links. Verify that any existing board ticket named as a dependency
-actually exists (fetch it from the board); a ref that fails verification
+actually exists (read "Verify a ticket exists" in `references/github.md` or `references/jira.md`, whichever matches `config.backend`); a ref that fails verification
 is reported here and must be fixed or removed by the user before
 creation starts — never guessed at or silently dropped.
 

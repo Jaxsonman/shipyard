@@ -69,7 +69,15 @@ future stage; this pipeline ends at "PR opened."
 The board is the pipeline's state machine — no local state files, extending
 kanban's "board is the single source of truth" principle. Jira uses real
 workflow columns; GitHub uses `ship:*` status labels (Issues has no native
-columns). Statuses:
+columns).
+
+Concrete GitHub label names use colon-namespaced, apostrophe-free forms —
+`ship:specced` and `ship:planned` are established by the planning plugin;
+later stages follow the same `ship:<status>` pattern. Jira uses real
+transitions, falling back to `ship-<status>` labels when a workflow lacks
+the status (planning plugin convention).
+
+Statuses:
 
 ```
 Backlog → Spec'd → Planned → In Dev → In QA → Awaiting Review

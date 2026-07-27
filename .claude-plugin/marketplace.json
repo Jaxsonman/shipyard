@@ -19,6 +19,13 @@
       "description": "Turn a PRD into vertical-slice tickets and create them on a real board (GitHub or Jira).",
       "category": "productivity",
       "keywords": ["kanban", "tickets", "sdlc", "github", "jira", "agile"]
+    },
+    {
+      "name": "planning",
+      "source": "./plugins/planning",
+      "description": "Per-ticket collaborative planning — /spec aligns on what done means; /plan produces an executable implementation plan.",
+      "category": "productivity",
+      "keywords": ["planning", "spec", "plan", "sdlc", "github", "jira"]
     }
   ]
 }

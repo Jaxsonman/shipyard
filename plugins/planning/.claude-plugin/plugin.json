@@ -1,0 +1,12 @@
+{
+  "name": "planning",
+  "description": "Per-ticket collaborative planning — /spec aligns on what done means; /plan produces an executable implementation plan.",
+  "author": {
+    "name": "Jaxson Mansouri",
+    "email": "mansouricobusiness@gmail.com"
+  },
+  "repository": "https://github.com/Jaxsonman/shipyard",
+  "license": "MIT",
+  "mcpServers": "./.mcp.json",
+  "keywords": ["planning", "spec", "plan", "sdlc", "github", "jira"]
+}

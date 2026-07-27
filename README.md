@@ -32,14 +32,15 @@ gives you its slash commands and skills.
    ```
    /plugin install prd@shipyard
    /plugin install kanban@shipyard
+   /plugin install planning@shipyard
    ```
 
    Repeat for any other stages you want (see the table below). Installing adds
    that plugin's slash commands and skills to your session.
 
-4. **Verify they're installed** — `/plugin` should list `prd@shipyard` and
-   `kanban@shipyard` as installed, and `/prd` and `/kanban` should
-   autocomplete as slash commands.
+4. **Verify they're installed** — `/plugin` should list `prd@shipyard`,
+   `kanban@shipyard`, and `planning@shipyard` as installed, and `/prd`,
+   `/kanban`, `/spec`, and `/plan` should autocomplete as slash commands.
 
 ### Keeping it up to date
 
@@ -68,12 +69,11 @@ Uninstall plugins before removing the marketplace they came from.
 |-------|--------|--------|------|
 | 1 | `prd` | ✅ Available | Turn a raw idea into a structured PRD via guided interview |
 | 2 | `kanban` | ✅ Available | Turn a PRD into dependency-linked tickets on a board |
-| 3 | `planning` | Planned | Per-ticket spec and implementation plan (/spec, /plan) |
-| 4 | `dev` | Planned | Autonomous dev agent implements a planned ticket |
-| 5 | `qa` | Planned | Autonomous verification of acceptance criteria |
-| 6 | `pr` | Planned | Rebase and open the PR |
-| — | `ship` | Planned | Conductor: dev ⇄ qa loop, review gates, PR handoff |
-| 7 | `cicd` | Planned | Pipeline monitoring and deploy help |
+| 3 | `planning` | ✅ Available | Per-ticket `/spec` + `/plan` collaborative sessions |
+| 4 | `dev` | Planned | Autonomous implementation of planned tickets |
+| 5 | `qa` | Planned | Autonomous verification — tests plus real end-to-end checks |
+| 6 | `pr` | Planned | Open PRs into your existing CI/CD |
+| — | `ship` | Planned | Conductor — runs stages 4–6 over spec'd + planned tickets |
 
 ## Usage
 
@@ -99,6 +99,26 @@ tickets — each one a single outcome a human can verify end-to-end, with
 `Depends on:` links where one slice genuinely requires another. Approve
 the list and Claude creates the tickets on your board in dependency
 order.
+
+After installing `planning`, run these per ticket, in order:
+
+```
+/spec 42
+```
+
+A guided PM/UX session that aligns on what the ticket really means — what
+"done" looks like, UX intent, edge cases, and the context an implementer
+needs. It writes `docs/ship/42/spec.md`, marks the ticket `Spec'd`, and
+fixes the ticket body on the board if the session reveals it was unclear.
+
+```
+/plan 42
+```
+
+An engineer session over the approved spec: architecture options and
+trade-offs discussed with you, security and testing approach, then an
+ordered, executable task list in `docs/ship/42/plan.md`. The ticket is
+marked `Planned` — ready for the autonomous stages (or hand execution).
 
 ## Contributing
 

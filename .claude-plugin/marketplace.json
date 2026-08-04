@@ -33,6 +33,13 @@
       "description": "Verification stage — run the test suite plus real per-criterion E2E against a branch and post a tiered verdict with evidence.",
       "category": "productivity",
       "keywords": ["qa", "testing", "e2e", "verification", "sdlc", "github", "jira", "playwright"]
+    },
+    {
+      "name": "dev",
+      "source": "./plugins/dev",
+      "description": "Autonomous implementation stage — executes an approved plan test-first in an isolated worktree and hands a structured report to QA.",
+      "category": "productivity",
+      "keywords": ["dev", "implementation", "tdd", "sdlc", "github", "jira"]
     }
   ]
 }

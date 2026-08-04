@@ -26,6 +26,13 @@
       "description": "Per-ticket collaborative planning — /spec aligns on what done means; /plan produces an executable implementation plan.",
       "category": "productivity",
       "keywords": ["planning", "spec", "plan", "sdlc", "github", "jira"]
+    },
+    {
+      "name": "qa",
+      "source": "./plugins/qa",
+      "description": "Verification stage — run the test suite plus real per-criterion E2E against a branch and post a tiered verdict with evidence.",
+      "category": "productivity",
+      "keywords": ["qa", "testing", "e2e", "verification", "sdlc", "github", "jira", "playwright"]
     }
   ]
 }

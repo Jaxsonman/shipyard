@@ -71,7 +71,7 @@ Uninstall plugins before removing the marketplace they came from.
 | 2 | `kanban` | ✅ Available | Turn a PRD into dependency-linked tickets on a board |
 | 3 | `planning` | ✅ Available | Per-ticket `/spec` + `/plan` collaborative sessions |
 | 4 | `dev` | Planned | Autonomous implementation of planned tickets |
-| 5 | `qa` | Planned | Autonomous verification — tests plus real end-to-end checks |
+| 5 | `qa` | 🚧 In progress | Autonomous verification — tests plus real end-to-end checks |
 | 6 | `pr` | Planned | Open PRs into your existing CI/CD |
 | — | `ship` | Planned | Conductor — runs stages 4–6 over spec'd + planned tickets |
 

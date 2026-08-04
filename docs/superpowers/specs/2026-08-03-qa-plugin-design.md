@@ -1,8 +1,7 @@
 # QA Plugin — /qa Design
 
 **Date:** 2026-08-03
-**Status:** 🚧 **Draft — brainstorm paused mid-session.** Not approved. Parts 2
-and 3 of the design are unwritten; see "Where this stopped" before resuming.
+**Status:** ✅ Design approved in session (all three parts). Awaiting final spec review.
 **Parent:** `2026-07-22-feature-pipeline-architecture-design.md` (build order item 3)
 
 ## Purpose
@@ -17,24 +16,6 @@ QA is sequenced third in the umbrella's build order for two reasons:
 `/qa <branch>` is useful today on human-written branches with no autonomous
 stages built, and it pins down the verdict/fix-list contract *before* `dev`
 exists to consume it.
-
-## Where this stopped
-
-Brainstorming checklist state:
-
-| Step | State |
-|------|-------|
-| Explore project context | ✅ done |
-| Clarifying questions | ✅ done — six decisions locked below |
-| Propose approaches | ✅ done — Approach A approved |
-| Present design sections | ⏸ **Part 1 presented, not yet approved. Parts 2–3 unwritten.** |
-| Write design doc | ⏸ this file, partial |
-| Spec self-review | ⬜ not started |
-| User reviews spec | ⬜ not started |
-| Invoke writing-plans | ⬜ not started |
-
-**To resume:** re-enter `superpowers:brainstorming`, confirm Part 1 below,
-then work Parts 2 and 3 (contents specified in "Still to design").
 
 ## Locked decisions
 
@@ -80,10 +61,12 @@ human confirms, and it persists to committed config:
   "setup":       "npm ci",
   "seed":        "npm run db:seed",
   "run":         "npm run dev",
+  "test":        "npm test",
   "health":      "http://localhost:{PORT}/",
   "basePort":    41000,
   "envFile":     ".env.qa.local",
-  "requiredEnv": ["DATABASE_URL"]
+  "requiredEnv": ["DATABASE_URL"],
+  "e2e":         "auto"
 }
 ```
 
@@ -109,7 +92,7 @@ Every verdict is stamped with a tier **and the reason it degraded**:
 A PASS with nothing executed is not evidence, it's an opinion — so it never
 advances a ticket. This is the designed degraded tier finding #5 asked for,
 and it keeps the umbrella's rule that QA never silently degrades to static
-review.
+review. Exact conditions for each tier are defined in Part 2.
 
 *Rejected:* any-tier-may-advance (leaves a PASS in the audit trail that
 verified nothing); full-tier-or-escalate (in early enterprise adoption —
@@ -164,7 +147,7 @@ instead); parallel per-criterion agents with an instance each (multiplies
 environment cost by N in exactly the repos where bring-up is already
 fragile, and imperfect isolation yields confident wrong verdicts).
 
-## Part 1 — Structure and resolution (presented, approval pending)
+## Part 1 — Structure and resolution (approved)
 
 ```
 plugins/qa/
@@ -216,73 +199,256 @@ rather than inventing something to test against.
 there, so running `/qa` mid-task doesn't disturb what is checked out.
 Ship-invoked runs reuse the worktree ship already created.
 
-## Still to design
+## Part 2 — The run (approved)
 
-### Part 2 — the run
+### Config home
 
-- **Bring-up sequence:** setup → seed → launch → health-check poll →
-  per-worktree port assignment; timeout and teardown discipline (no orphaned
-  app processes or worktrees on failure).
-- **First-run detection interview:** what `environments.md` recipes cover
-  (node/npm, docker-compose, python, go, static, CLI-only), and how the
-  proposal is confirmed and persisted.
-- **Test suite execution:** discovering the command, distinguishing
-  pre-existing failures on the base branch from regressions introduced by
-  this branch — a QA verdict must not fail a ticket for a suite that was
-  already red.
-- **Per-criterion E2E:** the navigate → act → assert → screenshot loop, how
-  a criterion is judged unverifiable vs failed, and `e2e: browser | cli |
-  auto` detection.
-- **Tier determination:** exactly what conditions produce each of the three
-  tiers, and the wording of the degradation reason.
-- **`--env-check` mode:** bring-up only, no verification — the debuggability
-  path carried over from rejected Approach B.
+The `qa` block (decision 3) lives in `.claude/ship.config.json`. Standalone
+`/qa` creates the file with just that block if it doesn't exist — QA must
+not require ship to have run first. **This supersedes the umbrella spec's
+top-level `runCommand` / `e2e` sketch**; those keys move inside the `qa`
+block (`run`, `e2e`), and ship's future spec follows this shape. The block
+also carries `test` (suite command) and `healthTimeoutSeconds` (optional,
+default 120).
 
-### Part 3 — contracts and error handling
+### First-run interview (standalone only)
 
-- **Verdict contract:** the exact structured object the agent returns to
-  ship, and the exact comment format. Draft shape:
+No `qa` block → detect from `package.json` / `docker-compose.yml` /
+`.env.example` using `references/environments.md` recipes: node/npm,
+docker-compose, python, go, static site, CLI-only. QA presents the proposed
+block; the human confirms or edits; it persists. Each recipe must state
+*how the port is injected* (PORT env var, `--port` flag, compose env
+override); if detection can't determine a port mechanism, the interview
+asks.
 
-  ```
-  ship:qa verdict FAIL round 2/3 tier=full
+**A ship-invoked run with no confirmed `qa` block does not
+detect-and-proceed.** An autonomous agent must not run guessed setup
+commands. It returns `tier=static` with reason `no confirmed QA environment
+— run /qa --env-check once interactively`, and ship escalates per the tier
+rule.
 
-  | # | Criterion | Verdict | Evidence |
-  ...
-  ## Findings
-  1. Symptom / Repro steps / Criterion violated
+### Bring-up sequence
 
-  Repro: <command>
-  Artifacts: .qa/42/round-2/   (gitignored)
-  ```
+1. **Port allocation:** probe upward from `basePort` for a free port;
+   export it as `PORT` and substitute `{PORT}` in the health URL. Probing
+   (not arithmetic on worktree index) is what makes parallel waves
+   collision-proof.
+2. **Env preflight:** check `requiredEnv` names against the environment
+   plus `envFile`. Missing vars → skip launch entirely, report the *names*
+   (never values), continue on the tests-only path.
+3. **setup → seed → launch → health poll:** setup has a 10-minute timeout,
+   seed 5 minutes; `run` launches in its own process group; the health URL
+   is polled until it returns 200 or `healthTimeoutSeconds` (default 120)
+   elapses. Any failure captures the tail of the app log as evidence and
+   falls through to the tests-only path.
+4. **Stale-run check:** a PID file in the scratch dir; on start, QA kills
+   any stale process a dead previous run left behind.
 
-- **Fix-list rules:** findings only, never prescribed solutions — the dev
-  agent owns the how (umbrella contract).
-- **Round awareness:** QA reads the last structured `ship:*` comment to
-  learn its round; standalone runs have no round.
-- **Error handling:** bring-up failure, health check never green, missing
-  env vars, Playwright unavailable, browser download blocked, ticket not
-  found, board comment failure after verification succeeded (verdict must
-  not be lost).
-- **Verification section:** acceptance tests for the plugin itself, in the
-  style of the planning spec — including a deliberately failing criterion, a
-  repo that cannot launch (→ `tests-only`), and a standalone run proving
-  board status is untouched.
+### Teardown discipline
 
-## Parked review findings this stage must absorb
+Teardown is unconditional: kill the app's process group and remove
+QA-created scratch worktrees on *every* exit path — success, failure,
+error, interruption. The artifacts dir is the only survivor. No orphaned
+app processes, no orphaned worktrees.
+
+### `--env-check` mode
+
+Resolution + bring-up + health check + a printed report (detected config,
+allocated port, health status, app-log tail) + teardown. No tests, no E2E,
+no board comment. This is both the debugging path (carried over from
+rejected Approach B) and the natural way to run the first-run interview
+ahead of time.
+
+### Test suite execution
+
+The command comes from `qa.test` (interview-filled; recipes provide
+defaults). QA runs it in the QA worktree and parses failures. If any test
+fails, QA classifies before blaming the branch: it creates a *temporary
+second worktree at the merge-base* and re-runs **only the failing tests**
+there.
+
+- Fails on base too → **pre-existing**: excluded from the verdict, listed
+  in the comment as "pre-existing (not counted)".
+- Passes on base → **regression**: becomes a finding.
+- Test file doesn't exist at merge-base → branch-introduced by definition;
+  its failures always count.
+
+This provides the already-red-suite protection without doubling suite
+runtime. If the classification worktree itself fails (broken merge-base
+checkout), failures still count but are marked "unclassified — may be
+pre-existing" rather than silently blamed on the branch.
+
+### Per-criterion E2E
+
+For each criterion, the main loop — which owns the browser session — runs:
+
+```
+plan steps → navigate/act (Playwright MCP, or shell in cli mode)
+  → assert an observable outcome → screenshot at the assertion point
+  → append to the step transcript
+```
+
+Sonnet reading-subagents feed it the map (diff summary, criterion →
+implementing code, fixture locations) but never drive the browser or judge
+outcomes. Three per-criterion results:
+
+- **pass** — the expected outcome was observed.
+- **fail** — the contrary was observed, or an app error blocked the path.
+  Always carries repro steps.
+- **unverifiable** — the criterion cannot be exercised in this environment
+  (external service, email/SMS channel, a fixture QA can't fabricate).
+  Never silently converted to pass *or* fail.
+
+**Overall verdict rule:** FAIL if any criterion fails. PASS requires zero
+fails; unverifiable criteria do not block PASS but are surfaced in the
+header (`verified 4/5, 1 unverifiable`) and itemized. Rationale: the stage
+after a QA PASS is the *human review gate*, so unverified criteria land in
+front of a person anyway; escalating every ticket with one unreachable
+criterion would park most real-world tickets on `Needs Human`.
+
+**e2e mode:** `qa.e2e` is `browser | cli | auto`. `auto` resolves once at
+interview time: health URL serves HTML → browser; bin-entry/CLI project →
+cli (driven via shell invocations with the same transcript discipline).
+
+### Tier determination — exact conditions
+
+| Tier | Condition | Reason wording |
+|------|-----------|----------------|
+| `full` | E2E ran on ≥1 criterion AND the suite ran — **or the repo has no suite at all**, recorded as "no test suite found" in the verdict body | — |
+| `tests-only` | suite ran; launch/E2E impossible (health never green, missing env vars, Playwright or browser download unavailable) | `tier=tests-only (launch: <one-line cause>)` |
+| `static` | nothing executed (setup failed, no runnable test command, or no confirmed env in ship mode) | `tier=static (<phase>: <cause>)` |
+
+A repo with no test suite can still earn `full` when E2E ran: QA executed
+everything that *exists*, and the missing suite is flagged in the verdict
+body rather than punishing the tier. The strict reading of decision 4
+("tests + E2E both ran") would make `full` permanently unreachable for
+suite-less repos.
+
+## Part 3 — Contracts and error handling (approved)
+
+### Verdict contract
+
+Two forms, one source of truth. **The agent's final message to ship is a
+single JSON object** — that is what "returns a structured result" means
+concretely; ship parses the agent's last message:
+
+```json
+{
+  "verdict": "FAIL",
+  "tier": "full",
+  "tierReason": null,
+  "round": 2,
+  "ticket": "42",
+  "branch": "feat/42-login",
+  "criteria": [
+    {"id": 1, "text": "...", "source": "spec", "result": "pass",
+     "evidence": ".qa/42/round-2/c1.png"}
+  ],
+  "suite": {"ran": true, "passed": 41, "failed": 1, "preExisting": 1,
+            "command": "npm test"},
+  "findings": [
+    {"id": 1, "symptom": "...", "repro": ["..."], "criterion": 2,
+     "evidence": ".qa/42/round-2/f1.png"}
+  ],
+  "unverifiable": [],
+  "artifacts": ".qa/42/round-2/",
+  "repro": "PORT=41007 npm run dev",
+  "commentPosted": true
+}
+```
+
+The board comment is the human-readable rendering of the same data:
+
+```
+ship:qa verdict FAIL round 2/3 tier=full verified 3/5
+
+| # | Criterion | Verdict | Evidence |
+...
+
+## Findings
+1. <symptom> / <repro steps> / criterion #N violated
+
+Repro: PORT=41007 npm run dev
+Artifacts: .qa/42/round-2/   (gitignored)
+```
+
+Standalone runs stamp `standalone` where the round goes. A standalone run
+whose branch resolves to *no ticket* prints the comment to the terminal
+instead and performs no board operations at all.
+
+QA ensures `.qa/` is ignored via `.git/info/exclude`, never by editing the
+repo's `.gitignore` — decision 5's "nothing QA produces enters the diff"
+applies to the ignore rule itself too.
+
+### Fix-list rules
+
+Numbered findings: symptom, repro steps, criterion violated, evidence
+path. **Never a prescribed solution** — the dev agent owns the how
+(umbrella contract). Every finding must be reproducible by a human from
+its steps alone.
+
+### Round awareness
+
+Ship passes the round when invoking QA. If absent, QA derives it as the
+last `ship:qa` comment's round + 1. Standalone runs have no round. QA
+never enforces the loop cap — that is ship's job.
+
+### Error handling
+
+Beyond the bring-up failures Part 2 routes to tiers:
+
+| Failure | Behavior |
+|---------|----------|
+| Ticket or branch not found | Fail fast with a clear message; no artifacts, no comment. |
+| Playwright MCP unavailable / browser download blocked | `tests-only`; reason names it explicitly. |
+| Merge-base classification worktree fails | Suite failures still count, marked "unclassified — may be pre-existing". |
+| Board comment post fails after verification succeeded | **The verdict must not be lost.** Retry once; then write the rendered comment to `.qa/<id>/round-N/comment.md`, set `commentPosted: false` in the returned object, and report it. The JSON object and artifacts persist regardless, so ship or a human can repost. |
+
+### Headless compatibility — stated design property
+
+Closes review finding #10 for this stage: **every autonomous path runs
+with zero interactive dependencies** — headless browser, no prompts, no
+desktop session, no per-site grants. Anything that requires a human (the
+env interview, derived-criteria confirmation) exists *only* on the
+standalone interactive path. This is a design property to be preserved,
+not an implementation accident.
+
+## Verification
+
+Acceptance tests for the plugin itself:
+
+1. Standalone `/qa` on a branch with a deliberately failing criterion →
+   FAIL verdict whose finding is reproducible from its repro steps; board
+   status untouched.
+2. A repo that cannot launch → `tests-only` with the exact reason wording;
+   a PASS at this tier is flagged as degraded.
+3. No confirmed env under simulated ship invocation → `static`; verdict
+   states it must not advance.
+4. `--env-check` on a fresh repo runs the interview once, persists the
+   block; a second run skips the interview.
+5. Two parallel QA worktrees allocate distinct ports; no collision.
+6. A suite that is red on the merge-base → failures listed as pre-existing,
+   not counted as findings.
+7. Simulated comment-post failure → `comment.md` saved in artifacts, JSON
+   object intact with `commentPosted: false`.
+8. Standalone run on a branch with no resolvable ticket → terminal verdict,
+   zero board operations.
+9. Inspection: `references/github.md` and `references/jira.md` contain no
+   set-status operation.
+
+## Parked review findings this stage absorbs
 
 From `docs/superpowers/reviews/2026-07-23-feature-pipeline-architecture-review.md`:
 
 - **#5 QA environment contract** — per-worktree ports/env/seed data,
-  secrets, and a *designed* degraded tier, explicitly labeled. Addressed by
-  locked decisions 3 and 4; Part 2 must carry it into the run's mechanics.
+  secrets, and a *designed* degraded tier, explicitly labeled. Addressed
+  by decisions 3 and 4; Part 2 carries it into the run's mechanics.
 - **#10 (partial)** — headless-runner compatibility as a stated design
-  property. Addressed by decision 2; Part 3 should state it as an explicit
-  design property rather than an implementation accident.
+  property. Addressed by decision 2; stated explicitly in Part 3.
 
-Also noted in that review, unowned and *not* in scope here unless we decide
-otherwise: the loop cap counts rounds but not tokens, so there is no
-per-ticket spend ceiling. QA is the expensive stage — worth a decision when
-`ship` is specced.
+Also noted in that review, unowned and *not* in scope here: the loop cap
+counts rounds but not tokens, so there is no per-ticket spend ceiling. QA
+is the expensive stage — worth a decision when `ship` is specced.
 
 ## Non-goals
 

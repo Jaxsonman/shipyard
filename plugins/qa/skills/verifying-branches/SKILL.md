@@ -18,6 +18,9 @@ Two modes, decided by how this skill was entered:
   flows, no questions). Ship passes ticket id, branch, worktree path, and
   round; QA reuses ship's worktree.
 
+Entered directly (neither via `/qa` nor the `qa-verifier` agent) →
+default to standalone.
+
 Board mechanics live in `../../references/github.md` and
 `../../references/jira.md` — **comment-only by design**; whenever a step
 says "via the backend reference," read the file matching `config.backend`
@@ -39,6 +42,13 @@ Fetch the ticket via the backend reference when one resolved. Ticket or
 branch not found → fail fast with the exact error; no artifacts, no
 comment, no verdict.
 
+`.claude/kanban.config.json` missing + standalone → bootstrap it exactly as
+kanban/planning do (two questions: backend github|jira, target owner/repo or
+project key), write and commit the file. If the user declines (repo has no
+board), continue boardless: skip ticket fetch, derive criteria from the
+diff/PR path, print the verdict to the terminal. Missing + ship-invoked →
+error envelope (`"phase": "board"`).
+
 Criteria precedence:
 
 1. `docs/ship/<id>/spec.md`, its **"Done means"** section → authoritative.
@@ -53,6 +63,8 @@ them, let the human edit, proceed only on approval. The verdict records
 Round: ship passes it. Ship-invoked without a round → last `ship:qa`
 comment's round + 1 (round 1 if none). Standalone → no round; the comment
 header says `standalone`. QA never enforces the loop cap — that is ship's.
+`M` in `round N/M` is `loopCap` from the same `.claude/ship.config.json`
+(default 3 when absent).
 
 ## Step 2: Environment config
 
@@ -77,6 +89,11 @@ interview time: health URL serves HTML → `browser`; CLI-only repo →
 `cli`. No secrets ever — `requiredEnv` holds variable *names*; values
 live in the gitignored `envFile`.
 
+The interview persists the *resolved* value. If a confirmed block still
+contains `auto`, resolve it at run start without rewriting config: the
+block has a `run` command and the health URL serves HTML → `browser`;
+no `run` command → `cli`.
+
 - Block present → use it. Never re-detect over a confirmed block.
 - Missing + **standalone** → first-run interview: detect using the first
   matching recipe in `environments.md`, present the proposed block
@@ -95,17 +112,27 @@ live in the gitignored `envFile`.
   never touched.
 - **ship-invoked:** use the worktree path ship passed; QA did not create
   it and must not remove it.
-- **Artifacts dir:** `.qa/<id|branch-slug>/round-<N|standalone>/` at the
-  main repo root. Before writing anything, ensure `.qa/` is listed in
-  `.git/info/exclude` — never edit the repo's `.gitignore`; nothing QA
+- **Artifacts dir:** `<main-root>/.qa/<id|branch-slug>/round-<N|standalone>/`,
+  where `<main-root>` is the main checkout's top level:
+  `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`.
+  This works identically from the main checkout and from any linked worktree.
+- Before writing anything, ensure `.qa/` is listed in
+  `"$(git rev-parse --path-format=absolute --git-common-dir)/info/exclude"` —
+  the shared exclude file (usable from linked worktrees, where `.git` is a
+  file, not a directory). Never edit the repo's `.gitignore`; nothing QA
   produces may enter the diff, including the ignore rule itself.
-- **Stale-run check:** if a previous run's `app.pid` exists under `.qa/`
-  and that process is still alive, kill its process group before starting.
+- **Stale-run check (scoped to this ticket):** each run writes `app.pid`
+  inside its own artifacts dir. On start, look only under this ticket's
+  `.qa/<id|branch-slug>/` tree: a PID whose process is dead → delete the
+  stale file; a PID whose process is **alive** is an orphan from a crashed
+  previous run of this same ticket → kill its process group. Never touch
+  other tickets' `.qa` dirs — live processes there belong to legitimate
+  parallel runs.
 
 ## Step 4: Bring-up
 
-In `cli` mode: run setup and seed only; skip port, launch, and health —
-then continue to Step 5.
+In `cli` mode: run the env preflight, setup, and seed; skip port,
+launch, and health — then continue to Step 5.
 
 1. **Port:** probe upward from `basePort` for the first free port.
    Export it as `PORT` and substitute `{PORT}` in the health URL and run
@@ -126,7 +153,9 @@ then continue to Step 5.
 **`--env-check` mode stops here:** print a report (resolved config,
 allocated port, health result, app-log tail), tear down, and exit. No
 tests, no E2E, no board comment. This is the debugging path and the way
-to run the first-run interview ahead of time.
+to run the first-run interview ahead of time. Env-check needs no ticket
+and performs no board operations — resolution reduces to branch +
+config; skip ticket fetch and auth entirely.
 
 ## Teardown — unconditional
 
@@ -147,7 +176,9 @@ On **every** exit path (success, failure, error, interruption):
 - **Classify before blaming the branch.** If any test fails, create a
   temporary worktree at `git merge-base <branch> <baseBranch>` (ship
   config `baseBranch`, else the repo's default branch) and re-run **only
-  the failing tests** there:
+  the failing tests** there. This temporary worktree lives at
+  `<main-root>/.qa/worktrees/mergebase-<id>` (inside the excluded `.qa/`
+  tree) and is removed in teardown:
   - fails on base too → **pre-existing**: excluded from the verdict,
     listed in the comment as "pre-existing (not counted)"
   - passes on base → **regression**: becomes a finding
@@ -182,6 +213,10 @@ Per-criterion result:
 - **unverifiable** — the criterion cannot be exercised in this
   environment (external service, email/SMS channel, a fixture QA cannot
   fabricate). Never silently converted to pass *or* fail.
+- **not-run** — the tier degraded before this criterion could be
+  exercised: every criterion is `not-run` in a `static` verdict, and all
+  criteria are `not-run` in `tests-only` (per-criterion E2E never
+  happens without a running app).
 
 ## Step 7: Tier and verdict
 
@@ -203,15 +238,18 @@ PASS but appear in the header count (`verified 4/5`) and are itemized. A
 2. Ticket known → post the comment via the backend reference:
 
    ```
-   ship:qa verdict FAIL round 2/3 tier=full verified 3/5
+   ship:qa verdict FAIL round 2/3 tier=full verified 4/5
 
    | # | Criterion | Verdict | Evidence |
    |---|-----------|---------|----------|
    | 1 | <text> | pass | .qa/42/round-2/c1.png |
-   | 2 | <text> | FAIL | .qa/42/round-2/f1.png |
+   | 2 | <text> | pass | .qa/42/round-2/c2.png |
+   | 3 | <text> | pass | .qa/42/round-2/c3.png |
+   | 4 | <text> | FAIL | .qa/42/round-2/f1.png |
+   | 5 | <text> | unverifiable | — |
 
    ## Findings
-   1. <symptom>. Repro: <numbered steps>. Violates criterion #2.
+   1. <symptom>. Repro: <numbered steps>. Violates criterion #4.
 
    ## Unverifiable
    - <criterion>: <why>
@@ -221,8 +259,14 @@ PASS but appear in the header count (`verified 4/5`) and are itemized. A
    Artifacts: .qa/42/round-2/   (gitignored)
    ```
 
+   `verified k/n`: `k` = criteria whose result is `pass` or `fail`
+   (actually exercised and judged); `n` = total criteria.
+
    Omit empty sections. Standalone header:
-   `ship:qa verdict PASS standalone tier=full verified 5/5`.
+   `ship:qa verdict PASS standalone tier=full verified 5/5`. When
+   `criteriaSource` is `derived`, append ` criteria=derived` to the
+   header (omit entirely when the source is `spec`), e.g.:
+   `ship:qa verdict PASS standalone tier=full verified 5/5 criteria=derived`.
    Post fails → retry once → on second failure set
    `commentPosted: false` (the comment is already saved to disk; ship or
    a human reposts it).
@@ -243,6 +287,7 @@ PASS but appear in the header count (`verified 4/5`) and are itemized. A
        "round": 2,
        "ticket": "42",
        "branch": "feat/42-login",
+       "criteriaSource": "spec",
        "criteria": [
          {"id": 1, "text": "...", "source": "spec", "result": "pass",
           "evidence": ".qa/42/round-2/c1.png"}
@@ -262,13 +307,30 @@ PASS but appear in the header count (`verified 4/5`) and are itemized. A
 
      Field notes: `tierReason` is the reason-wording string when tier is
      degraded, else `null`. `round` is `null` standalone.
+     `criteriaSource` is `"spec"` or `"derived"` — `"derived"` when
+     criteria did not come from spec.md's "Done means".
      `criteria[].source` is `"spec"` or `"derived"`; `criteria[].result`
-     is `"pass" | "fail" | "unverifiable"`. `unverifiable` entries are
-     `{"criterion": <id>, "why": "<one line>"}`.
+     is `"pass" | "fail" | "unverifiable" | "not-run"` (`not-run` = the
+     tier degraded before this criterion could be exercised — all
+     criteria in `static`; all in `tests-only`). `unverifiable` entries
+     are `{"criterion": <id>, "why": "<one line>"}`.
    - **standalone:** summarize conversationally — verdict, tier, the
      criteria table, findings, artifact paths, repro command.
 
 ## Error handling
+
+**Ship-invoked error envelope.** Fail-fast paths (ticket/branch not
+found; no `spec.md`; board unavailable before verification started)
+return, as the agent's final message, exactly:
+
+```json
+{"error": "<one-line cause>", "phase": "resolve|config|worktree|board",
+ "ticket": "42", "branch": "feat/42-login"}
+```
+
+(`ticket`/`branch` null when unresolved.) No `verdict` field — ship
+treats an `error` object as a failed invocation, distinct from a
+verdict. Standalone fail-fast paths report the same facts as prose.
 
 | Failure | Behavior |
 |---------|----------|

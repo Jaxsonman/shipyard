@@ -33,14 +33,16 @@ gives you its slash commands and skills.
    /plugin install prd@shipyard
    /plugin install kanban@shipyard
    /plugin install planning@shipyard
+   /plugin install qa@shipyard
    ```
 
    Repeat for any other stages you want (see the table below). Installing adds
    that plugin's slash commands and skills to your session.
 
 4. **Verify they're installed** — `/plugin` should list `prd@shipyard`,
-   `kanban@shipyard`, and `planning@shipyard` as installed, and `/prd`,
-   `/kanban`, `/spec`, and `/plan` should autocomplete as slash commands.
+   `kanban@shipyard`, `planning@shipyard`, and `qa@shipyard` as installed,
+   and `/prd`, `/kanban`, `/spec`, `/plan`, and `/qa` should autocomplete
+   as slash commands.
 
 ### Keeping it up to date
 
@@ -119,6 +121,20 @@ An engineer session over the approved spec: architecture options and
 trade-offs discussed with you, security and testing approach, then an
 ordered, executable task list in `docs/ship/42/plan.md`. The ticket is
 marked `Planned` — ready for the autonomous stages (or hand execution).
+
+After installing `qa`, run:
+
+```
+/qa
+```
+
+Verifies the current branch — or target one directly with `/qa 42` (a
+ticket) or `/qa feat/42-login` (a branch). Runs the project's test suite
+plus real per-criterion end-to-end checks in a headless browser, then
+posts a tiered verdict (`full`, `tests-only`, or `static`) with evidence
+as a board comment. `/qa --env-check` resolves and confirms the QA
+environment ahead of time without running any checks. The first run
+downloads a headless browser via `npx @playwright/mcp`.
 
 ## Contributing
 

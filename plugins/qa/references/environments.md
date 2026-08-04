@@ -41,7 +41,7 @@ human chooses to either edit the compose file or accept serialized runs.
 - `test`: `scripts.test` — unless it is npm's placeholder
   (`echo "Error: no test specified"`), which counts as no suite
 - `health`: `http://localhost:{PORT}/`
-- `e2e`: `auto`
+- `e2e`: `browser`
 
 **Port injection:** `PORT` env var (Express, Next, CRA, most frameworks
 honor it). Vite ignores it — if the run script is Vite, propose
@@ -59,7 +59,7 @@ honor it). Vite ignores it — if the run script is Vite, propose
   `flask run --port {PORT}`, or `python manage.py runserver {PORT}`
 - `test`: `.qa-venv/bin/pytest`
 - `health`: `http://localhost:{PORT}/`
-- `e2e`: `auto`
+- `e2e`: `browser`
 
 **Port injection:** `--port {PORT}` flag on the run command (shown above).
 
@@ -73,7 +73,7 @@ honor it). Vite ignores it — if the run script is Vite, propose
 - `run`: `go run .`
 - `test`: `go test ./...`
 - `health`: `http://localhost:{PORT}/`
-- `e2e`: `auto`
+- `e2e`: `browser`
 
 **Port injection:** no universal convention — check `main` for a `PORT`
 env read or a `-port`/`-addr` flag; if neither is found, the interview

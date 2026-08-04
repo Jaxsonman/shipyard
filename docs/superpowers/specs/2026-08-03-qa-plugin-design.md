@@ -209,7 +209,9 @@ not require ship to have run first. **This supersedes the umbrella spec's
 top-level `runCommand` / `e2e` sketch**; those keys move inside the `qa`
 block (`run`, `e2e`), and ship's future spec follows this shape. The block
 also carries `test` (suite command) and `healthTimeoutSeconds` (optional,
-default 120).
+default 120). A missing `.claude/kanban.config.json` follows the same
+must-not-require-ship-first rule: standalone bootstraps it (or continues
+boardless if the human declines); ship-invoked returns the error envelope.
 
 ### First-run interview (standalone only)
 
@@ -310,6 +312,11 @@ criterion would park most real-world tickets on `Needs Human`.
 interview time: health URL serves HTML → browser; bin-entry/CLI project →
 cli (driven via shell invocations with the same transcript discipline).
 
+The interview persists the *resolved* value. If a confirmed block still
+contains `auto`, resolve it at run start without rewriting config: the
+block has a `run` command and the health URL serves HTML → `browser`;
+no `run` command → `cli`.
+
 ### Tier determination — exact conditions
 
 | Tier | Condition | Reason wording |
@@ -340,6 +347,7 @@ concretely; ship parses the agent's last message:
   "round": 2,
   "ticket": "42",
   "branch": "feat/42-login",
+  "criteriaSource": "spec",
   "criteria": [
     {"id": 1, "text": "...", "source": "spec", "result": "pass",
      "evidence": ".qa/42/round-2/c1.png"}
@@ -357,28 +365,65 @@ concretely; ship parses the agent's last message:
 }
 ```
 
+`criteriaSource` is `"spec"` or `"derived"` — `"derived"` when criteria
+did not come from spec.md's "Done means". `criteria[].result` is
+`"pass" | "fail" | "unverifiable" | "not-run"` (`not-run` = the tier
+degraded before this criterion could be exercised — all criteria in
+`static`; all in `tests-only`).
+
 The board comment is the human-readable rendering of the same data:
 
 ```
-ship:qa verdict FAIL round 2/3 tier=full verified 3/5
+ship:qa verdict FAIL round 2/3 tier=full verified 4/5
 
 | # | Criterion | Verdict | Evidence |
-...
+|---|-----------|---------|----------|
+| 1 | <text> | pass | .qa/42/round-2/c1.png |
+| 2 | <text> | pass | .qa/42/round-2/c2.png |
+| 3 | <text> | pass | .qa/42/round-2/c3.png |
+| 4 | <text> | FAIL | .qa/42/round-2/f1.png |
+| 5 | <text> | unverifiable | — |
 
 ## Findings
-1. <symptom> / <repro steps> / criterion #N violated
+1. <symptom> / <repro steps> / criterion #4 violated
+
+## Unverifiable
+- <criterion>: <why>
 
 Repro: PORT=41007 npm run dev
 Artifacts: .qa/42/round-2/   (gitignored)
 ```
 
-Standalone runs stamp `standalone` where the round goes. A standalone run
-whose branch resolves to *no ticket* prints the comment to the terminal
-instead and performs no board operations at all.
+`verified k/n`: `k` = criteria whose result is `pass` or `fail`
+(actually exercised and judged); `n` = total criteria. A `static`
+verdict carries all criteria as `not-run`, `verified 0/n`, and its
+comment states it cannot advance the ticket.
 
-QA ensures `.qa/` is ignored via `.git/info/exclude`, never by editing the
-repo's `.gitignore` — decision 5's "nothing QA produces enters the diff"
-applies to the ignore rule itself too.
+Standalone runs stamp `standalone` where the round goes. When
+`criteriaSource` is `derived`, the header appends ` criteria=derived`
+(omitted entirely when the source is `spec`), e.g.:
+`ship:qa verdict PASS standalone tier=full verified 5/5 criteria=derived`.
+A standalone run whose branch resolves to *no ticket* prints the
+comment to the terminal instead and performs no board operations at
+all.
+
+QA ensures `.qa/` is ignored via `.git/info/exclude` (resolved via
+`git rev-parse --git-common-dir` so it works from linked worktrees),
+never by editing the repo's `.gitignore` — decision 5's "nothing QA
+produces enters the diff" applies to the ignore rule itself too.
+
+**Ship-invoked error envelope.** Fail-fast paths (ticket/branch not
+found; no `spec.md`; board unavailable before verification started)
+return, as the agent's final message, exactly:
+
+```json
+{"error": "<one-line cause>", "phase": "resolve|config|worktree|board",
+ "ticket": "42", "branch": "feat/42-login"}
+```
+
+(`ticket`/`branch` null when unresolved.) No `verdict` field — ship
+treats an `error` object as a failed invocation, distinct from a
+verdict. Standalone fail-fast paths report the same facts as prose.
 
 ### Fix-list rules
 
@@ -395,11 +440,14 @@ never enforces the loop cap — that is ship's job.
 
 ### Error handling
 
-Beyond the bring-up failures Part 2 routes to tiers:
+Beyond the bring-up failures Part 2 routes to tiers. Ship-invoked
+fail-fast rows below return the error envelope defined in the Verdict
+contract, as the agent's final message, in place of a verdict:
 
 | Failure | Behavior |
 |---------|----------|
 | Ticket or branch not found | Fail fast with a clear message; no artifacts, no comment. |
+| No spec.md, ship-invoked | Fail fast (error, not verdict) — never invent criteria. |
 | Playwright MCP unavailable / browser download blocked | `tests-only`; reason names it explicitly. |
 | Merge-base classification worktree fails | Suite failures still count, marked "unclassified — may be pre-existing". |
 | Board comment post fails after verification succeeded | **The verdict must not be lost.** Retry once; then write the rendered comment to `.qa/<id>/round-N/comment.md`, set `commentPosted: false` in the returned object, and report it. The JSON object and artifacts persist regardless, so ship or a human can repost. |

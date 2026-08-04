@@ -11,5 +11,7 @@ This is a **standalone (interactive)** invocation — the skill's
 standalone rules apply: scratch worktree, first-run interview allowed,
 derived criteria require confirmation, board status is never touched.
 
-If the input contains `--env-check`, run the skill's env-check mode:
-resolve, bring up, report, tear down — no tests, no E2E, no comment.
+If the input contains `--env-check`, strip the flag from the input
+before resolution (the remainder, if any, is the branch) and run the
+skill's env-check mode: resolve, bring up, report, tear down — no
+tests, no E2E, no comment.

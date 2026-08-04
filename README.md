@@ -33,6 +33,7 @@ gives you its slash commands and skills.
    /plugin install prd@shipyard
    /plugin install kanban@shipyard
    /plugin install planning@shipyard
+   /plugin install dev@shipyard
    /plugin install qa@shipyard
    ```
 
@@ -72,7 +73,7 @@ Uninstall plugins before removing the marketplace they came from.
 | 1 | `prd` | ✅ Available | Turn a raw idea into a structured PRD via guided interview |
 | 2 | `kanban` | ✅ Available | Turn a PRD into dependency-linked tickets on a board |
 | 3 | `planning` | ✅ Available | Per-ticket `/spec` + `/plan` collaborative sessions |
-| 4 | `dev` | 🚧 In progress | Autonomous implementation of planned tickets |
+| 4 | `dev` | ✅ Available | Autonomous implementation of planned tickets |
 | 5 | `qa` | ✅ Available | Autonomous verification — tests plus real end-to-end checks |
 | 6 | `pr` | Planned | Open PRs into your existing CI/CD |
 | — | `ship` | Planned | Conductor — runs stages 4–6 over spec'd + planned tickets |
@@ -135,6 +136,19 @@ posts a tiered verdict (`full`, `tests-only`, or `static`) with evidence
 as a board comment. `/qa --env-check` resolves and confirms the QA
 environment ahead of time without running any checks. The first run
 downloads a headless browser via `npx @playwright/mcp`.
+
+After installing `dev`, implement a planned ticket:
+
+```
+/dev 42
+```
+
+Executes `docs/ship/42/plan.md` test-first in an isolated worktree — one
+commit per task, each pinned by a failing-then-passing test — then an
+adversarial review pass, then a structured handoff comment on the ticket
+for QA and human reviewers. Requires an approved spec (`/spec 42`); if no
+plan exists, dev drafts a conservative self-plan and flags it. Dev never
+changes ticket status and never touches your checkout.
 
 ## Contributing
 

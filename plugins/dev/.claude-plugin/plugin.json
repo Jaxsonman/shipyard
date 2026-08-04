@@ -1,0 +1,12 @@
+{
+  "name": "dev",
+  "description": "Autonomous implementation stage — executes an approved plan test-first in an isolated worktree and hands a structured report to QA.",
+  "author": {
+    "name": "Jaxson Mansouri",
+    "email": "mansouricobusiness@gmail.com"
+  },
+  "repository": "https://github.com/Jaxsonman/shipyard",
+  "license": "MIT",
+  "mcpServers": "./.mcp.json",
+  "keywords": ["dev", "implementation", "tdd", "sdlc", "github", "jira"]
+}

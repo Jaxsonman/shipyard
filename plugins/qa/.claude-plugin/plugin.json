@@ -1,0 +1,12 @@
+{
+  "name": "qa",
+  "description": "Verification stage — run the test suite plus real per-criterion E2E against a branch and post a tiered verdict with evidence.",
+  "author": {
+    "name": "Jaxson Mansouri",
+    "email": "mansouricobusiness@gmail.com"
+  },
+  "repository": "https://github.com/Jaxsonman/shipyard",
+  "license": "MIT",
+  "mcpServers": "./.mcp.json",
+  "keywords": ["qa", "testing", "e2e", "verification", "sdlc", "github", "jira", "playwright"]
+}

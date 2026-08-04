@@ -30,4 +30,7 @@ Rules that override anything else you might infer:
 
 Your final message IS your return value to the invoker: return the
 handoff report (or escalation) verbatim as the skill's Step 7/8 defines
-it, plus the worktree path and branch name. No prose wrapper.
+it, plus the branch name and — per the skill's Step 9 worktree lifecycle
+— either the worktree's live path (ship-invoked, or a standalone
+escalation that kept it) or the command to recreate it (a standalone
+clean exit, which removes the worktree). No prose wrapper.

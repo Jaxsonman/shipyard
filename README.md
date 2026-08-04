@@ -41,9 +41,9 @@ gives you its slash commands and skills.
    that plugin's slash commands and skills to your session.
 
 4. **Verify they're installed** — `/plugin` should list `prd@shipyard`,
-   `kanban@shipyard`, `planning@shipyard`, and `qa@shipyard` as installed,
-   and `/prd`, `/kanban`, `/spec`, `/plan`, and `/qa` should autocomplete
-   as slash commands.
+   `kanban@shipyard`, `planning@shipyard`, `dev@shipyard`, and
+   `qa@shipyard` as installed, and `/prd`, `/kanban`, `/spec`, `/plan`,
+   `/dev`, and `/qa` should autocomplete as slash commands.
 
 ### Keeping it up to date
 
@@ -148,7 +148,9 @@ commit per task, each pinned by a failing-then-passing test — then an
 adversarial review pass, then a structured handoff comment on the ticket
 for QA and human reviewers. Requires an approved spec (`/spec 42`); if no
 plan exists, dev drafts a conservative self-plan and flags it. Dev never
-changes ticket status and never touches your checkout.
+changes ticket status and never touches your checkout's code — though its
+first run in a project may write and commit `.claude/kanban.config.json`
+(the family's config bootstrap, same as kanban and planning).
 
 ## Contributing
 

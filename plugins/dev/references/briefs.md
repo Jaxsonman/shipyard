@@ -86,6 +86,9 @@ commands; you must NOT edit files or commit.
 Spec ("Done means" section):
 {SPEC_DONE_MEANS}
 
+Plan context (Architecture decisions and Testing approach):
+{PLAN_CONTEXT}
+
 Plan tasks executed this round:
 {ROUND_TASK_LIST}
 

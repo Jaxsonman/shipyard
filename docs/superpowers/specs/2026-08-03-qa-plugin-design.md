@@ -243,8 +243,12 @@ rule.
    is polled until it returns 200 or `healthTimeoutSeconds` (default 120)
    elapses. Any failure captures the tail of the app log as evidence and
    falls through to the tests-only path.
-4. **Stale-run check:** a PID file in the scratch dir; on start, QA kills
-   any stale process a dead previous run left behind.
+4. **Stale-run check (scoped to this ticket):** each run writes `app.pid`
+   inside its own artifacts dir. On start, QA looks only under this
+   ticket's `.qa/` tree: a dead PID's file is removed as stale; a live PID
+   is an orphan from a crashed previous run of this same ticket and its
+   process group is killed. Other tickets' `.qa` dirs are never touched —
+   live processes there belong to legitimate parallel runs.
 
 ### Teardown discipline
 

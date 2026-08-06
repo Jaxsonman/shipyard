@@ -1,0 +1,12 @@
+{
+  "name": "ship",
+  "description": "Conductor stage — drives one planned ticket through the autonomous dev ⇄ QA loop to Awaiting Review.",
+  "author": {
+    "name": "Jaxson Mansouri",
+    "email": "mansouricobusiness@gmail.com"
+  },
+  "repository": "https://github.com/Jaxsonman/shipyard",
+  "license": "MIT",
+  "mcpServers": "./.mcp.json",
+  "keywords": ["ship", "conductor", "orchestration", "sdlc", "github", "jira"]
+}

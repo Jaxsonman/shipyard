@@ -35,15 +35,16 @@ gives you its slash commands and skills.
    /plugin install planning@shipyard
    /plugin install dev@shipyard
    /plugin install qa@shipyard
+   /plugin install ship@shipyard
    ```
 
    Repeat for any other stages you want (see the table below). Installing adds
    that plugin's slash commands and skills to your session.
 
 4. **Verify they're installed** — `/plugin` should list `prd@shipyard`,
-   `kanban@shipyard`, `planning@shipyard`, `dev@shipyard`, and
-   `qa@shipyard` as installed, and `/prd`, `/kanban`, `/spec`, `/plan`,
-   `/dev`, and `/qa` should autocomplete as slash commands.
+   `kanban@shipyard`, `planning@shipyard`, `dev@shipyard`, `qa@shipyard`,
+   and `ship@shipyard` as installed, and `/prd`, `/kanban`, `/spec`, `/plan`,
+   `/dev`, `/qa`, and `/ship` should autocomplete as slash commands.
 
 ### Keeping it up to date
 
@@ -76,7 +77,7 @@ Uninstall plugins before removing the marketplace they came from.
 | 4 | `dev` | ✅ Available | Autonomous implementation of planned tickets |
 | 5 | `qa` | ✅ Available | Autonomous verification — tests plus real end-to-end checks |
 | 6 | `pr` | Planned | Open PRs into your existing CI/CD |
-| — | `ship` | Planned | Conductor — runs stages 4–6 over spec'd + planned tickets |
+| — | `ship` | ✅ Available | Conductor — drives one planned ticket through the dev ⇄ QA loop (v1) |
 
 ## Usage
 
@@ -151,6 +152,23 @@ plan exists, dev drafts a conservative self-plan and flags it. Dev never
 changes ticket status and never touches your checkout's code — though its
 first run in a project may write and commit `.claude/kanban.config.json`
 (the family's config bootstrap, same as kanban and planning).
+
+After installing `ship`, conduct a ticket:
+
+```
+/ship 42
+```
+
+Preflights the ticket (Planned status, spec + plan committed, deps
+satisfied, QA environment configured), creates the branch and
+worktree, then loops dev → QA rounds (default cap 3) until QA
+passes — posting a `ship:review-packet` and marking the ticket
+`Awaiting Review` — or escalates to `Needs Human` with a summary of
+what kept failing. Resume a dead session by re-running `/ship 42`;
+it reconstructs the round from the board trail. v1 conducts one
+ticket at a time; bare `/ship` lists tickets ready to conduct.
+Configure the QA environment once beforehand with `/qa --env-check` —
+ship refuses to run without it.
 
 ## Contributing
 

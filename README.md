@@ -167,6 +167,8 @@ passes — posting a `ship:review-packet` and marking the ticket
 what kept failing. Resume a dead session by re-running `/ship 42`;
 it reconstructs the round from the board trail. v1 conducts one
 ticket at a time; bare `/ship` lists tickets ready to conduct.
+Configure the QA environment once beforehand with `/qa --env-check` —
+ship refuses to run without it.
 
 ## Contributing
 

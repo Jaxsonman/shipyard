@@ -153,7 +153,7 @@ Status → `In Dev`, then per round N (1‥loopCap):
    is exactly one JSON verdict object (qa's existing contract); QA
    posts its own `ship:qa verdict ...` comment.
 3. **Branch on verdict:**
-   - `PASS` (tier `full` or `degraded`) → post review packet, status →
+   - `PASS` (tier `full` or `tests-only`) → post review packet, status →
      `Awaiting Review`, report to the user, stop.
    - `FAIL`, N < loopCap → status → `In Dev`, run round N+1.
    - `FAIL`, N = loopCap → ship writes the cap escalation (decision 7),

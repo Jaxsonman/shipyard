@@ -37,6 +37,12 @@ strategies, and the human review gate are v2.
 
 ## Step 1: Intake
 
+Load the backend reference now, before either branch below:
+- GitHub → `${CLAUDE_PLUGIN_ROOT}/references/github.md`
+- Jira → `${CLAUDE_PLUGIN_ROOT}/references/jira.md`
+
+Run its Auth check.
+
 Bare `/ship` (no ticket): run the config check (Step 2, without the
 ship-config interview if the file is missing — read-only), then use the
 backend reference's **List ready tickets** to show tickets at `Planned`,
@@ -44,11 +50,7 @@ one line each (id, title, url). Explain: "Wave mode is not built yet —
 run `/ship <ticket>` to conduct one of these." Stop.
 
 With a ticket reference: resolve it per the backend reference (number,
-`#N`, key, or URL). Load the backend reference now:
-- GitHub → `${CLAUDE_PLUGIN_ROOT}/references/github.md`
-- Jira → `${CLAUDE_PLUGIN_ROOT}/references/jira.md`
-
-Run its Auth check, then Fetch ticket.
+`#N`, key, or URL), then Fetch ticket.
 
 ## Step 2: Configs
 
@@ -87,7 +89,8 @@ line naming the fixing command), then stop. Order:
    Ship never writes it — ship-invoked QA never interviews and would
    degrade to a `tier=static` verdict, which ship converts to
    `Needs Human`: the run would escalate immediately. Fix named in the
-   report: "run `/qa` once — its first-run interview creates the block."
+   report: "run `/qa --env-check` once — its first-run interview creates
+   the block."
 2. **Ticket status** (backend reference → Read status):
    - `Planned` → proceed.
    - Backlog / `Spec'd` → refuse: "run `/spec <id>` then `/plan <id>`"
@@ -162,19 +165,20 @@ line naming the fixing command), then stop. Order:
    - Anything else (prose, no JSON) → stage-error policy.
 
    If the verdict has `"commentPosted": false`, repost it for the trail:
-   look in the verdict's `artifacts` dir for the comment markdown QA
-   saved and post it verbatim; if not found, post a comment synthesized
-   from the verdict JSON with header
-   `ship:qa verdict <VERDICT> round N/M (reposted by ship)` containing
-   the criteria table and findings. Resume depends on this trail.
+   QA saves the comment as `comment.md` in the verdict's `artifacts` dir
+   before any board call — post that file verbatim. If it is not found,
+   the synthesized comment must reproduce qa's comment shape: header
+   `ship:qa verdict <VERDICT> round N/M tier=<tier> verified k/n
+   (reposted by ship)` and a literal `## Findings` section (dev's
+   round-N+1 fix-list parse reads exactly that heading), plus the
+   criteria table. Resume depends on this trail.
 
 3. **Branch on verdict:**
    - `tier` = `"static"` (any verdict) → the environment could not be
      brought up; a static PASS cannot advance a ticket. Post
-     `ship:escalation static round N/M` quoting the verdict's
-     `tierReason` and `tier`/`phase` cause, plus the State block (see
-     Step 7's template from "## State" down). Status → `Needs Human`;
-     stop.
+     `ship:escalation static round N/M` quoting the verdict's `tier` and
+     `tierReason` verbatim, plus the State block (see Step 7's template
+     from "## State" down). Status → `Needs Human`; stop.
    - `verdict` = `"PASS"` (tier `full` or `tests-only`) → Step 7 review
      packet; status → `Awaiting Review`; report; stop.
    - `verdict` = `"FAIL"`, N < M → set status → `In Dev`; run round N+1.
@@ -193,7 +197,9 @@ status → `Needs Human`; stop.
 
 ## Step 6: Resume — board state only (v1 has no claims)
 
-`/ship <ticket>` on an `In Dev`/`In QA` ticket reconstructs the round
+`/ship <ticket>` on an `In Dev`/`In QA` ticket first runs Step 4.1-4.2
+(branch resolution + worktree ensure — Step 4.3's `In Dev` status set is
+skipped since status is already set) and then reconstructs the round
 from the comment trail. Evidence, in order:
 
 1. Comment headers on the ticket: `ship:dev round N/M`,
@@ -208,14 +214,28 @@ from the comment trail. Evidence, in order:
 2. Reconstruction:
    - Last `ship:dev round N/M` with no round-N verdict → dev finished
      round N; enter Step 5 at the QA round (5.2) with round N.
-   - Last `ship:qa verdict FAIL round N/M`, N < M → enter Step 5 at the
-     dev round (5.1) with round N+1.
-   - Last `ship:qa verdict FAIL round M/M` → cap escalation (Step 7).
+   - Last `ship:qa verdict FAIL round N/M` (tier not static), N < M →
+     enter Step 5 at the dev round (5.1) with round N+1.
+   - Last `ship:qa verdict FAIL round M/M` (tier not static) → cap
+     escalation (Step 7).
    - Last `ship:qa verdict PASS round N/M` (tier not static) but status
      never reached `Awaiting Review` → finish the terminal actions:
      review packet, transition.
+   - Last verdict has `tier=static` → the previous run died mid-terminal;
+     complete Step 5.3's static escalation and the `Needs Human`
+     transition (skip the escalation comment if one for that round is
+     already posted).
+   - Newest comment is `ship:dev escalation` or `ship:escalation <cause>`
+     while status is still `In Dev`/`In QA` → the previous run died
+     mid-terminal; complete the pending transition to `Needs Human` and
+     report. Do not post a second escalation and do not run another
+     round.
    - Status says `In Dev`/`In QA` but no `ship:dev` comment (or fallback
      file) exists → start round 1.
+
+   On entering the loop, set the round-appropriate status (`In Dev`
+   before a dev round, `In QA` before a QA round) rather than assuming
+   the status already on the ticket matches the round being resumed.
 3. Worktree missing → recreate:
    `git worktree add ../<repo-dir-name>-ship/dev-<id> <branch>`.
    Uncommitted changes in an existing worktree are abandoned partial

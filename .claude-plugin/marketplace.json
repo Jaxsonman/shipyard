@@ -40,6 +40,13 @@
       "description": "Autonomous implementation stage — executes an approved plan test-first in an isolated worktree and hands a structured report to QA.",
       "category": "productivity",
       "keywords": ["dev", "implementation", "tdd", "sdlc", "github", "jira"]
+    },
+    {
+      "name": "ship",
+      "source": "./plugins/ship",
+      "description": "Conductor stage — drive one planned ticket through the autonomous dev ⇄ QA loop to Awaiting Review.",
+      "category": "productivity",
+      "keywords": ["ship", "conductor", "orchestration", "sdlc", "github", "jira"]
     }
   ]
 }

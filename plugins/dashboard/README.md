@@ -28,4 +28,4 @@ The dashboard server starts in the background and opens in your browser. The URL
 
 ## Metrics
 
-The dashboard reads per-ticket metrics instrumented by the stage plugins (dev, qa, ship). See [metrics specification](../../docs/design/dashboard/metrics.md) for the convention.
+The dashboard reads per-ticket metrics instrumented by the stage plugins (dev, qa, ship). See [metrics specification](../../docs/superpowers/specs/2026-08-10-dashboard-design.md) for the convention (section "Stage metrics instrumentation").

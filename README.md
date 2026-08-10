@@ -179,6 +179,10 @@ effectively undiscoverable. A Claude Code `PreToolUse` hook blocks
 `git commit` in-session when files under `plugins/` or `.claude-plugin/` are
 staged without `README.md`; see `.claude/hooks/check-readme-updated.sh` (wired up in `.claude/settings.json`).
 
+Plugin `plugin.json` files must include `name`, `description`, `version`, `author` (with `name` and `email`),
+`repository`, and `license` fields, plus a `keywords` array matching the marketplace entry. See
+`plugins/ship/.claude-plugin/plugin.json` as the field-shape reference for all plugins.
+
 ## License
 
 MIT

@@ -160,6 +160,12 @@ In order:
    <!-- shipyard-metrics {"stage":"spec","started":"<ISO8601>","finished":"<ISO8601>","tokens_in":<n>,"tokens_out":<n>} -->
    ```
 
+   (omit the token fields entirely when unknown — never emit placeholders)
+
+   ```
+   <!-- shipyard-metrics {"stage":"spec","started":"<ISO8601>","finished":"<ISO8601>"} -->
+   ```
+
 If a board operation fails after the commit, report the exact error
 verbatim and stop — never claim a status was set without seeing the
 operation succeed. Re-running `/spec <id>` recovers via Step 2's "finish

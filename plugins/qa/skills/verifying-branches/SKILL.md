@@ -259,17 +259,6 @@ PASS but appear in the header count (`verified 4/5`) and are itemized. A
    Artifacts: .qa/42/round-2/   (gitignored)
    ```
 
-   **Metrics footer (dashboard integration).** Append this hidden HTML comment as the
-   last line of the comment body, so the dashboard plugin can build stage timelines.
-   Record `started` when this stage began work on the ticket (ISO 8601 UTC) and
-   `finished` as now. `tokens_in`/`tokens_out` are optional — include them only when
-   the stage runner knows real numbers (e.g. ship fills them for dev/qa rounds from
-   the subagent usage reported in task notifications); never estimate.
-
-   ```
-   <!-- shipyard-metrics {"stage":"qa","started":"<ISO8601>","finished":"<ISO8601>","tokens_in":<n>,"tokens_out":<n>} -->
-   ```
-
    `verified k/n`: `k` = criteria whose result is `pass` or `fail`
    (actually exercised and judged); `n` = total criteria.
 
@@ -281,6 +270,23 @@ PASS but appear in the header count (`verified 4/5`) and are itemized. A
    Post fails → retry once → on second failure set
    `commentPosted: false` (the comment is already saved to disk; ship or
    a human reposts it).
+
+   **Metrics footer (dashboard integration).** Append this hidden HTML comment as the
+   last line of the comment body, so the dashboard plugin can build stage timelines.
+   Record `started` when this stage began work on the ticket (ISO 8601 UTC) and
+   `finished` as now. `tokens_in`/`tokens_out` are optional — include them only when
+   the stage runner knows real numbers (e.g. ship fills them for dev/qa rounds from
+   the subagent usage reported in task notifications); never estimate.
+
+   ```
+   <!-- shipyard-metrics {"stage":"qa","started":"<ISO8601>","finished":"<ISO8601>","tokens_in":<n>,"tokens_out":<n>} -->
+   ```
+
+   (omit the token fields entirely when unknown — never emit placeholders)
+
+   ```
+   <!-- shipyard-metrics {"stage":"qa","started":"<ISO8601>","finished":"<ISO8601>"} -->
+   ```
 3. No ticket resolved → print the comment to the terminal; zero board
    operations.
 4. **Findings are findings, never solutions.** Symptom, repro steps,

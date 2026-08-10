@@ -289,6 +289,12 @@ the subagent usage reported in task notifications); never estimate.
 <!-- shipyard-metrics {"stage":"ship","started":"<ISO8601>","finished":"<ISO8601>","tokens_in":<n>,"tokens_out":<n>} -->
 ```
 
+(omit the token fields entirely when unknown — never emit placeholders)
+
+```
+<!-- shipyard-metrics {"stage":"ship","started":"<ISO8601>","finished":"<ISO8601>"} -->
+```
+
 This footer applies to the review packet above only — never to the cap
 escalation comment below.
 

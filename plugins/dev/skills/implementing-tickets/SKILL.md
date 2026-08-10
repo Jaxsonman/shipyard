@@ -204,6 +204,12 @@ the subagent usage reported in task notifications); never estimate.
 <!-- shipyard-metrics {"stage":"dev","started":"<ISO8601>","finished":"<ISO8601>","tokens_in":<n>,"tokens_out":<n>} -->
 ```
 
+(omit the token fields entirely when unknown — never emit placeholders)
+
+```
+<!-- shipyard-metrics {"stage":"dev","started":"<ISO8601>","finished":"<ISO8601>"} -->
+```
+
 This footer applies to the handoff comment above only — never to the
 Step 8 escalation comment.
 

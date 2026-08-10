@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/modernist-491d6b1d-3fa3-40d5-b658-76f671374ebd/styles.css">
+<script src="_ds/modernist-491d6b1d-3fa3-40d5-b658-76f671374ebd/_ds_bundle.js"></script>
+<style>
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+body { margin: 0; }
+</style>
+</helmet>
+<div style="min-height:100vh; background:var(--color-bg); color:var(--color-text); display:flex; flex-direction:column;">
+
+  <div class="nav">
+    <div class="nav-brand">Shipyard</div>
+    <a href="#" aria-current="page">Tickets</a>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:var(--space-3);">
+      <input class="input" style="width:220px;" placeholder="Search tickets…">
+      <button class="btn btn-primary">New PRD</button>
+    </div>
+  </div>
+
+  <div style="display:flex; flex:1; min-height:0;">
+    <div style="width:240px; flex:none; border-right:2px solid var(--color-divider); padding:var(--space-4); display:flex; flex-direction:column; gap:var(--space-1);">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-2);">
+        <h6 style="margin:0;">Projects</h6>
+        <button class="btn btn-ghost" style="padding:2px 6px; font-size:12px;" onClick="{{ openAddDialog }}">+ Add</button>
+      </div>
+      <sc-for list="{{ projectRows }}" as="proj" hint-placeholder-count="5">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); padding:var(--space-2); background:{{ proj.bg }}; cursor:pointer;" onClick="{{ proj.select }}">
+          <div style="min-width:0;">
+            <div style="font-size:13px; font-weight:600; color:{{ proj.textColor }}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ proj.name }}</div>
+            <div style="font-size:11px; font-family:monospace; color:var(--color-neutral-600); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ proj.repo }}</div>
+          </div>
+          <span class="tag tag-neutral" style="flex:none;">{{ proj.count }}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+      <div style="padding:var(--space-6) var(--space-6) 0;">
+        <h2 style="margin-bottom:2px;">{{ headerTitle }}</h2>
+        <p class="text-muted" style="font-size:13px; margin-bottom:var(--space-4);">{{ headerSubtitle }}</p>
+      </div>
+
+      <div style="padding:0 var(--space-6) var(--space-6);">
+        <table class="table">
+      <thead>
+        <tr>
+          <th>Ticket</th>
+          <th>Title</th>
+          <th>Stage</th>
+          <th>Priority</th>
+          <th>Owner</th>
+          <th>Updated</th>
+        </tr>
+      </thead>
+      <tbody>
+        <sc-for list="{{ pageRows }}" as="ticket" hint-placeholder-count="5">
+          <tr style="cursor:pointer;" onClick="{{ ticket.select }}">
+            <td>{{ ticket.id }}</td>
+            <td>{{ ticket.title }}</td>
+            <td>
+              <span class="tag tag-neutral">{{ ticket.stage }}</span>
+              <sc-if value="{{ ticket.showDot }}" hint-placeholder-val="{{ false }}">
+                <span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--color-accent); margin-left:6px; animation: pulse 1.6s ease-in-out infinite;"></span>
+              </sc-if>
+            </td>
+            <td><span class="tag {{ ticket.priorityClass }}">{{ ticket.priorityLabel }}</span></td>
+            <td>{{ ticket.owner }}</td>
+            <td>{{ ticket.updated }}</td>
+          </tr>
+        </sc-for>
+      </tbody>
+    </table>
+    <div style="display:flex; align-items:center; justify-content:space-between; padding-top:var(--space-3);">
+      <span class="text-muted" style="font-size:12px;">{{ pageSummary }}</span>
+      <div style="display:flex; gap:var(--space-2);">
+        <button class="btn btn-secondary" onClick="{{ prevPage }}" disabled="{{ isFirstPage }}">Prev</button>
+        <button class="btn btn-secondary" onClick="{{ nextPage }}" disabled="{{ isLastPage }}">Next</button>
+      </div>
+    </div>
+      </div>
+    </div>
+  </div>
+
+  <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:color-mix(in srgb, var(--color-neutral-900) 45%, transparent); z-index:20;" onClick="{{ closeDrawer }}">
+      <div style="position:absolute; top:0; right:0; bottom:0; width:min(480px, 100%); background:var(--color-bg); box-shadow:var(--shadow-lg); display:flex; flex-direction:column; padding:var(--space-6); overflow-y:auto;" onClick="{{ stopClick }}">
+
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:var(--space-2);">
+          <div>
+            <div class="card-kicker">{{ selectedTicket.id }} · {{ selectedTicket.projectRepo }}</div>
+            <h3 style="margin:2px 0 0;">{{ selectedTicket.title }}</h3>
+          </div>
+          <button class="btn btn-icon btn-ghost" onClick="{{ closeDrawer }}">×</button>
+        </div>
+
+        <div class="card-meta" style="margin-bottom:var(--space-4);">
+          <span>{{ selectedTicket.owner }}</span>
+          <span>·</span>
+          <span>updated {{ selectedTicket.updated }}</span>
+          <span>·</span>
+          <span class="tag {{ selectedTicket.priorityClass }}">{{ selectedTicket.priorityLabel }}</span>
+        </div>
+
+        <div style="margin-bottom:var(--space-4);">
+          <h6 style="margin-bottom:var(--space-2);">Pipeline timeline</h6>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <sc-for list="{{ selectedTicket.ganttRows }}" as="row" hint-placeholder-count="7">
+              <div style="display:grid; grid-template-columns:76px 1fr 130px; align-items:center; gap:var(--space-2);">
+                <div style="font-size:10px; letter-spacing:0.04em; text-transform:uppercase; color:{{ row.labelColor }};">{{ row.stage }}</div>
+                <div style="position:relative; height:14px; background:var(--color-surface);">
+                  <div style="position:absolute; top:0; bottom:0; left:{{ row.leftPct }}%; width:{{ row.widthPct }}%; background:{{ row.barColor }};"></div>
+                </div>
+                <div style="font-size:11px; font-family:monospace; color:{{ row.labelColor }}; text-align:right;">{{ row.statLabel }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div class="hr" style="margin:0 0 var(--space-4);"></div>
+
+        <div style="display:flex; gap:var(--space-1); margin-bottom:var(--space-4);">
+          <sc-for list="{{ tabs }}" as="tab" hint-placeholder-count="4">
+            <button class="{{ tab.cls }}" onClick="{{ tab.onClick }}">{{ tab.name }}</button>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ selectedTicket.isOverview }}" hint-placeholder-val="{{ true }}">
+          <p style="font-size:14px; opacity:0.85;">{{ selectedTicket.description }}</p>
+        </sc-if>
+        <sc-if value="{{ selectedTicket.isSpec }}" hint-placeholder-val="{{ false }}">
+          <p style="font-size:14px; opacity:0.85; white-space:pre-wrap;">{{ selectedTicket.spec }}</p>
+        </sc-if>
+        <sc-if value="{{ selectedTicket.isPlan }}" hint-placeholder-val="{{ false }}">
+          <p style="font-size:14px; opacity:0.85; white-space:pre-wrap;">{{ selectedTicket.plan }}</p>
+        </sc-if>
+        <sc-if value="{{ selectedTicket.isLogs }}" hint-placeholder-val="{{ false }}">
+          <pre style="background:var(--color-neutral-900); color:var(--color-neutral-100); font-size:12px; padding:var(--space-3); overflow-x:auto; white-space:pre-wrap; line-height:1.5;">{{ selectedTicket.logs }}</pre>
+        </sc-if>
+
+        <div style="flex:1;"></div>
+        <div class="hr" style="margin:var(--space-4) 0;"></div>
+        <div style="display:flex; gap:var(--space-2); flex-wrap:wrap;">
+          <button class="btn btn-primary" onClick="{{ selectedTicket.approve }}">{{ selectedTicket.approveLabel }}</button>
+          <button class="btn btn-secondary">Reassign</button>
+          <button class="btn btn-secondary">Retry stage</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ addDialogOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="dialog-backdrop" onClick="{{ closeAddDialog }}">
+      <div class="dialog" onClick="{{ stopClick }}">
+        <div class="dialog-title">Link a local codebase</div>
+        <div class="dialog-body">
+          <div class="field" style="margin-bottom:var(--space-3);">
+            <label>Folder</label>
+            <input class="input" type="file" webkitdirectory="true" directory="true" onChange="{{ handleFolderPick }}">
+            <div class="text-muted" style="font-size:12px; margin-top:6px;">{{ folderPickSummary }}</div>
+          </div>
+          <div class="field">
+            <label>Project name</label>
+            <input class="input" value="{{ newProjectName }}" onChange="{{ handleNameChange }}" placeholder="e.g. Payments Service">
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button class="btn btn-secondary" onClick="{{ closeAddDialog }}">Cancel</button>
+          <button class="btn btn-primary" disabled="{{ addDisabled }}" onClick="{{ confirmAddProject }}">Link project</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1440, &quot;height&quot;: 900}, &quot;simulateLive&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Table&quot;}, &quot;defaultDrawerTab&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;Overview&quot;, &quot;options&quot;: [&quot;Overview&quot;, &quot;Spec&quot;, &quot;Plan&quot;, &quot;Logs&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Ticket drawer&quot;}}">
+const STAGES = ["PRD", "Kanban", "Spec'd", "Planned", "Dev", "QA", "PR"];
+
+const TIMELINE_DAYS = 14;
+const PAGE_SIZE = 5;
+
+const PROJECTS = [
+  { id: "core", name: "Core platform", repo: "org/shipyard-core" },
+  { id: "reef", name: "Reef Tracker", repo: "org/reef-tracker" },
+  { id: "billing", name: "Billing Service", repo: "org/billing-service" },
+  { id: "mobile", name: "Mobile App", repo: "org/mobile-app" }
+];
+
+const RAW_TICKETS = [
+  { id: "SHP-101", project: "core", title: "Reef tank PRD", stage: "PRD", priority: "Low", owner: "M. Alvarez", updated: "2h ago",
+    description: "Draft PRD for the reef-tank water parameter tracker: problem, users, success metrics.",
+    spec: "Not spec'd yet — awaiting kanban breakdown.", plan: "Not planned yet.", logs: "No pipeline runs yet.",
+    history: [{ stage: "PRD", start: 0, days: 1.5, time: "18m", tokensIn: 42000, tokensOut: 6000 }] },
+  { id: "SHP-102", project: "core", title: "Ticket breakdown: auth", stage: "Kanban", priority: "Medium", owner: "R. Chen", updated: "40m ago",
+    description: "Break the auth PRD into dependency-linked vertical-slice tickets.",
+    spec: "Not spec'd yet.", plan: "Not planned yet.", logs: "No pipeline runs yet.",
+    history: [{ stage: "PRD", start: 0, days: 1, time: "18m", tokensIn: 42000, tokensOut: 6000 }, { stage: "Kanban", start: 1, days: 1, time: "9m", tokensIn: 31000, tokensOut: 4500 }] },
+  { id: "SHP-097", project: "reef", title: "Magic-link login", stage: "Spec'd", priority: "High", owner: "R. Chen", updated: "1d ago",
+    description: "Passwordless login via emailed magic link, session bootstrap on click-through.",
+    spec: "Done means: link expires in 15m, single-use, falls back to password if email delivery fails. Edge cases: stale tab, multiple requests.",
+    plan: "Not planned yet.", logs: "No pipeline runs yet.",
+    history: [{ stage: "PRD", start: 0, days: 1, time: "18m", tokensIn: 42000, tokensOut: 6000 }, { stage: "Kanban", start: 1, days: 1, time: "9m", tokensIn: 31000, tokensOut: 4500 }, { stage: "Spec'd", start: 2, days: 2, time: "26m", tokensIn: 68000, tokensOut: 11000 }] },
+  { id: "SHP-088", project: "billing", title: "Rate-limit API gateway", stage: "Planned", priority: "Medium", owner: "J. Okafor", updated: "3h ago",
+    description: "Token-bucket rate limiting in front of the public API.",
+    spec: "Done means: 429 with Retry-After header, per-key limits configurable, burst allowance.",
+    plan: "1. Add token-bucket middleware\n2. Wire per-key config store\n3. Tests: burst, sustained, reset\n4. Load test at 10x expected traffic",
+    logs: "No pipeline runs yet.",
+    history: [{ stage: "PRD", start: 0, days: 1, time: "18m", tokensIn: 42000, tokensOut: 6000 }, { stage: "Kanban", start: 1, days: 1, time: "9m", tokensIn: 31000, tokensOut: 4500 }, { stage: "Spec'd", start: 2, days: 2, time: "26m", tokensIn: 68000, tokensOut: 11000 }, { stage: "Planned", start: 4, days: 2, time: "22m", tokensIn: 54000, tokensOut: 9000 }] },
+  { id: "SHP-081", project: "core", title: "CSV export for reports", stage: "Dev", priority: "Medium", owner: "dev agent", updated: "6m ago", running: true,
+    description: "Server-side CSV export for the reporting dashboard, streamed for large datasets.",
+    spec: "Done means: handles 500k+ rows without OOM, respects active filters, UTF-8 BOM for Excel.",
+    plan: "1. Streaming CSV writer\n2. Wire filter state into query\n3. Failing-then-passing tests per task\n4. Adversarial review pass",
+    logs: "[12:04:01] worktree created — feat/81-csv-export\n[12:04:12] test: export_respects_filters — FAIL (expected)\n[12:05:44] impl: streaming writer added\n[12:05:50] test: export_respects_filters — PASS\n[12:06:02] commit 3a9f1c2 — streaming CSV writer\n[12:06:03] running remaining suite…",
+    history: [{ stage: "PRD", start: 0, days: 1, time: "18m", tokensIn: 42000, tokensOut: 6000 }, { stage: "Kanban", start: 1, days: 1, time: "9m", tokensIn: 31000, tokensOut: 4500 }, { stage: "Spec'd", start: 2, days: 2, time: "26m", tokensIn: 68000, tokensOut: 11000 }, { stage: "Planned", start: 4, days: 2, time: "22m", tokensIn: 54000, tokensOut: 9000 }, { stage: "Dev", start: 6, days: 3, time: "1h 40m", tokensIn: 420000, tokensOut: 38000 }] },
+  { id: "SHP-076", project: "mobile", title: "Dark mode toggle", stage: "QA", priority: "Low", owner: "qa agent", updated: "22m ago", running: true,
+    description: "Persisted dark-mode toggle across the settings surface.",
+    spec: "Done means: persists across reload, respects system preference by default, no flash of wrong theme.",
+    plan: "1. Theme context + localStorage\n2. Settings toggle UI\n3. Regression pass on existing screens",
+    logs: "[11:40:00] /qa started on feat/76-dark-mode\n[11:40:22] test suite — 48 passed, 0 failed\n[11:41:03] e2e: toggle persists after reload — PASS\n[11:41:20] e2e: no flash on load — PASS\n[11:41:25] verdict: full — posting to ticket…",
+    history: [{ stage: "PRD", start: 0, days: 1, time: "18m", tokensIn: 42000, tokensOut: 6000 }, { stage: "Kanban", start: 1, days: 1, time: "9m", tokensIn: 31000, tokensOut: 4500 }, { stage: "Spec'd", start: 2, days: 1, time: "26m", tokensIn: 68000, tokensOut: 11000 }, { stage: "Planned", start: 3, days: 2, time: "22m", tokensIn: 54000, tokensOut: 9000 }, { stage: "Dev", start: 5, days: 3, time: "1h 40m", tokensIn: 420000, tokensOut: 38000 }, { stage: "QA", start: 8, days: 1.5, time: "31m", tokensIn: 96000, tokensOut: 14000 }] },
+  { id: "SHP-070", project: "billing", title: "Onboarding checklist widget", stage: "PR", priority: "Medium", owner: "J. Okafor", updated: "1d ago",
+    description: "Dismissible checklist nudging new accounts through first-run setup.",
+    spec: "Done means: dismiss persists, resumes where left off, tracks completion rate.",
+    plan: "1. Checklist state model\n2. Widget UI\n3. Analytics events\n4. QA pass",
+    logs: "[Y-day 16:02] QA verdict: full\n[Y-day 16:10] PR #214 opened against main\n[Y-day 16:11] CI running…",
+    history: [{ stage: "PRD", start: 0, days: 1, time: "18m", tokensIn: 42000, tokensOut: 6000 }, { stage: "Kanban", start: 1, days: 1, time: "9m", tokensIn: 31000, tokensOut: 4500 }, { stage: "Spec'd", start: 2, days: 1, time: "26m", tokensIn: 68000, tokensOut: 11000 }, { stage: "Planned", start: 3, days: 2, time: "22m", tokensIn: 54000, tokensOut: 9000 }, { stage: "Dev", start: 5, days: 3, time: "1h 40m", tokensIn: 420000, tokensOut: 38000 }, { stage: "QA", start: 8, days: 1, time: "31m", tokensIn: 96000, tokensOut: 14000 }, { stage: "PR", start: 9, days: 1, time: "12m", tokensIn: 27000, tokensOut: 5000 }] },
+  { id: "SHP-065", project: "core", title: "Webhook retry backoff", stage: "PR", priority: "High", owner: "R. Chen", updated: "2d ago",
+    description: "Exponential backoff + dead-letter queue for failed outbound webhooks.",
+    spec: "Done means: 5 retries max, jittered backoff, DLQ entries visible in admin.",
+    plan: "1. Backoff scheduler\n2. DLQ table + admin view\n3. Load + failure-injection tests",
+    logs: "[2d ago] QA verdict: full\n[2d ago] PR #211 opened against main\n[1d ago] CI green — awaiting human review",
+    history: [{ stage: "PRD", start: 0, days: 1, time: "18m", tokensIn: 42000, tokensOut: 6000 }, { stage: "Kanban", start: 1, days: 1, time: "9m", tokensIn: 31000, tokensOut: 4500 }, { stage: "Spec'd", start: 2, days: 2, time: "26m", tokensIn: 68000, tokensOut: 11000 }, { stage: "Planned", start: 4, days: 2, time: "22m", tokensIn: 54000, tokensOut: 9000 }, { stage: "Dev", start: 6, days: 4, time: "1h 40m", tokensIn: 420000, tokensOut: 38000 }, { stage: "QA", start: 10, days: 1, time: "31m", tokensIn: 96000, tokensOut: 14000 }, { stage: "PR", start: 11, days: 2, time: "12m", tokensIn: 27000, tokensOut: 5000 }] }
+];
+
+class Component extends DCLogic {
+  state = {
+    selectedId: null, activeTab: this.props.defaultDrawerTab || "Overview", page: 0, project: "all",
+    customProjects: [], addDialogOpen: false, pickedFolderName: "", newProjectName: ""
+  };
+
+  formatTokens(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+    if (n >= 1000) return Math.round(n / 1000) + "K";
+    return String(n);
+  }
+
+  ganttRows(ticket) {
+    const currentIdx = STAGES.indexOf(ticket.stage);
+    return STAGES.map((stage, i) => {
+      const entry = ticket.history.find((h) => h.stage === stage);
+      const isCurrent = i === currentIdx;
+      let statLabel = "";
+      if (entry && entry.tokensIn != null) {
+        statLabel = entry.time + " · " + this.formatTokens(entry.tokensIn) + "/" + this.formatTokens(entry.tokensOut);
+      }
+      return {
+        stage,
+        leftPct: entry ? (entry.start / TIMELINE_DAYS) * 100 : 0,
+        widthPct: entry ? Math.max((entry.days / TIMELINE_DAYS) * 100, 2) : 0,
+        barColor: isCurrent ? "var(--color-accent)" : "var(--color-neutral-400)",
+        labelColor: isCurrent ? "var(--color-accent-700)" : i < currentIdx ? "var(--color-neutral-700)" : "var(--color-neutral-400)",
+        statLabel
+      };
+    });
+  }
+
+  priorityClass(p) {
+    if (p === "High") return "tag-accent";
+    if (p === "Medium") return "tag-outline";
+    return "tag-neutral";
+  }
+
+  renderVals() {
+    const simulateLive = this.props.simulateLive !== false;
+    const selectTicket = (id) => this.setState({ selectedId: id, activeTab: this.props.defaultDrawerTab || "Overview" });
+    const closeDrawer = () => this.setState({ selectedId: null });
+    const setTab = (name) => this.setState({ activeTab: name });
+    const stopClick = (e) => e.stopPropagation();
+    const advanceStage = (id) => this.setState((s) => s);
+
+    const allProjects = PROJECTS.concat(this.state.customProjects);
+    const activeProject = this.state.project;
+    const setProject = (id) => this.setState({ project: id, page: 0 });
+
+    const openAddDialog = () => this.setState({ addDialogOpen: true, pickedFolderName: "", newProjectName: "" });
+    const closeAddDialog = () => this.setState({ addDialogOpen: false });
+    const handleFolderPick = (e) => {
+      const files = e.target.files;
+      const folderName = files && files.length ? files[0].webkitRelativePath.split("/")[0] : "";
+      this.setState((s) => ({ pickedFolderName: folderName, newProjectName: s.newProjectName || folderName }));
+    };
+    const handleNameChange = (e) => this.setState({ newProjectName: e.target.value });
+    const confirmAddProject = () => {
+      const name = this.state.newProjectName || this.state.pickedFolderName;
+      if (!name) return;
+      const id = "custom-" + Date.now();
+      this.setState((s) => ({
+        customProjects: [...s.customProjects, { id, name, repo: s.pickedFolderName ? "local: " + s.pickedFolderName : "local folder" }],
+        addDialogOpen: false,
+        project: id,
+        page: 0
+      }));
+    };
+
+    const projectRows = [{ id: "all", name: "All projects", repo: allProjects.length + " repos" }, ...allProjects].map((p) => {
+      const isAll = p.id === "all";
+      const count = isAll ? RAW_TICKETS.length : RAW_TICKETS.filter((t) => t.project === p.id).length;
+      const isActive = activeProject === p.id;
+      return {
+        ...p,
+        count,
+        bg: isActive ? "var(--color-accent-100)" : "transparent",
+        textColor: isActive ? "var(--color-accent-700)" : "var(--color-text)",
+        select: () => setProject(p.id)
+      };
+    });
+
+    const rows = RAW_TICKETS
+      .filter((t) => activeProject === "all" || t.project === activeProject)
+      .map((t) => ({
+        ...t,
+        priorityLabel: t.priority,
+        priorityClass: this.priorityClass(t.priority),
+        showDot: !!t.running && simulateLive,
+        select: () => selectTicket(t.id)
+      }));
+
+    const activeProjectMeta = allProjects.find((p) => p.id === activeProject);
+    const headerTitle = activeProjectMeta ? activeProjectMeta.name : "All tickets";
+    const headerSubtitle = activeProjectMeta
+      ? `${activeProjectMeta.repo} — PRD → Kanban → Spec'd → Planned → Dev → QA → PR.`
+      : "Every ticket across every project, wherever it sits in the pipeline.";
+    const folderPickSummary = this.state.pickedFolderName ? `Selected: ${this.state.pickedFolderName}` : "Choose a folder from your file system.";
+    const addDisabled = !(this.state.newProjectName || this.state.pickedFolderName);
+
+    const pageCount = Math.max(Math.ceil(rows.length / PAGE_SIZE), 1);
+    const page = Math.min(this.state.page, pageCount - 1);
+    const pageRows = rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+    const rangeStart = rows.length ? page * PAGE_SIZE + 1 : 0;
+    const rangeEnd = Math.min(page * PAGE_SIZE + PAGE_SIZE, rows.length);
+    const pageSummary = `${rangeStart}–${rangeEnd} of ${rows.length}`;
+    const prevPage = () => this.setState((s) => ({ page: Math.max(s.page - 1, 0) }));
+    const nextPage = () => this.setState((s) => ({ page: Math.min(s.page + 1, pageCount - 1) }));
+
+    const raw = RAW_TICKETS.find((t) => t.id === this.state.selectedId) || null;
+    const activeTab = this.state.activeTab;
+    const stageIdx = raw ? STAGES.indexOf(raw.stage) : -1;
+    const nextStage = stageIdx >= 0 && stageIdx < STAGES.length - 1 ? STAGES[stageIdx + 1] : null;
+
+    const selectedTicket = raw ? {
+      ...raw,
+      priorityClass: this.priorityClass(raw.priority),
+      projectRepo: (PROJECTS.find((p) => p.id === raw.project) || {}).repo || "",
+      ganttRows: this.ganttRows(raw),
+      isOverview: activeTab === "Overview",
+      isSpec: activeTab === "Spec",
+      isPlan: activeTab === "Plan",
+      isLogs: activeTab === "Logs",
+      approveLabel: nextStage ? `Approve → ${nextStage}` : "Approve",
+      approve: () => advanceStage(raw.id)
+    } : null;
+
+    const tabs = ["Overview", "Spec", "Plan", "Logs"].map((name) => ({
+      name,
+      cls: "btn " + (activeTab === name ? "btn-secondary" : "btn-ghost"),
+      onClick: () => setTab(name)
+    }));
+
+    return {
+      projectRows,
+      headerTitle,
+      headerSubtitle,
+      addDialogOpen: this.state.addDialogOpen,
+      openAddDialog,
+      closeAddDialog,
+      handleFolderPick,
+      handleNameChange,
+      confirmAddProject,
+      newProjectName: this.state.newProjectName,
+      folderPickSummary,
+      addDisabled,
+      pageRows,
+      pageSummary,
+      isFirstPage: page === 0,
+      isLastPage: page >= pageCount - 1,
+      prevPage,
+      nextPage,
+      drawerOpen: !!selectedTicket,
+      selectedTicket: selectedTicket || {},
+      closeDrawer,
+      stopClick,
+      tabs
+    };
+  }
+}
+</script>
+</body>
+</html>

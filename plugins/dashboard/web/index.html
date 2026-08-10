@@ -5,9 +5,54 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Shipyard Dashboard</title>
 <link rel="stylesheet" href="/styles.css">
+<style>
+  /* Prototype styles not covered by the Modernist design system. */
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+  body { margin: 0; }
+  .dot-running {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--color-accent); margin-left: 6px;
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  .gantt-track { position: relative; height: 14px; background: var(--color-surface); }
+  .gantt-bar { position: absolute; top: 0; bottom: 0; }
+  .drawer-backdrop {
+    position: fixed; inset: 0; z-index: 20;
+    background: color-mix(in srgb, var(--color-neutral-900) 45%, transparent);
+  }
+  .drawer-panel {
+    position: absolute; top: 0; right: 0; bottom: 0; width: min(480px, 100%);
+    background: var(--color-bg); box-shadow: var(--shadow-lg);
+    display: flex; flex-direction: column; padding: var(--space-6); overflow-y: auto;
+  }
+</style>
 </head>
 <body>
-<div id="app">Loading Shipyard dashboard&hellip;</div>
+<div style="min-height:100vh; background:var(--color-bg); color:var(--color-text); display:flex; flex-direction:column;">
+
+  <div class="nav">
+    <div class="nav-brand">Shipyard</div>
+    <a href="#" aria-current="page">Tickets</a>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:var(--space-4);">
+      <input id="search" class="input" style="width:220px;" placeholder="Search tickets…">
+      <button id="new-prd-btn" class="btn btn-primary" title="Run /prd in Claude Code">New PRD</button>
+    </div>
+  </div>
+
+  <div id="banner"></div>
+
+  <div style="display:flex; flex:1; min-height:0;">
+    <div id="sidebar" style="width:240px; flex:none; border-right:2px solid var(--color-divider); padding:var(--space-4); display:flex; flex-direction:column; gap:var(--space-1);"></div>
+
+    <div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+      <div id="main"></div>
+    </div>
+  </div>
+
+  <div id="drawer-root"></div>
+  <div id="dialog-root"></div>
+
+</div>
 <script src="/app.js"></script>
 </body>
 </html>

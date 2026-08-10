@@ -14,7 +14,7 @@ Coexistence with the marketplace is a non-issue by construction: the dashboard *
 
 1. **Delivery:** marketplace plugin, not a standalone app or hosted site.
 2. **Stage metrics:** instrument the pipeline for real per-stage time/token data (not derived-only, not mocked).
-3. **Actions:** board-only writes in v1 (approve = advance stage label, reassign = change assignee). No launching pipeline runs. "Retry stage" from the mock is omitted from v1 UI.
+3. **Actions:** board-only writes in v1, and only transitions that are legitimately human-owned (only ship transitions mid-pipeline labels): Approve on **Awaiting Review** = close the issue (accept); Approve on **Needs Human** = reset to `ship:planned` (re-enter pipeline, the documented human recovery); Approve disabled on all other stages. Reassign = change assignee. No launching pipeline runs. "Retry stage" from the mock is omitted from v1 UI.
 4. **Stack:** zero-dependency Node (stdlib HTTP server) + vanilla JS frontend recreating the prototype; `styles.css` design system used verbatim. GitHub-only v1 (board adapter isolated so Jira can slot in later).
 
 ## Plugin structure
@@ -37,8 +37,8 @@ Also: new entry in root `marketplace.json`; README stage table row (pre-commit h
 ## Data model & board mapping
 
 - **Projects** — linked local repo folders, stored in a machine-level JSON config at `~/.claude/shipyard-dashboard.json` (projects span repos, so not per-repo config). Server derives `owner/repo` from the folder's git remote. Sidebar shows name + repo path + open-ticket count; "All projects" aggregates.
-- **Tickets** — `gh issue list` per project: number, title, assignee, priority label, updated time. **Stage** derives from the stage labels/columns the kanban and ship plugins already use (pipeline: PRD → Kanban → Spec'd → Planned → Dev → QA → PR). The exact label→stage mapping table is pinned during planning from kanban's actual conventions.
-- **Drawer tabs** — Overview = issue body. Spec / Plan = spec.md / plan.md content the planning stage posted to the ticket (placeholder if absent). Logs = stage handoff comments rendered as a monospace log trail.
+- **Tickets** — `gh issue list` per project: number, title, assignee, priority, updated time. **Stage** derives from the pipeline's actual labels (`plugins/ship/references/github.md`): `ship:specced` → Spec'd, `ship:planned` → Planned, `ship:in-dev` → Dev, `ship:in-qa` → QA, `ship:awaiting-review` → Awaiting Review, `ship:needs-human` → Needs Human, no `ship:*` label → Backlog; >1 `ship:*` label = conflict, flagged in UI. **Priority**: no pipeline convention exists — read an optional `priority:*` label if present, else show "—" (no new convention invented).
+- **Drawer tabs** — Overview = issue body. Spec / Plan = the repo files `docs/ship/<ticket>/spec.md` / `plan.md` read from the linked local folder (placeholder if absent). Logs = stage handoff comments (`ship:dev` / `ship:qa` / `ship:review-packet` / `ship:escalation` headers) rendered as a monospace log trail.
 - **"Running" dot** — shown when the board says the ticket is actively in Dev/QA (in-progress stage label with a recent handoff comment). No process introspection.
 
 ## Stage metrics instrumentation

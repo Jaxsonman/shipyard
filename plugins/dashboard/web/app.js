@@ -21,6 +21,7 @@ const state = {
   selectedTicket: null,
   activeDrawerTab: 'Overview',
   ghOk: true,
+  boardWarning: null,
   search: '',
 };
 
@@ -86,7 +87,9 @@ function ticketsForProject(projectId) {
 async function loadProjects() {
   const data = await fetchJson('/api/projects');
   state.projects = data.projects || [];
+  state.boardWarning = data.warning || null;
   renderSidebar();
+  renderBanner();
 }
 
 async function loadTickets({ preserve = false } = {}) {
@@ -124,15 +127,23 @@ async function loadHealth() {
 function renderBanner() {
   const el = document.getElementById('banner');
   if (!el) return;
-  if (state.ghOk) {
-    el.innerHTML = '';
-    return;
+
+  let html = '';
+  if (!state.ghOk) {
+    html += `
+      <div style="width:100%; padding:var(--space-2) var(--space-4); background:var(--color-accent-100); color:var(--color-accent-800); font-size:13px; border-bottom:2px solid var(--color-divider);">
+        gh not authenticated — run: <code>gh auth login</code>
+      </div>
+    `;
   }
-  el.innerHTML = `
-    <div style="width:100%; padding:var(--space-2) var(--space-4); background:var(--color-accent-100); color:var(--color-accent-800); font-size:13px; border-bottom:2px solid var(--color-divider);">
-      gh not authenticated — run: <code>gh auth login</code>
-    </div>
-  `;
+  if (state.boardWarning) {
+    html += `
+      <div style="width:100%; padding:var(--space-2) var(--space-4); background:var(--color-accent-100); color:var(--color-accent-800); font-size:13px; border-bottom:2px solid var(--color-divider);">
+        ${esc(state.boardWarning)}
+      </div>
+    `;
+  }
+  el.innerHTML = html;
 }
 
 // ---- render: sidebar -----------------------------------------------------
@@ -323,6 +334,7 @@ async function openDrawer(project, number, { preserveTab = false } = {}) {
   } catch (err) {
     console.error('Failed to load ticket detail', err);
     drawerDetail = null;
+    drawerError = (err && err.message) || String(err);
   }
   renderDrawer();
 }
@@ -344,8 +356,31 @@ function renderDrawer() {
   const el = document.getElementById('drawer-root');
   if (!el) return;
 
-  if (!state.selectedTicket || !drawerDetail) {
+  if (!state.selectedTicket) {
     el.innerHTML = '';
+    return;
+  }
+
+  if (!drawerDetail) {
+    el.innerHTML = drawerError
+      ? `
+        <div class="drawer-backdrop" id="drawer-backdrop">
+          <div class="drawer-panel" id="drawer-panel">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:var(--space-2);">
+              <h4 style="margin:0;">Failed to load ticket</h4>
+              <button class="btn btn-icon btn-ghost" id="drawer-close">×</button>
+            </div>
+            <div style="color:var(--color-accent); font-size:13px;">${esc(drawerError)}</div>
+          </div>
+        </div>
+      `
+      : '';
+    const backdropEl = document.getElementById('drawer-backdrop');
+    if (backdropEl) backdropEl.addEventListener('click', () => closeDrawer());
+    const panelEl = document.getElementById('drawer-panel');
+    if (panelEl) panelEl.addEventListener('click', (ev) => ev.stopPropagation());
+    const closeBtnEl = document.getElementById('drawer-close');
+    if (closeBtnEl) closeBtnEl.addEventListener('click', () => closeDrawer());
     return;
   }
 

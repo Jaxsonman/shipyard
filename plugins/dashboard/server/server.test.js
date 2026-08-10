@@ -23,6 +23,7 @@ test('tickets list, detail, and guarded approve', async () => {
   const t = tickets.find(x => x.stage === 'Awaiting Review');
   const detail = await (await fetch(`${base}/api/tickets/${t.project}/${t.number}`)).json();
   assert.strictEqual(detail.ticket.timeline.length, 5);
+  assert.ok(typeof detail.ticket.spec === 'string' && detail.ticket.spec.length > 0);
   const ok = await fetch(`${base}/api/tickets/${t.project}/${t.number}/approve`, { method: 'POST' });
   assert.strictEqual(ok.status, 200);
   const dev = tickets.find(x => x.stage === 'Dev');
@@ -33,4 +34,25 @@ test('tickets list, detail, and guarded approve', async () => {
 test('static serving and traversal guard', async () => {
   assert.strictEqual((await fetch(`${base}/`)).status, 200);
   assert.strictEqual((await fetch(`${base}/../../etc/passwd`)).status, 404);
+});
+
+test('cross-origin POST is rejected, same-origin/no-origin requests still work', async () => {
+  const { tickets } = await (await fetch(`${base}/api/tickets?project=all`)).json();
+  const t = tickets.find((x) => x.stage === 'Needs Human');
+
+  const evil = await fetch(`${base}/api/tickets/${t.project}/${t.number}/approve`, {
+    method: 'POST',
+    headers: { Origin: 'https://evil.example' },
+  });
+  assert.strictEqual(evil.status, 403);
+  assert.strictEqual((await evil.json()).error, 'cross-origin request rejected');
+
+  const sameOrigin = await fetch(`${base}/api/tickets/${t.project}/${t.number}/approve`, {
+    method: 'POST',
+    headers: { Origin: base },
+  });
+  assert.strictEqual(sameOrigin.status, 200);
+
+  const noOrigin = await fetch(`${base}/api/health`);
+  assert.strictEqual(noOrigin.status, 200);
 });

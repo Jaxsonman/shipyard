@@ -157,7 +157,7 @@ const TICKETS = {
       comments: [
         metricsComment('ship:dev round 1/3', 'dev', 500, 400, 300000, 28000),
         metricsComment('ship:qa verdict tests-only', 'qa', 390, 360, 80000, 10000),
-        metricsComment('ship:escalation — dev/QA loop exhausted at round 3', 'ship', 30, 20, 12000, 3000),
+        { body: 'ship:escalation — dev/QA loop exhausted at round 3', createdAt: iso(20) },
       ],
     },
   ],
@@ -196,6 +196,8 @@ function createMockBoard() {
         url: t.url,
         comments: t.comments,
         assignees: t.assignees,
+        spec: t.spec ?? null,
+        plan: t.plan ?? null,
       };
     },
 

@@ -76,6 +76,28 @@ function readJsonBody(req) {
   });
 }
 
+// Guards against CSRF and DNS-rebinding: this server binds to 127.0.0.1
+// but CORS "simple requests" (e.g. a form POST) skip preflight, and a
+// malicious page served from an attacker-controlled DNS name that
+// resolves to 127.0.0.1 could still send same-origin-looking requests if
+// we only trusted the socket. So we validate Origin (when present) and
+// Host against the loopback names the server actually listens on.
+function isAllowedOrigin(origin, port) {
+  if (!origin) return true;
+  return origin === `http://127.0.0.1:${port}` || origin === `http://localhost:${port}`;
+}
+
+function isAllowedHostHeader(hostHeader) {
+  if (!hostHeader) return true;
+  let hostname;
+  try {
+    hostname = new URL(`http://${hostHeader}`).hostname;
+  } catch (err) {
+    return false;
+  }
+  return hostname === '127.0.0.1' || hostname === 'localhost';
+}
+
 function slugify(input) {
   const base = String(input || 'project')
     .toLowerCase()
@@ -406,6 +428,17 @@ function createApp(opts = {}) {
   const server = http.createServer((req, res) => {
     Promise.resolve()
       .then(async () => {
+        const addr = server.address();
+        const port = addr && addr.port;
+        if (!isAllowedOrigin(req.headers.origin, port)) {
+          sendJson(res, 403, { error: 'cross-origin request rejected' });
+          return;
+        }
+        if (!isAllowedHostHeader(req.headers.host)) {
+          sendJson(res, 403, { error: 'cross-origin request rejected' });
+          return;
+        }
+
         const url = new URL(req.url, 'http://127.0.0.1');
         const pathname = url.pathname;
         const parts = pathname.split('/').filter(Boolean);

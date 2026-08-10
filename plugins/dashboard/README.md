@@ -22,9 +22,8 @@ The dashboard server starts in the background and opens in your browser. The URL
 - View tickets across all configured pipeline stages
 - Stage timeline and per-stage metrics (time, token usage)
 - Board actions:
-  - Approve tickets (only when on `Awaiting Review` or `Needs Human`)
-  - Reassign tickets
-  - Mark tickets as complete
+  - Approve (`Awaiting Review` → close; `Needs Human` → re-plan)
+  - Reassign
 
 ## Metrics
 

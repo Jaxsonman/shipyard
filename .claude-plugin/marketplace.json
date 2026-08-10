@@ -47,6 +47,13 @@
       "description": "Conductor stage — drive one planned ticket through the autonomous dev ⇄ QA loop to Awaiting Review.",
       "category": "productivity",
       "keywords": ["ship", "conductor", "orchestration", "sdlc", "github", "jira"]
+    },
+    {
+      "name": "dashboard",
+      "source": "./plugins/dashboard",
+      "description": "Visual pipeline dashboard — local web UI for tickets, stages, per-stage stats, and board actions.",
+      "category": "productivity",
+      "keywords": ["dashboard", "ui", "pipeline", "sdlc", "github"]
     }
   ]
 }

@@ -78,6 +78,7 @@ Uninstall plugins before removing the marketplace they came from.
 | 5 | `qa` | ✅ Available | Autonomous verification — tests plus real end-to-end checks |
 | 6 | `pr` | Planned | Open PRs into your existing CI/CD |
 | — | `ship` | ✅ Available | Conductor — drives one planned ticket through the dev ⇄ QA loop (v1) |
+| — | `dashboard` | ✅ Available | Visual dashboard — local web UI over the board: stages, timelines, approve/reassign |
 
 ## Usage
 

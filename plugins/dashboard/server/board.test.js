@@ -10,6 +10,10 @@ test('stageFromLabels maps ship labels with precedence and conflict flag', () =>
   assert.strictEqual(r.conflict, true);
 });
 
+test('stageFromLabels maps ship:specced to Spec\'d', () => {
+  assert.deepStrictEqual(stageFromLabels([{ name: 'ship:specced' }]), { stage: "Spec'd", conflict: false });
+});
+
 test('priorityFromLabels reads optional priority label', () => {
   assert.strictEqual(priorityFromLabels([{ name: 'priority: high' }]), 'High');
   assert.strictEqual(priorityFromLabels([{ name: 'bug' }]), null);

@@ -9,7 +9,7 @@ const STAGE_PRECEDENCE = [
   { label: 'ship:in-qa', stage: 'QA' },
   { label: 'ship:in-dev', stage: 'Dev' },
   { label: 'ship:planned', stage: 'Planned' },
-  { label: 'ship:specced', stage: 'Specced' },
+  { label: 'ship:specced', stage: "Spec'd" },
 ];
 
 function stageFromLabels(labels) {

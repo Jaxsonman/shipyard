@@ -11,6 +11,11 @@ const POLL_MS = 30000;
 const state = {
   projects: [],
   tickets: [],
+  // Always the unfiltered (project=all) ticket list — used only to compute
+  // sidebar counts, so they stay correct regardless of which project is
+  // active (state.tickets is server-filtered by activeProjectId and is not
+  // a safe source for "All projects"/sibling counts — see fix report).
+  allTickets: [],
   activeProjectId: 'all',
   page: 0,
   selectedTicket: null,
@@ -21,6 +26,7 @@ const state = {
 
 // Last-fetched raw payloads, kept for stringify-compare polling.
 let lastTicketsJson = null;
+let lastAllTicketsJson = null;
 let lastHealthJson = null;
 
 // ---- helpers --------------------------------------------------------
@@ -95,6 +101,15 @@ async function loadTickets({ preserve = false } = {}) {
   renderTable();
 }
 
+async function loadAllTicketsForCounts() {
+  const data = await fetchJson('/api/tickets?project=all');
+  const json = JSON.stringify(data);
+  if (json === lastAllTicketsJson) return;
+  lastAllTicketsJson = json;
+  state.allTickets = data.tickets || [];
+  renderSidebar();
+}
+
 async function loadHealth() {
   const data = await fetchJson('/api/health');
   const json = JSON.stringify(data);
@@ -126,14 +141,14 @@ function renderSidebar() {
   const el = document.getElementById('sidebar');
   if (!el) return;
 
-  const allCount = state.tickets.length;
+  const allCount = state.allTickets.length;
   const rows = [{ id: 'all', name: 'All projects', repo: `${state.projects.length} repos`, count: allCount }].concat(
     state.projects.map((p) => ({
       id: p.id,
       name: p.name,
       repo: p.repo,
       count: p.openCount === null || p.openCount === undefined
-        ? state.tickets.filter((t) => t.project === p.id).length
+        ? state.allTickets.filter((t) => t.project === p.id).length
         : p.openCount,
     }))
   );
@@ -310,6 +325,7 @@ function wireStaticControls() {
 function startPolling() {
   setInterval(() => {
     loadTickets({ preserve: true }).catch((err) => console.error('poll tickets failed', err));
+    loadAllTicketsForCounts().catch((err) => console.error('poll ticket counts failed', err));
     loadHealth().catch((err) => console.error('poll health failed', err));
   }, POLL_MS);
 }
@@ -322,7 +338,7 @@ async function boot() {
   renderSidebar();
   renderTable();
   try {
-    await Promise.all([loadProjects(), loadTickets(), loadHealth()]);
+    await Promise.all([loadProjects(), loadTickets(), loadAllTicketsForCounts(), loadHealth()]);
   } catch (err) {
     console.error('Failed to load dashboard data', err);
   }

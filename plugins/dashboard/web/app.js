@@ -281,11 +281,11 @@ function renderTable() {
       const number = Number(rowEl.getAttribute('data-number'));
       const ticket = state.tickets.find((t) => t.project === project && t.number === number) || null;
       state.selectedTicket = ticket;
-      state.activeDrawerTab = 'Overview';
-      if (typeof window.renderDrawer === 'function') {
+      if (ticket && typeof window.openDrawer === 'function') {
+        window.openDrawer(project, number);
+      } else if (typeof window.renderDrawer === 'function') {
+        state.activeDrawerTab = 'Overview';
         window.renderDrawer();
-      } else {
-        console.log('Selected ticket (drawer not yet implemented, Task 6):', ticket);
       }
     });
   });
@@ -305,6 +305,347 @@ function renderTable() {
     });
   }
 }
+
+// ---- render: drawer -----------------------------------------------------
+
+// Full detail payload for the currently-open drawer ticket (body, spec,
+// plan, logs, timeline) — fetched fresh on open/refetch; state.selectedTicket
+// (the list-row shape) drives *which* ticket is open.
+let drawerDetail = null;
+let drawerError = '';
+
+async function openDrawer(project, number, { preserveTab = false } = {}) {
+  if (!preserveTab) state.activeDrawerTab = 'Overview';
+  drawerError = '';
+  try {
+    const data = await fetchJson(`/api/tickets/${encodeURIComponent(project)}/${encodeURIComponent(number)}`);
+    drawerDetail = data.ticket;
+  } catch (err) {
+    console.error('Failed to load ticket detail', err);
+    drawerDetail = null;
+  }
+  renderDrawer();
+}
+
+function closeDrawer() {
+  state.selectedTicket = null;
+  drawerDetail = null;
+  drawerError = '';
+  renderDrawer();
+}
+
+function approveEligibility(stage) {
+  if (stage === 'Awaiting Review') return { enabled: true, label: 'Approve — close ticket' };
+  if (stage === 'Needs Human') return { enabled: true, label: 'Approve → Planned' };
+  return { enabled: false, label: 'Approve' };
+}
+
+function renderDrawer() {
+  const el = document.getElementById('drawer-root');
+  if (!el) return;
+
+  if (!state.selectedTicket || !drawerDetail) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const t = drawerDetail;
+  const tabs = ['Overview', 'Spec', 'Plan', 'Logs'];
+  const tabsHtml = tabs
+    .map((tab) => {
+      const active = state.activeDrawerTab === tab;
+      const cls = active ? 'btn btn-secondary' : 'btn btn-ghost';
+      return `<button class="${cls}" data-tab="${esc(tab)}">${esc(tab)}</button>`;
+    })
+    .join('');
+
+  const ganttHtml = (t.timeline || [])
+    .map((row) => {
+      const isCurrent = row.state === 'current';
+      const isPast = row.state === 'past';
+      const labelColor = isCurrent ? 'var(--color-accent)' : 'var(--color-neutral-600)';
+      const barColor = isCurrent ? 'var(--color-accent)' : isPast ? 'var(--color-neutral-400)' : 'transparent';
+      return `
+        <div style="display:grid; grid-template-columns:76px 1fr 130px; align-items:center; gap:var(--space-2);">
+          <div style="font-size:10px; letter-spacing:0.04em; text-transform:uppercase; color:${labelColor};">${esc(row.label)}</div>
+          <div class="gantt-track">
+            <div class="gantt-bar" style="left:${row.startPct}%; width:${row.widthPct}%; background:${barColor};"></div>
+          </div>
+          <div style="font-size:11px; font-family:monospace; color:${labelColor}; text-align:right;">${esc(row.stat)}</div>
+        </div>
+      `;
+    })
+    .join('');
+
+  let tabContent = '';
+  if (state.activeDrawerTab === 'Overview') {
+    tabContent = `<p style="font-size:14px; opacity:0.85; white-space:pre-wrap;">${esc(t.body)}</p>`;
+  } else if (state.activeDrawerTab === 'Spec') {
+    tabContent = `<p style="font-size:14px; opacity:0.85; white-space:pre-wrap;">${esc(t.spec || "Not spec'd yet")}</p>`;
+  } else if (state.activeDrawerTab === 'Plan') {
+    tabContent = `<p style="font-size:14px; opacity:0.85; white-space:pre-wrap;">${esc(t.plan || 'Not planned yet')}</p>`;
+  } else if (state.activeDrawerTab === 'Logs') {
+    const logsText = (t.logs || [])
+      .map((l) => `[${l.createdAt}] ${l.header}${l.body ? `\n${l.body}` : ''}`)
+      .join('\n\n');
+    tabContent = `<pre style="background:var(--color-neutral-900); color:var(--color-neutral-100); font-size:12px; padding:var(--space-3); overflow-x:auto; white-space:pre-wrap; line-height:1.5;">${esc(logsText || 'No pipeline runs yet.')}</pre>`;
+  }
+
+  const { enabled: approveEnabled, label: approveLabel } = approveEligibility(t.stage);
+  const pCls = priorityClass(t.priority);
+  const priorityTag = pCls
+    ? `<span class="tag ${pCls}">${esc(t.priority)}</span>`
+    : '<span class="text-muted">—</span>';
+
+  const errorHtml = drawerError
+    ? `<div style="color:var(--color-accent); font-size:12px; width:100%;">${esc(drawerError)}</div>`
+    : '';
+
+  el.innerHTML = `
+    <div class="drawer-backdrop" id="drawer-backdrop">
+      <div class="drawer-panel" id="drawer-panel">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:var(--space-2);">
+          <div>
+            <div class="card-kicker">#${esc(t.number)} · ${esc(t.projectName)}</div>
+            <h4 style="margin:2px 0 0;">${esc(t.title)}</h4>
+          </div>
+          <button class="btn btn-icon btn-ghost" id="drawer-close">×</button>
+        </div>
+
+        <div class="card-meta" style="margin-bottom:var(--space-4);">
+          <span>${esc(t.assignee || '—')}</span>
+          <span>·</span>
+          <span>updated ${esc(relativeTime(t.updatedAt))}</span>
+          <span>·</span>
+          ${priorityTag}
+        </div>
+
+        <div style="margin-bottom:var(--space-4);">
+          <h6 style="margin-bottom:var(--space-2);">Pipeline timeline</h6>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            ${ganttHtml}
+          </div>
+        </div>
+
+        <div class="hr" style="margin:0 0 var(--space-4);"></div>
+
+        <div style="display:flex; gap:var(--space-1); margin-bottom:var(--space-4);">
+          ${tabsHtml}
+        </div>
+
+        ${tabContent}
+
+        <div style="flex:1;"></div>
+        <div class="hr" style="margin:var(--space-4) 0;"></div>
+        <div style="display:flex; gap:var(--space-2); flex-wrap:wrap; align-items:center;">
+          <button class="btn btn-primary" id="drawer-approve" ${approveEnabled ? '' : 'disabled'} ${approveEnabled ? '' : 'title="Pipeline-owned stage"'}>${esc(approveLabel)}</button>
+          <button class="btn btn-secondary" id="drawer-reassign">Reassign</button>
+          ${errorHtml}
+        </div>
+      </div>
+    </div>
+  `;
+
+  const backdrop = document.getElementById('drawer-backdrop');
+  if (backdrop) {
+    backdrop.addEventListener('click', () => closeDrawer());
+  }
+  const panel = document.getElementById('drawer-panel');
+  if (panel) {
+    panel.addEventListener('click', (ev) => ev.stopPropagation());
+  }
+  const closeBtn = document.getElementById('drawer-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => closeDrawer());
+  }
+  el.querySelectorAll('[data-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.activeDrawerTab = btn.getAttribute('data-tab');
+      renderDrawer();
+    });
+  });
+  const approveBtn = document.getElementById('drawer-approve');
+  if (approveBtn && approveEnabled) {
+    approveBtn.addEventListener('click', async () => {
+      drawerError = '';
+      try {
+        const res = await fetch(`/api/tickets/${encodeURIComponent(t.project)}/${encodeURIComponent(t.number)}/approve`, {
+          method: 'POST',
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || `approve failed: ${res.status}`);
+        }
+        await openDrawer(t.project, t.number, { preserveTab: true });
+        await Promise.all([loadTickets({ preserve: true }), loadAllTicketsForCounts()]);
+      } catch (err) {
+        drawerError = err.message || String(err);
+        renderDrawer();
+      }
+    });
+  }
+  const reassignBtn = document.getElementById('drawer-reassign');
+  if (reassignBtn) {
+    reassignBtn.addEventListener('click', async () => {
+      const login = window.prompt('GitHub login to assign:');
+      if (!login) return;
+      drawerError = '';
+      try {
+        const res = await fetch(`/api/tickets/${encodeURIComponent(t.project)}/${encodeURIComponent(t.number)}/assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ login }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || `assign failed: ${res.status}`);
+        }
+        await openDrawer(t.project, t.number, { preserveTab: true });
+        await Promise.all([loadTickets({ preserve: true }), loadAllTicketsForCounts()]);
+      } catch (err) {
+        drawerError = err.message || String(err);
+        renderDrawer();
+      }
+    });
+  }
+}
+
+window.renderDrawer = renderDrawer;
+window.openDrawer = openDrawer;
+
+// ---- render: add-project dialog -----------------------------------------
+
+let addDialogOpen = false;
+let pickedFolderName = '';
+let newProjectName = '';
+let newProjectPath = '';
+let addDialogError = '';
+
+function openAddDialog() {
+  addDialogOpen = true;
+  pickedFolderName = '';
+  newProjectName = '';
+  newProjectPath = '';
+  addDialogError = '';
+  renderAddDialog();
+}
+
+function closeAddDialog() {
+  addDialogOpen = false;
+  renderAddDialog();
+}
+
+function renderAddDialog() {
+  const el = document.getElementById('dialog-root');
+  if (!el) return;
+
+  if (!addDialogOpen) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const linkDisabled = newProjectPath.trim().length === 0;
+  const errorHtml = addDialogError
+    ? `<div style="color:var(--color-accent); font-size:12px; margin-top:var(--space-2);">${esc(addDialogError)}</div>`
+    : '';
+
+  el.innerHTML = `
+    <div class="dialog-backdrop" id="add-dialog-backdrop">
+      <div class="dialog" id="add-dialog">
+        <div class="dialog-title">Link a local codebase</div>
+        <div class="dialog-body">
+          <div class="field" style="margin-bottom:var(--space-3);">
+            <label>Folder</label>
+            <input class="input" type="file" id="add-dialog-folder" webkitdirectory directory>
+            <div class="text-muted" style="font-size:12px; margin-top:6px;">${esc(pickedFolderName || 'Used only to prefill the project name below.')}</div>
+          </div>
+          <div class="field" style="margin-bottom:var(--space-3);">
+            <label>Path</label>
+            <input class="input" id="add-dialog-path" value="${esc(newProjectPath)}" placeholder="/absolute/path/to/repo">
+            <div class="text-muted" style="font-size:12px; margin-top:6px;">The server validates this folder has a GitHub remote.</div>
+          </div>
+          <div class="field">
+            <label>Project name</label>
+            <input class="input" id="add-dialog-name" value="${esc(newProjectName)}" placeholder="e.g. Payments Service">
+          </div>
+          ${errorHtml}
+        </div>
+        <div class="dialog-actions">
+          <button class="btn btn-secondary" id="add-dialog-cancel">Cancel</button>
+          <button class="btn btn-primary" id="add-dialog-confirm" ${linkDisabled ? 'disabled' : ''}>Link project</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const backdrop = document.getElementById('add-dialog-backdrop');
+  if (backdrop) backdrop.addEventListener('click', () => closeAddDialog());
+  const dialog = document.getElementById('add-dialog');
+  if (dialog) dialog.addEventListener('click', (ev) => ev.stopPropagation());
+  const cancelBtn = document.getElementById('add-dialog-cancel');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => closeAddDialog());
+
+  const folderInput = document.getElementById('add-dialog-folder');
+  if (folderInput) {
+    folderInput.addEventListener('change', () => {
+      const file = folderInput.files && folderInput.files[0];
+      if (!file) return;
+      const rel = file.webkitRelativePath || '';
+      const folderName = rel.split('/')[0] || '';
+      pickedFolderName = folderName;
+      if (!newProjectName) newProjectName = folderName;
+      renderAddDialog();
+    });
+  }
+
+  const pathInput = document.getElementById('add-dialog-path');
+  if (pathInput) {
+    pathInput.addEventListener('input', () => {
+      newProjectPath = pathInput.value;
+      const confirmBtn = document.getElementById('add-dialog-confirm');
+      if (confirmBtn) confirmBtn.disabled = newProjectPath.trim().length === 0;
+    });
+  }
+
+  const nameInput = document.getElementById('add-dialog-name');
+  if (nameInput) {
+    nameInput.addEventListener('input', () => {
+      newProjectName = nameInput.value;
+    });
+  }
+
+  const confirmBtn = document.getElementById('add-dialog-confirm');
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', async () => {
+      addDialogError = '';
+      try {
+        const res = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: newProjectPath, name: newProjectName }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(body.error || `link failed: ${res.status}`);
+        }
+        addDialogOpen = false;
+        renderAddDialog();
+        await loadProjects();
+        if (body.project && body.project.id) {
+          state.activeProjectId = body.project.id;
+          state.page = 0;
+          renderSidebar();
+          await loadTickets();
+        }
+      } catch (err) {
+        addDialogError = err.message || String(err);
+        renderAddDialog();
+      }
+    });
+  }
+}
+
+window.openAddDialog = openAddDialog;
 
 // ---- search / nav wiring -----------------------------------------------
 

@@ -193,6 +193,20 @@ resume — or "none">
 rationale; baseline failures inherited — or "none">
 ```
 
+**Metrics footer (dashboard integration).** Append this hidden HTML comment as the
+last line of the comment body, so the dashboard plugin can build stage timelines.
+Record `started` when this stage began work on the ticket (ISO 8601 UTC) and
+`finished` as now. `tokens_in`/`tokens_out` are optional — include them only when
+the stage runner knows real numbers (e.g. ship fills them for dev/qa rounds from
+the subagent usage reported in task notifications); never estimate.
+
+```
+<!-- shipyard-metrics {"stage":"dev","started":"<ISO8601>","finished":"<ISO8601>","tokens_in":<n>,"tokens_out":<n>} -->
+```
+
+This footer applies to the handoff comment above only — never to the
+Step 8 escalation comment.
+
 Post it as a ticket comment via the backend reference. **If the post
 fails after work is committed**, write the same content to
 `docs/ship/<id>/dev-handoff-<round-or-standalone>.md`, commit only that

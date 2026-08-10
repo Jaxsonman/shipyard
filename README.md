@@ -80,6 +80,11 @@ Uninstall plugins before removing the marketplace they came from.
 | — | `ship` | ✅ Available | Conductor — drives one planned ticket through the dev ⇄ QA loop (v1) |
 | — | `dashboard` | ✅ Available | Visual dashboard — local web UI over the board: stages, timelines, approve/reassign |
 
+`planning`'s `/spec` and `/plan`, `dev`, `qa`, and `ship` each append a
+hidden `<!-- shipyard-metrics {...} -->` footer to their primary handoff
+comment (spec/plan approval, dev handoff, qa verdict, ship review packet)
+so the `dashboard` plugin can build accurate per-stage timelines.
+
 ## Usage
 
 After installing `prd`, run:

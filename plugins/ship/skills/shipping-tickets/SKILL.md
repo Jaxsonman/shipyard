@@ -278,6 +278,20 @@ ticket; /ship picks up from Awaiting Review in v2. When done with the
 worktree: git worktree remove ../<repo-dir-name>-ship/dev-<id>
 ```
 
+**Metrics footer (dashboard integration).** Append this hidden HTML comment as the
+last line of the comment body, so the dashboard plugin can build stage timelines.
+Record `started` when this stage began work on the ticket (ISO 8601 UTC) and
+`finished` as now. `tokens_in`/`tokens_out` are optional — include them only when
+the stage runner knows real numbers (e.g. ship fills them for dev/qa rounds from
+the subagent usage reported in task notifications); never estimate.
+
+```
+<!-- shipyard-metrics {"stage":"ship","started":"<ISO8601>","finished":"<ISO8601>","tokens_in":<n>,"tokens_out":<n>} -->
+```
+
+This footer applies to the review packet above only — never to the cap
+escalation comment below.
+
 **Cap escalation** — after M failed round-trips, the one artifact only
 the conductor can write; posted, then status → `Needs Human`:
 

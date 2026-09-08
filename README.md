@@ -4,6 +4,12 @@ An SDLC pipeline for Claude Code, delivered as plugins. Ideas go in one end;
 shipped software comes out the other. Each pipeline stage is its own plugin —
 adopt one stage or the whole line.
 
+**Contract:** every plugin parses the same labels, comment headers, metrics
+footer, and config schemas, defined once in [`docs/contract.md`](docs/contract.md)
+(contract v1); `docs/contract.md` and `plugins/*/references/contract.md` are
+generated from `shared/references/contract.md` by `scripts/sync-shared.sh` and
+must not be hand-edited.
+
 ## Adding Shipyard to Claude Code
 
 Shipyard is a [Claude Code plugin marketplace](https://docs.claude.com/en/docs/claude-code/plugin-marketplaces).
@@ -169,6 +175,38 @@ it reconstructs the round from the board trail. v1 conducts one
 ticket at a time; bare `/ship` lists tickets ready to conduct.
 Configure the QA environment once beforehand with `/qa --env-check` —
 ship refuses to run without it.
+
+## Shared scripts
+
+Every plugin's skills call the same six scripts:
+
+- `board-trail.js` — parse ticket comments into typed, trust-marked events and reconcile pipeline state
+- `preflight.js` — stage-agnostic environment and repository checks, run before any interview
+- `config.js` — bootstrap, validate and normalize `.claude/kanban.config.json` and `.claude/ship.config.json`
+- `validate-artifact.js` — enforce the required sections of `spec.md` and `plan.md`
+- `metrics.js` — ISO-8601 timestamps and the metrics footer line
+- `redact.js` — strip secrets from log excerpts before they reach a board comment
+
+All six require Node >= 18, are CommonJS, and have zero dependencies. A skill
+invokes one like this:
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/scripts/<name>.js" --help
+```
+
+The source of truth is `shared/scripts/`. Run `bash scripts/sync-shared.sh` to
+regenerate the vendored copies under `plugins/*/scripts/` — those copies must
+never be hand-edited.
+
+## Verification
+
+```bash
+node --test shared/scripts/*.test.js   # unit tests (the directory form fails on Node 25)
+bash scripts/check-shared-sync.sh      # vendored copies match shared/
+claude plugin validate .               # plugin manifests
+```
+
+The pre-commit hook and `.github/workflows/ci.yml` both run all three.
 
 ## Contributing
 

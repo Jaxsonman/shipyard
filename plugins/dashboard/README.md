@@ -60,6 +60,12 @@ resolves a directory argument as a module specifier.
   rows, warnings }`; a per-ticket detail failure degrades that ticket to a
   list-derived row instead of failing the whole response, and is reported in
   `warnings`.
+- `GET /api/stats?project=<id|all>` — pipeline stats strip. Reuses the exact
+  same `gatherRows`/`timeline.buildBoardTimeline` row set as `GET
+  /api/timeline` so the two views can never disagree, then runs it through
+  `stats.buildStats`. Returns `{ counts, stageDuration, tokens, throughput,
+  escalations, warnings }` — per-stage ticket counts, median/p90 stage
+  duration, token totals, review throughput, and escalation-cause tallies.
 
 ## Metrics
 

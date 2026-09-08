@@ -37,6 +37,16 @@ test('GET /api/timeline filters rows to the requested project', async () => {
   assert.ok(body.rows.every((r) => r.project === 'core'));
 });
 
+test('GET /api/stats returns counts, durations, tokens and escalation causes', async () => {
+  const res = await fetch(`${base}/api/stats?project=all`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(Object.prototype.hasOwnProperty.call(body.counts, 'Needs Human'));
+  assert.ok(body.stageDuration.samples > 0);
+  assert.ok(body.tokens.in > 0);
+  assert.ok(body.escalations.cap >= 1);
+});
+
 test('tickets list, detail, and guarded approve', async () => {
   const { tickets } = await (await fetch(`${base}/api/tickets?project=all`)).json();
   assert.ok(tickets.length >= 5);

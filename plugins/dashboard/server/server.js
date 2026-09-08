@@ -11,6 +11,7 @@ const { parseMetrics, buildTimeline } = require('./metrics.js');
 const { stageFromLabels, priorityFromLabels, createBoard, repoFromPath } = require('./board.js');
 const fixtures = require('./fixtures.js');
 const timeline = require('./timeline.js');
+const stats = require('./stats.js');
 
 const DETAIL_CONCURRENCY = 5;
 
@@ -356,6 +357,17 @@ function createApp(opts = {}) {
     sendJson(res, 200, { now, domain, groups, rows, warnings });
   }
 
+  async function handleGetStats(req, res, query) {
+    const projectFilter = query.get('project') || 'all';
+    const result = await gatherRows(projectFilter);
+    if (result.error) {
+      sendJson(res, 400, { error: result.error });
+      return;
+    }
+    const built = stats.buildStats({ rows: result.rows, now: result.now });
+    sendJson(res, 200, { ...built, warnings: result.warnings });
+  }
+
   async function handleGetTicketDetail(req, res, projectId, numberStr) {
     const config = await loadConfig();
     const project = await findProject(config, projectId);
@@ -535,6 +547,9 @@ function createApp(opts = {}) {
         }
         if (pathname === '/api/timeline' && req.method === 'GET') {
           return handleGetTimeline(req, res, url.searchParams);
+        }
+        if (pathname === '/api/stats' && req.method === 'GET') {
+          return handleGetStats(req, res, url.searchParams);
         }
         // /api/tickets/<projectId>/<number>[/approve|/assign]
         if (parts[0] === 'api' && parts[1] === 'tickets' && parts.length === 4 && req.method === 'GET') {

@@ -50,6 +50,16 @@ resolves a directory argument as a module specifier.
   ticket (handoff headers, no metrics footers), a running Dev/QA ticket, a
   PR-stage ticket, a Backlog ticket, and one Needs Human ticket per
   escalation cause (`cap`, `static`, `stage-error`, `reconcile`).
+- **Theming contract**: `web/styles.css` is the verbatim Modernist design
+  system, generated from `docs/design/dashboard/styles.css` — it is never
+  hand-edited; a `diff` between the two must always be empty. `web/app.css`
+  is the dashboard's own stylesheet: it swaps the design system's token
+  *values* for a dark theme (same token names, `prefers-color-scheme` plus an
+  explicit `[data-theme="dark"]` override) and holds every app-specific
+  component class (`.app-shell`, `.sidebar`, `.proj-row`, `.gantt-grid`,
+  `.tabs`, `.dialog-field`, …). No inline `style="…"` attributes remain in
+  `web/index.html` or `web/app.js` except CSS-custom-property carriers for
+  genuinely dynamic geometry (e.g. `--bar-left`/`--bar-width` on `.gantt-bar`).
 
 ## API
 

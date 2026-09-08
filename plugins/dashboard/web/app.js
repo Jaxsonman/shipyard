@@ -131,14 +131,14 @@ function renderBanner() {
   let html = '';
   if (!state.ghOk) {
     html += `
-      <div style="width:100%; padding:var(--space-2) var(--space-4); background:var(--color-accent-100); color:var(--color-accent-800); font-size:13px; border-bottom:2px solid var(--color-divider);">
+      <div class="banner-warn">
         gh not authenticated — run: <code>gh auth login</code>
       </div>
     `;
   }
   if (state.boardWarning) {
     html += `
-      <div style="width:100%; padding:var(--space-2) var(--space-4); background:var(--color-accent-100); color:var(--color-accent-800); font-size:13px; border-bottom:2px solid var(--color-divider);">
+      <div class="banner-warn">
         ${esc(state.boardWarning)}
       </div>
     `;
@@ -165,24 +165,23 @@ function renderSidebar() {
   );
 
   const header = `
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:var(--space-2);">
-      <h6 style="margin:0;">Projects</h6>
-      <button class="btn btn-ghost" id="add-project-btn" style="padding:2px 6px; font-size:12px;">+ Add</button>
+    <div class="sidebar-head">
+      <h6>Projects</h6>
+      <button class="btn btn-ghost sidebar-add-btn" id="add-project-btn">+ Add</button>
     </div>
   `;
 
   const rowsHtml = rows
     .map((r) => {
       const isActive = state.activeProjectId === r.id;
-      const bg = isActive ? 'var(--color-accent-100)' : 'transparent';
-      const textColor = isActive ? 'var(--color-accent-700)' : 'var(--color-text)';
+      const rowCls = isActive ? 'proj-row is-active focusable' : 'proj-row focusable';
       return `
-        <div class="sidebar-row" data-project-id="${esc(r.id)}" style="display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); padding:var(--space-2); background:${bg}; cursor:pointer;">
-          <div style="min-width:0;">
-            <div style="font-size:13px; font-weight:600; color:${textColor}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(r.name)}</div>
-            <div style="font-size:11px; font-family:monospace; color:var(--color-neutral-600); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(r.repo)}</div>
+        <div class="${rowCls}" data-project-id="${esc(r.id)}">
+          <div class="proj-row-text">
+            <div class="proj-name">${esc(r.name)}</div>
+            <div class="proj-repo">${esc(r.repo)}</div>
           </div>
-          <span class="tag tag-neutral" style="flex:none;">${esc(r.count)}</span>
+          <span class="tag tag-neutral proj-count">${esc(r.count)}</span>
         </div>
       `;
     })
@@ -190,7 +189,7 @@ function renderSidebar() {
 
   el.innerHTML = header + rowsHtml;
 
-  el.querySelectorAll('.sidebar-row').forEach((rowEl) => {
+  el.querySelectorAll('.proj-row').forEach((rowEl) => {
     rowEl.addEventListener('click', () => {
       state.activeProjectId = rowEl.getAttribute('data-project-id');
       state.page = 0;
@@ -243,7 +242,7 @@ function renderTable() {
         ? `<span class="tag ${pCls}">${esc(t.priority)}</span>`
         : '<span class="text-muted">—</span>';
       return `
-        <tr class="ticket-row" style="cursor:pointer;" data-project="${esc(t.project)}" data-number="${esc(t.number)}">
+        <tr class="ticket-row row-click focusable" data-project="${esc(t.project)}" data-number="${esc(t.number)}">
           <td>#${esc(t.number)}</td>
           <td>${esc(t.title)}</td>
           <td><span class="tag tag-neutral"${stageTitle}>${esc(t.stage)}</span>${dot}</td>
@@ -256,11 +255,11 @@ function renderTable() {
     .join('');
 
   el.innerHTML = `
-    <div style="padding:var(--space-6) var(--space-6) 0;">
-      <h2 style="margin-bottom:2px;">${esc(headerTitle)}</h2>
-      <p class="text-muted" style="font-size:13px; margin-bottom:var(--space-4);">${esc(headerSubtitle)}</p>
+    <div class="page-head">
+      <h2 class="page-title">${esc(headerTitle)}</h2>
+      <p class="text-muted page-sub">${esc(headerSubtitle)}</p>
     </div>
-    <div style="padding:0 var(--space-6) var(--space-6);">
+    <div class="page-body">
       <table class="table">
         <thead>
           <tr>
@@ -276,9 +275,9 @@ function renderTable() {
           ${bodyRows || '<tr><td colspan="6" class="text-muted">No tickets.</td></tr>'}
         </tbody>
       </table>
-      <div style="display:flex; align-items:center; justify-content:space-between; padding-top:var(--space-3);">
-        <span class="text-muted" style="font-size:12px;">${esc(pageSummary)}</span>
-        <div style="display:flex; gap:var(--space-2);">
+      <div class="pager">
+        <span class="text-muted pager-summary">${esc(pageSummary)}</span>
+        <div class="pager-actions">
           <button class="btn btn-secondary" id="prev-page" ${isFirstPage ? 'disabled' : ''}>Prev</button>
           <button class="btn btn-secondary" id="next-page" ${isLastPage ? 'disabled' : ''}>Next</button>
         </div>
@@ -366,11 +365,11 @@ function renderDrawer() {
       ? `
         <div class="drawer-backdrop" id="drawer-backdrop">
           <div class="drawer-panel" id="drawer-panel">
-            <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:var(--space-2);">
-              <h4 style="margin:0;">Failed to load ticket</h4>
+            <div class="drawer-head">
+              <h4 class="drawer-title">Failed to load ticket</h4>
               <button class="btn btn-icon btn-ghost" id="drawer-close">×</button>
             </div>
-            <div style="color:var(--color-accent); font-size:13px;">${esc(drawerError)}</div>
+            <div class="drawer-err">${esc(drawerError)}</div>
           </div>
         </div>
       `
@@ -398,15 +397,15 @@ function renderDrawer() {
     .map((row) => {
       const isCurrent = row.state === 'current';
       const isPast = row.state === 'past';
-      const labelColor = isCurrent ? 'var(--color-accent)' : 'var(--color-neutral-600)';
-      const barColor = isCurrent ? 'var(--color-accent)' : isPast ? 'var(--color-neutral-400)' : 'transparent';
+      const activeCls = isCurrent ? ' is-active' : '';
+      const barStateCls = isCurrent ? 'gantt-bar-current' : isPast ? 'gantt-bar-past' : 'gantt-bar-future';
       return `
-        <div style="display:grid; grid-template-columns:76px 1fr 130px; align-items:center; gap:var(--space-2);">
-          <div style="font-size:10px; letter-spacing:0.04em; text-transform:uppercase; color:${labelColor};">${esc(row.label)}</div>
+        <div class="gantt-grid">
+          <div class="gantt-label${activeCls}">${esc(row.label)}</div>
           <div class="gantt-track">
-            <div class="gantt-bar" style="left:${row.startPct}%; width:${row.widthPct}%; background:${barColor};"></div>
+            <div class="gantt-bar ${barStateCls}" style="--bar-left:${row.startPct}%; --bar-width:${row.widthPct}%"></div>
           </div>
-          <div style="font-size:11px; font-family:monospace; color:${labelColor}; text-align:right;">${esc(row.stat)}</div>
+          <div class="gantt-stat${activeCls}">${esc(row.stat)}</div>
         </div>
       `;
     })
@@ -414,16 +413,16 @@ function renderDrawer() {
 
   let tabContent = '';
   if (state.activeDrawerTab === 'Overview') {
-    tabContent = `<p style="font-size:14px; opacity:0.85; white-space:pre-wrap;">${esc(t.body)}</p>`;
+    tabContent = `<p class="tab-copy">${esc(t.body)}</p>`;
   } else if (state.activeDrawerTab === 'Spec') {
-    tabContent = `<p style="font-size:14px; opacity:0.85; white-space:pre-wrap;">${esc(t.spec || "Not spec'd yet")}</p>`;
+    tabContent = `<p class="tab-copy">${esc(t.spec || "Not spec'd yet")}</p>`;
   } else if (state.activeDrawerTab === 'Plan') {
-    tabContent = `<p style="font-size:14px; opacity:0.85; white-space:pre-wrap;">${esc(t.plan || 'Not planned yet')}</p>`;
+    tabContent = `<p class="tab-copy">${esc(t.plan || 'Not planned yet')}</p>`;
   } else if (state.activeDrawerTab === 'Logs') {
     const logsText = (t.logs || [])
       .map((l) => `[${l.createdAt}] ${l.header}${l.body ? `\n${l.body}` : ''}`)
       .join('\n\n');
-    tabContent = `<pre style="background:var(--color-neutral-900); color:var(--color-neutral-100); font-size:12px; padding:var(--space-3); overflow-x:auto; white-space:pre-wrap; line-height:1.5;">${esc(logsText || 'No pipeline runs yet.')}</pre>`;
+    tabContent = `<pre class="logs">${esc(logsText || 'No pipeline runs yet.')}</pre>`;
   }
 
   const { enabled: approveEnabled, label: approveLabel } = approveEligibility(t.stage);
@@ -433,21 +432,21 @@ function renderDrawer() {
     : '<span class="text-muted">—</span>';
 
   const errorHtml = drawerError
-    ? `<div style="color:var(--color-accent); font-size:12px; width:100%;">${esc(drawerError)}</div>`
+    ? `<div class="drawer-err">${esc(drawerError)}</div>`
     : '';
 
   el.innerHTML = `
     <div class="drawer-backdrop" id="drawer-backdrop">
       <div class="drawer-panel" id="drawer-panel">
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:var(--space-2);">
+        <div class="drawer-head">
           <div>
             <div class="card-kicker">#${esc(t.number)} · ${esc(t.projectName)}</div>
-            <h4 style="margin:2px 0 0;">${esc(t.title)}</h4>
+            <h4 class="drawer-title">${esc(t.title)}</h4>
           </div>
           <button class="btn btn-icon btn-ghost" id="drawer-close">×</button>
         </div>
 
-        <div class="card-meta" style="margin-bottom:var(--space-4);">
+        <div class="card-meta drawer-meta">
           <span>${esc(t.assignee || '—')}</span>
           <span>·</span>
           <span>updated ${esc(relativeTime(t.updatedAt))}</span>
@@ -455,24 +454,24 @@ function renderDrawer() {
           ${priorityTag}
         </div>
 
-        <div style="margin-bottom:var(--space-4);">
-          <h6 style="margin-bottom:var(--space-2);">Pipeline timeline</h6>
-          <div style="display:flex; flex-direction:column; gap:6px;">
+        <div class="drawer-section">
+          <h6 class="drawer-section-title">Pipeline timeline</h6>
+          <div class="gantt-list">
             ${ganttHtml}
           </div>
         </div>
 
-        <div class="hr" style="margin:0 0 var(--space-4);"></div>
+        <div class="hr hr-tight"></div>
 
-        <div style="display:flex; gap:var(--space-1); margin-bottom:var(--space-4);">
+        <div class="tabs">
           ${tabsHtml}
         </div>
 
         ${tabContent}
 
-        <div style="flex:1;"></div>
-        <div class="hr" style="margin:var(--space-4) 0;"></div>
-        <div style="display:flex; gap:var(--space-2); flex-wrap:wrap; align-items:center;">
+        <div class="drawer-spacer"></div>
+        <div class="hr hr-loose"></div>
+        <div class="drawer-actions">
           <button class="btn btn-primary" id="drawer-approve" ${approveEnabled ? '' : 'disabled'} ${approveEnabled ? '' : 'title="Pipeline-owned stage"'}>${esc(approveLabel)}</button>
           <button class="btn btn-secondary" id="drawer-reassign">Reassign</button>
           ${errorHtml}
@@ -581,7 +580,7 @@ function renderAddDialog() {
 
   const linkDisabled = newProjectPath.trim().length === 0;
   const errorHtml = addDialogError
-    ? `<div style="color:var(--color-accent); font-size:12px; margin-top:var(--space-2);">${esc(addDialogError)}</div>`
+    ? `<div class="dialog-err">${esc(addDialogError)}</div>`
     : '';
 
   el.innerHTML = `
@@ -589,15 +588,15 @@ function renderAddDialog() {
       <div class="dialog" id="add-dialog">
         <div class="dialog-title">Link a local codebase</div>
         <div class="dialog-body">
-          <div class="field" style="margin-bottom:var(--space-3);">
+          <div class="field dialog-field">
             <label>Folder</label>
             <input class="input" type="file" id="add-dialog-folder" webkitdirectory directory>
-            <div class="text-muted" style="font-size:12px; margin-top:6px;">${esc(pickedFolderName || 'Used only to prefill the project name below.')}</div>
+            <div class="text-muted dialog-hint">${esc(pickedFolderName || 'Used only to prefill the project name below.')}</div>
           </div>
-          <div class="field" style="margin-bottom:var(--space-3);">
+          <div class="field dialog-field">
             <label>Path</label>
             <input class="input" id="add-dialog-path" value="${esc(newProjectPath)}" placeholder="/absolute/path/to/repo">
-            <div class="text-muted" style="font-size:12px; margin-top:6px;">The server validates this folder has a GitHub remote.</div>
+            <div class="text-muted dialog-hint">The server validates this folder has a GitHub remote.</div>
           </div>
           <div class="field">
             <label>Project name</label>

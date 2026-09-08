@@ -70,7 +70,9 @@ const HEADERS = [
       if (/^ship:dev standalone\s*$/.test(line)) return { standalone: true };
       const m = /^ship:dev round (\d+)\/(\d+)\s*$/.exec(line);
       if (!m) return null;
-      return { round: Number(m[1]), cap: Number(m[2]) };
+      const round = Number(m[1]); const cap = Number(m[2]);
+      if (!validRound(round, cap)) return null;
+      return { round, cap };
     },
   },
   {
@@ -83,6 +85,7 @@ const HEADERS = [
       if (!VERDICTS.includes(verdict)) return null;
       if (!TIERS.includes(tier)) return null;
       if (criteria !== undefined && criteria !== 'derived') return null;
+      if (n !== undefined && !validRound(Number(n), Number(cap))) return null;
       return {
         verdict,
         tier,
@@ -100,7 +103,9 @@ const HEADERS = [
     parse: (line) => {
       const m = /^ship:metrics round (\d+)\/(\d+)\s*$/.exec(line);
       if (!m) return null;
-      return { round: Number(m[1]), cap: Number(m[2]) };
+      const round = Number(m[1]); const cap = Number(m[2]);
+      if (!validRound(round, cap)) return null;
+      return { round, cap };
     },
   },
   {
@@ -109,7 +114,9 @@ const HEADERS = [
     parse: (line) => {
       const m = /^ship:review-packet round (\d+)\/(\d+)\s*$/.exec(line);
       if (!m) return null;
-      return { round: Number(m[1]), cap: Number(m[2]) };
+      const round = Number(m[1]); const cap = Number(m[2]);
+      if (!validRound(round, cap)) return null;
+      return { round, cap };
     },
   },
   {
@@ -119,7 +126,9 @@ const HEADERS = [
       const m = /^ship:escalation (\S+) round (\d+)\/(\d+)\s*$/.exec(line);
       if (!m) return null;
       if (!CAUSES.includes(m[1])) return null;
-      return { cause: m[1], round: Number(m[2]), cap: Number(m[3]) };
+      const round = Number(m[2]); const cap = Number(m[3]);
+      if (!validRound(round, cap)) return null;
+      return { cause: m[1], round, cap };
     },
   },
   {
@@ -131,7 +140,19 @@ const HEADERS = [
       return { prUrl: m[1] };
     },
   },
+  {
+    // Catch-all, last: a first line that claims to be a pipeline header but
+    // matches no form in contract v1 §5 is reported, never silently dropped.
+    type: 'unknown',
+    re: /^ship:/,
+    parse: () => null,
+  },
 ];
+
+/** Round and cap are 1-based counts; 0 or negative is a malformed header. */
+function validRound(n, cap) {
+  return Number.isInteger(n) && n >= 1 && Number.isInteger(cap) && cap >= 1;
+}
 
 function blankEvent() {
   return {

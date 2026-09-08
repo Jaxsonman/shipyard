@@ -37,6 +37,10 @@ The glob must be quoted so Node — not the shell — expands it. The bare-direc
 form (`node --test plugins/dashboard/server/`) fails on Node 23 and newer, which
 resolves a directory argument as a module specifier.
 
+## Architecture
+
+`server/trail.js` is the single place comment bodies are parsed — metrics blocks, stage-handoff headers, and escalation headers all go through it and come out as one normalized trail. Every other module (`metrics.js`, and later `timeline.js`/`stats.js`) consumes `trail.parseTrail()` output instead of parsing comment bodies itself.
+
 ## Metrics
 
 The dashboard reads per-ticket metrics instrumented by the stage plugins (dev, qa, ship). See [metrics specification](../../docs/superpowers/specs/2026-08-10-dashboard-design.md) for the convention (section "Stage metrics instrumentation").

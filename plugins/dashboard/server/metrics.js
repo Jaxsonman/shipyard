@@ -1,13 +1,10 @@
 'use strict';
 
-// Matches `<!-- shipyard-metrics {...} -->` comment blocks embedded in ship
-// pipeline comment bodies.
-const METRICS_BLOCK_RE = /<!--\s*shipyard-metrics\s+(\{[\s\S]*?\})\s*-->/g;
+const trail = require('./trail');
 
+// Drawer's five-row Gantt keeps its own stage order (unchanged UI); this is
+// intentionally a subset of trail.STAGE_ORDER (no 'PR' row here).
 const STAGE_ORDER = ['Spec', 'Plan', 'Dev', 'QA', 'Review'];
-
-// Maps a metrics block's `stage` key to its display row label.
-const STAGE_KEY_TO_LABEL = { spec: 'Spec', plan: 'Plan', dev: 'Dev', qa: 'QA', ship: 'Review' };
 
 // Display-stage -> row index of the row that is "current" for that stage.
 const CURRENT_STAGE_INDEX = {
@@ -19,44 +16,8 @@ const CURRENT_STAGE_INDEX = {
   closed: 4,
 };
 
-// Fallback header patterns, checked against each comment body in order.
-const FALLBACK_PATTERNS = [
-  { label: 'Spec', test: (body) => body.startsWith('📋 Spec approved') },
-  { label: 'Plan', test: (body) => body.startsWith('🗺️ Plan approved') },
-  { label: 'Dev', test: (body) => /^ship:dev (round|standalone)/.test(body.split('\n')[0]) },
-  { label: 'QA', test: (body) => /^ship:qa verdict /.test(body.split('\n')[0]) },
-  { label: 'Review', test: (body) => /^ship:review-packet /.test(body.split('\n')[0]) },
-];
-
-/**
- * Extracts all valid shipyard-metrics blocks from a list of comments.
- * Invalid JSON or blocks missing required fields (stage, started, finished)
- * are skipped silently. Order matches comment order.
- * @param {Array<{body: string, createdAt: string}>} comments
- * @returns {Array<{stage: string, started: string, finished: string, tokens_in?: number, tokens_out?: number}>}
- */
-function parseMetrics(comments) {
-  const out = [];
-  for (const comment of comments || []) {
-    const body = comment && typeof comment.body === 'string' ? comment.body : '';
-    let match;
-    METRICS_BLOCK_RE.lastIndex = 0;
-    while ((match = METRICS_BLOCK_RE.exec(body)) !== null) {
-      let parsed;
-      try {
-        parsed = JSON.parse(match[1]);
-      } catch (err) {
-        continue;
-      }
-      if (!parsed || !parsed.stage || !parsed.started || !parsed.finished) continue;
-      const entry = { stage: parsed.stage, started: parsed.started, finished: parsed.finished };
-      if (typeof parsed.tokens_in === 'number') entry.tokens_in = parsed.tokens_in;
-      if (typeof parsed.tokens_out === 'number') entry.tokens_out = parsed.tokens_out;
-      out.push(entry);
-    }
-  }
-  return out;
-}
+// Thin re-export for back-compat: all comment parsing lives in trail.js now.
+const parseMetrics = trail.parseMetricsBlocks;
 
 /** 420000 -> "420K", 1500000 -> "1.5M", below 1000 verbatim. */
 function formatTokens(n) {
@@ -90,57 +51,25 @@ function formatDuration(ms) {
  */
 function buildTimeline(comments, currentStage) {
   const list = comments || [];
-  const metrics = parseMetrics(list);
+  const t = trail.parseTrail(list);
 
-  // Aggregate metrics blocks per row label: earliest start, latest finish,
-  // summed tokens.
-  const agg = {};
-  for (const m of metrics) {
-    const label = STAGE_KEY_TO_LABEL[m.stage];
-    if (!label) continue; // unknown stage key
-    const startedTime = Date.parse(m.started);
-    const finishedTime = Date.parse(m.finished);
-    if (Number.isNaN(startedTime) || Number.isNaN(finishedTime)) continue;
-    if (!agg[label]) {
-      agg[label] = { start: startedTime, end: finishedTime, tokensIn: 0, tokensOut: 0, hasIn: false, hasOut: false };
-    }
-    const a = agg[label];
-    a.start = Math.min(a.start, startedTime);
-    a.end = Math.max(a.end, finishedTime);
-    if (typeof m.tokens_in === 'number') {
-      a.tokensIn += m.tokens_in;
-      a.hasIn = true;
-    }
-    if (typeof m.tokens_out === 'number') {
-      a.tokensOut += m.tokens_out;
-      a.hasOut = true;
-    }
-  }
-
-  // Fallback from comment header timestamps: only for rows without metrics
-  // data, first matching comment wins (comments are processed in order).
-  const fallback = {};
-  for (const comment of list) {
-    const body = comment && typeof comment.body === 'string' ? comment.body : '';
-    for (const pattern of FALLBACK_PATTERNS) {
-      if (agg[pattern.label] || fallback[pattern.label] !== undefined) continue;
-      if (pattern.test(body)) {
-        const t = Date.parse(comment.createdAt);
-        if (!Number.isNaN(t)) fallback[pattern.label] = t;
-      }
-    }
-  }
-
-  // Resolve per-row data: {start, end, hasData, metrics?}
+  // Only the drawer's five rows; segments for other stages (e.g. PR) are
+  // dropped here since this Gantt has no row for them.
   const rowsData = {};
   for (const label of STAGE_ORDER) {
-    if (agg[label]) {
-      rowsData[label] = { start: agg[label].start, end: agg[label].end, hasData: true, metrics: agg[label] };
-    } else if (fallback[label] !== undefined) {
-      rowsData[label] = { start: fallback[label], end: fallback[label], hasData: true };
-    } else {
+    const seg = t.segments.find((s) => s.stage === label);
+    if (!seg) {
       rowsData[label] = { hasData: false };
+      continue;
     }
+    rowsData[label] = {
+      start: seg.start,
+      end: seg.end,
+      hasData: true,
+      metrics: seg.estimated
+        ? undefined
+        : { tokensIn: seg.tokensIn || 0, tokensOut: seg.tokensOut || 0, hasIn: seg.tokensIn != null, hasOut: seg.tokensOut != null },
+    };
   }
 
   // Resolve current-row index.

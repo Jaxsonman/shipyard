@@ -25,6 +25,18 @@ The dashboard server starts in the background and opens in your browser. The URL
   - Approve (`Awaiting Review` → close; `Needs Human` → re-plan)
   - Reassign
 
+## Development
+
+Run the test suite from the repo root:
+
+```
+node --test "plugins/dashboard/**/*.test.js"
+```
+
+The glob must be quoted so Node — not the shell — expands it. The bare-directory
+form (`node --test plugins/dashboard/server/`) fails on Node 23 and newer, which
+resolves a directory argument as a module specifier.
+
 ## Metrics
 
 The dashboard reads per-ticket metrics instrumented by the stage plugins (dev, qa, ship). See [metrics specification](../../docs/superpowers/specs/2026-08-10-dashboard-design.md) for the convention (section "Stage metrics instrumentation").

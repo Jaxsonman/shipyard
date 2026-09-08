@@ -15,17 +15,20 @@ if ! echo "$changed" | grep -qE '^(shared/|plugins/|scripts/|\.claude-plugin/)';
 fi
 
 deny() {
-  # $1 = reason text
-  python3 - "$1" <<'PY'
-import json, sys
-print(json.dumps({
-    "hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "permissionDecision": "deny",
-        "permissionDecisionReason": sys.argv[1],
-    }
-}, indent=2))
-PY
+  # $1 = reason text. Node is already a hard requirement of this repo; if it is
+  # somehow unavailable, fall back to a fixed reason rather than emitting
+  # malformed JSON or failing open.
+  if command -v node >/dev/null 2>&1; then
+    REASON="$1" node -e 'process.stdout.write(JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "deny",
+        permissionDecisionReason: process.env.REASON,
+      },
+    }, null, 2) + "\n")'
+  else
+    printf '%s\n' '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"Shared-sync or plugin-validate check failed, and node is unavailable to report the details. Run `bash scripts/check-shared-sync.sh` and `claude plugin validate .` manually."}}'
+  fi
   exit 0
 }
 

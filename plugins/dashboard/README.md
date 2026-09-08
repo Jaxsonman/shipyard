@@ -41,6 +41,11 @@ resolves a directory argument as a module specifier.
 
 `server/trail.js` is the single place comment bodies are parsed — metrics blocks, stage-handoff headers, and escalation headers all go through it and come out as one normalized trail. Every other module (`metrics.js`, and later `timeline.js`/`stats.js`) consumes `trail.parseTrail()` output instead of parsing comment bodies itself.
 
+- `web/timeline-scale.js` — pure time-scale math for the board-wide Timeline
+  (zoom presets, domain resolution, pan clamping, gridline ticks, segment →
+  pixel-rect projection). It touches no DOM, so it is unit-tested under
+  `node --test` alongside the server modules.
+
 ## Metrics
 
 The dashboard reads per-ticket metrics instrumented by the stage plugins (dev, qa, ship). See [metrics specification](../../docs/superpowers/specs/2026-08-10-dashboard-design.md) for the convention (section "Stage metrics instrumentation").

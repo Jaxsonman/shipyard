@@ -1,6 +1,7 @@
 {
   "name": "prd",
   "description": "Turn a raw idea into a structured PRD through a guided, one-question-at-a-time interview.",
+  "version": "1.0.0",
   "author": {
     "name": "Jaxson Mansouri",
     "email": "mansouricobusiness@gmail.com"

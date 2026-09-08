@@ -1,6 +1,7 @@
 {
   "name": "dev",
   "description": "Autonomous implementation stage — executes an approved plan test-first in an isolated worktree and hands a structured report to QA.",
+  "version": "1.0.0",
   "author": {
     "name": "Jaxson Mansouri",
     "email": "mansouricobusiness@gmail.com"

@@ -1,6 +1,7 @@
 {
   "name": "qa",
   "description": "Verification stage — run the test suite plus real per-criterion E2E against a branch and post a tiered verdict with evidence.",
+  "version": "1.0.0",
   "author": {
     "name": "Jaxson Mansouri",
     "email": "mansouricobusiness@gmail.com"

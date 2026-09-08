@@ -67,6 +67,11 @@ resolves a directory argument as a module specifier.
   escalations, warnings }` — per-stage ticket counts, median/p90 stage
   duration, token totals, review throughput, and escalation-cause tallies.
 
+A timeline segment exists only when the trail has evidence its stage ran, so no
+segment is ever "future". A segment after the ticket's current stage means the
+ticket was rewound (QA sent it back, or a human re-planned it) and is rendered
+as past.
+
 ## Metrics
 
 The dashboard reads per-ticket metrics instrumented by the stage plugins (dev, qa, ship). See [metrics specification](../../docs/superpowers/specs/2026-08-10-dashboard-design.md) for the convention (section "Stage metrics instrumentation").

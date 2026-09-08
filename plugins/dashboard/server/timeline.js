@@ -59,11 +59,12 @@ function buildRow(ticket, ctx) {
   let tokensOut = 0;
   const segments = t.segments.map((s) => {
     const idx = trail.STAGE_ORDER.indexOf(s.stage);
-    let state = 'future';
-    if (currentIndex >= 0) {
-      if (idx < currentIndex) state = 'past';
-      else if (idx === currentIndex) state = 'current';
-    }
+    // A segment is only emitted when the trail has evidence the stage ran, so
+    // no segment is ever 'future'. A segment *after* the current stage means
+    // the ticket was rewound (QA sent it back, a human re-planned it) — that
+    // is still history. Only the stage the board says the ticket is in now is
+    // 'current'.
+    const state = currentIndex >= 0 && idx === currentIndex ? 'current' : 'past';
     if (typeof s.tokensIn === 'number') tokensIn += s.tokensIn;
     if (typeof s.tokensOut === 'number') tokensOut += s.tokensOut;
     const hasTokens = typeof s.tokensIn === 'number' || typeof s.tokensOut === 'number';

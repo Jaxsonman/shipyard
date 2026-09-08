@@ -109,3 +109,18 @@ test('buildBoardTimeline keeps tickets from an unlisted project, grouped last', 
   assert.deepEqual(out.groups.map((g) => g.projectId), ['core', 'ghost']);
   assert.deepEqual(out.rows.map((r) => r.id), ['core#4', 'ghost#3']);
 });
+
+test('buildRow treats a rewound stage as past, never future', () => {
+  // The board says Planned, but the trail shows Dev already ran once — the
+  // ticket was sent back. Dev is history, not something still to come.
+  const row = timeline.buildRow({
+    number: 4, title: 'rounding helper', url: 'u', updatedAt: '2026-08-11T13:00:00Z',
+    labels: [{ name: 'ship:planned' }],
+    comments: [
+      mk('🗺️ Plan approved', '2026-08-09T09:00:00Z'),
+      mk('ship:dev round 1/3', '2026-08-10T09:00:00Z'),
+    ],
+  }, { projectId: 'core', projectName: 'Core', now: NOW });
+  assert.deepEqual(row.segments.map((s) => [s.stage, s.state]), [['Plan', 'current'], ['Dev', 'past']]);
+  assert.ok(row.segments.every((s) => s.state !== 'future'));
+});

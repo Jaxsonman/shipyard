@@ -19,6 +19,12 @@ function metricsComment(header, stage, startedAgoMin, finishedAgoMin, tokensIn, 
   return { body, createdAt: iso(finishedAgoMin) };
 }
 
+// Comments with no shipyard-metrics footer at all — for handoff-header-only
+// (estimated) tickets and freeform escalation bodies.
+function plainComment(body, minutesAgo) {
+  return { body, createdAt: iso(minutesAgo) };
+}
+
 const PROJECTS = [
   { id: 'core', name: 'Core platform', path: '/mock/core', repo: 'org/shipyard-core' },
   { id: 'reef', name: 'Reef Tracker', path: '/mock/reef', repo: 'org/reef-tracker' },
@@ -109,6 +115,45 @@ const TICKETS = {
         metricsComment('ship:review-packet — ready for human review', 'ship', 250, 238, 27000, 5000),
       ],
     },
+    {
+      number: 55,
+      title: 'Saved search filters',
+      body: 'Let users save a named combination of report filters and reapply it in one click.',
+      labels: [{ name: 'ship:in-dev' }, { name: 'priority: low' }],
+      state: 'open',
+      url: 'https://github.com/org/shipyard-core/issues/55',
+      assignees: [{ login: 'dev-agent' }],
+      updatedAt: iso(30150),
+      spec: 'Done means: filters persist per-user, apply instantly, can be renamed and deleted.',
+      plan: '1. Saved-filter model + storage\n2. Save/apply UI\n3. Rename/delete flows\n4. Tests per task',
+      comments: [
+        plainComment('📋 Spec approved — `docs/ship/55/spec.md`', 30300),
+        plainComment('🗺️ Plan approved — `docs/ship/55/plan.md`', 30220),
+        plainComment('ship:dev round 1/3', 30150),
+      ],
+    },
+    {
+      number: 56,
+      title: 'Bulk tag editor',
+      body: 'Multi-select bulk add/remove of tags across report rows.',
+      labels: [{ name: 'ship:needs-human' }, { name: 'priority: medium' }],
+      state: 'open',
+      url: 'https://github.com/org/shipyard-core/issues/56',
+      assignees: [],
+      updatedAt: iso(15000),
+      spec: 'Done means: bulk apply/remove is atomic, undo available, no partial writes on failure.',
+      plan: '1. Bulk-edit endpoint\n2. Multi-select UI\n3. Undo buffer\n4. Failure-injection tests',
+      comments: [
+        metricsComment('ship:dev round 1/3', 'dev', 15400, 15300, 260000, 24000),
+        metricsComment('ship:qa verdict tests-only', 'qa', 15280, 15250, 70000, 9000),
+        metricsComment('ship:dev round 2/3', 'dev', 15200, 15100, 240000, 22000),
+        metricsComment('ship:qa verdict tests-only', 'qa', 15080, 15050, 65000, 8000),
+        plainComment(
+          'ship:escalation static round 2/3\n\n## What QA keeps finding\nQA flags the same TypeScript strict-mode violation on every round; dev keeps re-introducing it while chasing an unrelated fix.',
+          15000,
+        ),
+      ],
+    },
   ],
   'org/reef-tracker': [
     {
@@ -157,7 +202,70 @@ const TICKETS = {
       comments: [
         metricsComment('ship:dev round 1/3', 'dev', 500, 400, 300000, 28000),
         metricsComment('ship:qa verdict tests-only', 'qa', 390, 360, 80000, 10000),
-        { body: 'ship:escalation — dev/QA loop exhausted at round 3', createdAt: iso(20) },
+        plainComment(
+          'ship:escalation cap round 3/3\n\n## What QA keeps finding\nQA keeps failing the same burst-limit edge case after 3 rounds of dev fixes; the round cap is exhausted.',
+          20,
+        ),
+      ],
+    },
+    {
+      number: 90,
+      title: 'Coral growth photo diffing',
+      body: 'Overlay two tank photos and highlight coral-growth delta for the tracker.',
+      labels: [{ name: 'ship:needs-human' }, { name: 'priority: medium' }],
+      state: 'open',
+      url: 'https://github.com/org/reef-tracker/issues/90',
+      assignees: [],
+      updatedAt: iso(25000),
+      spec: 'Done means: alignment is automatic within tolerance, delta overlay is toggleable, works on mobile.',
+      plan: '1. Image alignment pass\n2. Delta overlay renderer\n3. Mobile layout\n4. Visual regression tests',
+      comments: [
+        metricsComment('ship:dev round 1/1', 'dev', 25200, 25100, 220000, 20000),
+        plainComment(
+          'ship:escalation stage-error round 1/3\n\n## What QA keeps finding\nThe QA stage crashed before producing a verdict: the image-diff harness ran out of memory on the fixture set.',
+          25000,
+        ),
+      ],
+    },
+    {
+      number: 91,
+      title: 'Water-change reminder scheduling',
+      body: 'Recurring reminders for scheduled water changes with per-tank cadence.',
+      labels: [{ name: 'ship:needs-human' }, { name: 'priority: medium' }],
+      state: 'open',
+      url: 'https://github.com/org/reef-tracker/issues/91',
+      assignees: [],
+      updatedAt: iso(9000),
+      spec: 'Done means: cadence is per-tank, reminders fire on schedule across timezones, snooze supported.',
+      plan: '1. Cadence model\n2. Scheduler job\n3. Notification delivery\n4. Timezone + snooze tests',
+      comments: [
+        metricsComment('ship:dev round 1/2', 'dev', 9400, 9300, 250000, 23000),
+        metricsComment('ship:qa verdict tests-only', 'qa', 9280, 9250, 72000, 9000),
+        metricsComment('ship:dev round 2/2', 'dev', 9200, 9100, 230000, 21000),
+        plainComment(
+          'ship:escalation reconcile round 2/3\n\n## What QA keeps finding\nDev and QA disagree on ticket state after round 2: dev reports done, QA reports the fix-list still open, and reconciliation could not settle it.',
+          9000,
+        ),
+      ],
+    },
+    {
+      number: 92,
+      title: 'Export water-parameter history to CSV',
+      body: 'One-click export of a tank\'s full water-parameter history for offline analysis.',
+      labels: [{ name: 'ship:awaiting-review' }, { name: 'priority: low' }],
+      state: 'open',
+      url: 'https://github.com/org/reef-tracker/issues/92',
+      assignees: [{ login: 'r.chen' }],
+      updatedAt: iso(3),
+      spec: 'Done means: export includes all logged parameters, respects date-range filter, UTF-8 CSV.',
+      plan: '1. Export query + CSV writer\n2. Date-range filter wiring\n3. Tests per task\n4. Adversarial review pass',
+      comments: [
+        metricsComment('📋 Spec approved — `docs/ship/92/spec.md`', 'spec', 2000, 1980, 68000, 11000),
+        metricsComment('🗺️ Plan approved — `docs/ship/92/plan.md`', 'plan', 1970, 1950, 54000, 9000),
+        metricsComment('ship:dev round 1/1', 'dev', 1900, 1600, 410000, 37000),
+        metricsComment('ship:qa verdict full', 'qa', 1590, 1560, 94000, 13000),
+        metricsComment('ship:review-packet — ready for human review', 'ship', 1550, 1530, 26000, 5000),
+        metricsComment('ship:pr-open — https://github.com/org/reef-tracker/pull/92', 'pr', 60, 3, 18000, 3000),
       ],
     },
   ],

@@ -45,6 +45,11 @@ resolves a directory argument as a module specifier.
   (zoom presets, domain resolution, pan clamping, gridline ticks, segment →
   pixel-rect projection). It touches no DOM, so it is unit-tested under
   `node --test` alongside the server modules.
+- `server/fixtures.js` — the `--mock` mode board. Covers every timeline code
+  path: metrics-backed tickets (full Spec→Review bars), an estimated-only
+  ticket (handoff headers, no metrics footers), a running Dev/QA ticket, a
+  PR-stage ticket, a Backlog ticket, and one Needs Human ticket per
+  escalation cause (`cap`, `static`, `stage-error`, `reconcile`).
 
 ## Metrics
 

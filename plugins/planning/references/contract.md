@@ -83,11 +83,9 @@ Every pipeline comment's **first line** is its header. A comment whose first lin
 ship:spec approved
 ```
 
-Emitted by `planning` (`/spec`). The human-readable title moves to line two of the body:
+Emitted by `planning` (`/spec`). The human-readable title moves to line two; the rest of the body follows the header line above:
 
 ```
-ship:spec approved
-
 📋 Spec approved — `docs/ship/<id>/spec.md`
 
 - <one line: what done means>
@@ -105,11 +103,9 @@ Next: /plan <id>
 ship:plan approved
 ```
 
-Emitted by `planning` (`/plan`). Body:
+Emitted by `planning` (`/plan`). The body follows the header line above:
 
 ```
-ship:plan approved
-
 🗺️ Plan approved — `docs/ship/<id>/plan.md`
 
 - <one line: chosen architecture>
@@ -165,7 +161,7 @@ Emitted by `dev` when the plan cannot be executed. Body sections:
 ship:qa verdict <VERDICT> round N/M tier=<tier> verified k/n
 ```
 
-or, for a standalone `/qa` invocation (§9):
+or, for a standalone `/qa` invocation (§9), with `round N/M` replaced by the literal word `standalone`:
 
 ```
 ship:qa verdict <VERDICT> standalone tier=<tier> verified k/n

@@ -51,6 +51,16 @@ resolves a directory argument as a module specifier.
   PR-stage ticket, a Backlog ticket, and one Needs Human ticket per
   escalation cause (`cap`, `static`, `stage-error`, `reconcile`).
 
+## API
+
+- `GET /api/timeline?project=<id|all>` — board-wide timeline model. Resolves the
+  project list the same way `GET /api/tickets` does, fetches full ticket detail
+  (comments) per issue with bounded `gh` concurrency, and runs it through
+  `timeline.buildBoardTimeline`. Returns `{ now, domain: {start, end}, groups,
+  rows, warnings }`; a per-ticket detail failure degrades that ticket to a
+  list-derived row instead of failing the whole response, and is reported in
+  `warnings`.
+
 ## Metrics
 
 The dashboard reads per-ticket metrics instrumented by the stage plugins (dev, qa, ship). See [metrics specification](../../docs/superpowers/specs/2026-08-10-dashboard-design.md) for the convention (section "Stage metrics instrumentation").

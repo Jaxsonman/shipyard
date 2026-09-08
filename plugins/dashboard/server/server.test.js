@@ -17,6 +17,26 @@ test('GET /api/projects returns mock projects with counts', async () => {
   assert.ok(typeof j.projects[0].openCount === 'number');
 });
 
+test('GET /api/timeline returns grouped rows with segments', async () => {
+  const res = await fetch(`${base}/api/timeline?project=all`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(body.domain.end > body.domain.start);
+  assert.ok(body.rows.length > 0);
+  assert.ok(body.rows.some((r) => r.segments.some((s) => s.estimated === false && s.tokensIn > 0)));
+  assert.ok(body.rows.some((r) => r.segments.some((s) => s.estimated === true)));
+  assert.ok(body.rows.some((r) => r.running === true));
+  assert.ok(body.groups.length >= 2);
+});
+
+test('GET /api/timeline filters rows to the requested project', async () => {
+  const res = await fetch(`${base}/api/timeline?project=core`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(body.rows.length > 0);
+  assert.ok(body.rows.every((r) => r.project === 'core'));
+});
+
 test('tickets list, detail, and guarded approve', async () => {
   const { tickets } = await (await fetch(`${base}/api/tickets?project=all`)).json();
   assert.ok(tickets.length >= 5);

@@ -10,6 +10,25 @@ const { execFile: execFileCb } = require('node:child_process');
 const { parseMetrics, buildTimeline } = require('./metrics.js');
 const { stageFromLabels, priorityFromLabels, createBoard, repoFromPath } = require('./board.js');
 const fixtures = require('./fixtures.js');
+const timeline = require('./timeline.js');
+
+const DETAIL_CONCURRENCY = 5;
+
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (true) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const workers = [];
+  for (let i = 0; i < Math.min(limit, items.length); i++) workers.push(worker());
+  await Promise.all(workers);
+  return results;
+}
 
 const DEFAULT_PORT = 7433;
 const MAX_PORT = 7453;
@@ -278,6 +297,65 @@ function createApp(opts = {}) {
     sendJson(res, 200, { tickets: all });
   }
 
+  // Resolves the project list the same way handleGetTickets does, lists
+  // issues per project, then fetches full ticket detail (comments) for each
+  // issue with bounded concurrency so a large board doesn't spawn hundreds
+  // of `gh` processes at once. A single bad ticket degrades to a
+  // list-derived row instead of failing the whole response.
+  async function gatherRows(projectId) {
+    const config = await loadConfig();
+    const projectFilter = projectId || 'all';
+    const projects =
+      projectFilter === 'all'
+        ? config.projects
+        : config.projects.filter((p) => p.id === projectFilter);
+
+    if (projectFilter !== 'all' && projects.length === 0) {
+      return { error: `unknown project: ${projectFilter}` };
+    }
+
+    const warnings = [];
+    const tickets = [];
+
+    for (const project of projects) {
+      let issues;
+      try {
+        issues = await board.listTickets(project.repo);
+      } catch (err) {
+        warnings.push(`Failed to load tickets for ${project.id}: ${err.message}`);
+        continue;
+      }
+
+      const details = await mapWithConcurrency(issues, DETAIL_CONCURRENCY, async (issue) => {
+        try {
+          const detail = await board.getTicket(project.repo, issue.number);
+          return { ...detail, project: project.id };
+        } catch (err) {
+          warnings.push(
+            `Failed to load detail for ${project.id}#${issue.number}: ${err.message}`
+          );
+          return { ...issue, comments: [], project: project.id };
+        }
+      });
+
+      for (const d of details) tickets.push(d);
+    }
+
+    const built = timeline.buildBoardTimeline({ tickets, projects: config.projects, now: Date.now() });
+    return { ...built, warnings };
+  }
+
+  async function handleGetTimeline(req, res, query) {
+    const projectFilter = query.get('project') || 'all';
+    const result = await gatherRows(projectFilter);
+    if (result.error) {
+      sendJson(res, 400, { error: result.error });
+      return;
+    }
+    const { now, domain, groups, rows, warnings } = result;
+    sendJson(res, 200, { now, domain, groups, rows, warnings });
+  }
+
   async function handleGetTicketDetail(req, res, projectId, numberStr) {
     const config = await loadConfig();
     const project = await findProject(config, projectId);
@@ -454,6 +532,9 @@ function createApp(opts = {}) {
         }
         if (pathname === '/api/tickets' && req.method === 'GET') {
           return handleGetTickets(req, res, url.searchParams);
+        }
+        if (pathname === '/api/timeline' && req.method === 'GET') {
+          return handleGetTimeline(req, res, url.searchParams);
         }
         // /api/tickets/<projectId>/<number>[/approve|/assign]
         if (parts[0] === 'api' && parts[1] === 'tickets' && parts.length === 4 && req.method === 'GET') {

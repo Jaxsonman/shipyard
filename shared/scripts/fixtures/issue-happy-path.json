@@ -1,0 +1,78 @@
+{
+  "number": 42,
+  "title": "Add login form",
+  "state": "OPEN",
+  "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42",
+  "author": {
+    "login": "Jaxsonman"
+  },
+  "labels": [
+    {
+      "name": "ship:awaiting-review",
+      "description": "",
+      "color": "1d76db"
+    }
+  ],
+  "comments": [
+    {
+      "author": {
+        "login": "Jaxsonman"
+      },
+      "authorAssociation": "OWNER",
+      "body": "ship:spec approved\n\n📋 Spec approved — `docs/ship/42/spec.md`\n\n- A user can sign in with email and password\n- Sessions expire after 24h\n- Password reset is out of scope\n\nNext: /plan 42\n\n<!-- shipyard-metrics {\"stage\":\"spec\",\"started\":\"2026-09-08T09:00:00Z\",\"finished\":\"2026-09-08T09:20:00Z\"} -->",
+      "createdAt": "2026-09-08T09:20:00Z",
+      "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42#issuecomment-1",
+      "id": "IC_1"
+    },
+    {
+      "author": {
+        "login": "Jaxsonman"
+      },
+      "authorAssociation": "OWNER",
+      "body": "ship:plan approved\n\n🗺️ Plan approved — `docs/ship/42/plan.md`\n\n- Session cookie plus a server-side store\n- 3 tasks, one migration\n\nNext: /ship 42\n\n<!-- shipyard-metrics {\"stage\":\"plan\",\"started\":\"2026-09-08T09:30:00Z\",\"finished\":\"2026-09-08T09:50:00Z\"} -->",
+      "createdAt": "2026-09-08T09:50:00Z",
+      "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42#issuecomment-2",
+      "id": "IC_2"
+    },
+    {
+      "author": {
+        "login": "Jaxsonman"
+      },
+      "authorAssociation": "OWNER",
+      "body": "ship:dev round 1/3\n\n## What changed and why\n- Task 1: add the login form — a1b2c3d\n\n## How to run it\nnpm ci && npm run dev\n\n## Criteria coverage\n| Criterion (spec \"Done means\") | Where implemented | How tested |\n|---|---|---|\n| 1 | src/login.js | tests/login.test.js |\n\n## Deviations\nnone\n\n## Known limitations\nnone\n\n<!-- shipyard-metrics {\"stage\":\"dev\",\"started\":\"2026-09-08T12:00:00Z\",\"finished\":\"2026-09-08T12:34:56Z\"} -->",
+      "createdAt": "2026-09-08T12:34:56Z",
+      "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42#issuecomment-3",
+      "id": "IC_3"
+    },
+    {
+      "author": {
+        "login": "Jaxsonman"
+      },
+      "authorAssociation": "OWNER",
+      "body": "ship:qa verdict PASS round 1/3 tier=full verified 1/1\n\n| # | Criterion | Verdict | Evidence |\n|---|-----------|---------|----------|\n| 1 | A user can sign in | pass | .qa/42/round-1/c1.png |\n\nSuite: 41 passed, 0 failed — `npm test`\nRepro: PORT=41007 npm run dev\nArtifacts: .qa/42/round-1/   (gitignored)\n\n<!-- shipyard-metrics {\"stage\":\"qa\",\"started\":\"2026-09-08T12:40:00Z\",\"finished\":\"2026-09-08T12:55:00Z\"} -->",
+      "createdAt": "2026-09-08T12:55:00Z",
+      "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42#issuecomment-4",
+      "id": "IC_4"
+    },
+    {
+      "author": {
+        "login": "Jaxsonman"
+      },
+      "authorAssociation": "OWNER",
+      "body": "ship:metrics round 1/3\n\nRound 1 usage.\n\n<!-- shipyard-metrics {\"stage\":\"ship\",\"started\":\"2026-09-08T12:00:00Z\",\"finished\":\"2026-09-08T12:55:00Z\",\"tokens_in\":120000,\"tokens_out\":24000} -->",
+      "createdAt": "2026-09-08T12:56:00Z",
+      "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42#issuecomment-5",
+      "id": "IC_5"
+    },
+    {
+      "author": {
+        "login": "Jaxsonman"
+      },
+      "authorAssociation": "OWNER",
+      "body": "ship:review-packet round 1/3\n\n## State\nBranch: feat/42-login\n\n<!-- shipyard-metrics {\"stage\":\"ship\",\"started\":\"2026-09-08T11:59:00Z\",\"finished\":\"2026-09-08T12:57:00Z\"} -->",
+      "createdAt": "2026-09-08T12:57:00Z",
+      "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42#issuecomment-6",
+      "id": "IC_6"
+    }
+  ]
+}

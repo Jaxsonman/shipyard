@@ -229,7 +229,7 @@ Per-criterion results are `pass`, `fail`, and `unverifiable`.
 ## 7. QA tier table
 
 | Tier | Condition | Reason wording |
-|------|-----------|------------------|
+|------|-----------|----------------|
 | `full` | E2E ran on ≥1 criterion AND the suite ran — or the repo has no suite at all ("no test suite found" recorded in the body) | — |
 | `tests-only` | suite ran; launch/E2E impossible (health never green, missing env vars, Playwright or browser unavailable) | `tier=tests-only (launch: <one-line cause>)` |
 | `static` | nothing executed (setup failed, no runnable test command, no confirmed env in ship mode) | `tier=static (<phase>: <cause>)` |

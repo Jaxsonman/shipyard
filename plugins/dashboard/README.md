@@ -82,6 +82,21 @@ segment is ever "future". A segment after the ticket's current stage means the
 ticket was rewound (QA sent it back, or a human re-planned it) and is rendered
 as past.
 
+## Views
+
+**Tickets** — the paginated table, one row per ticket, grouped by the project
+picked in the sidebar.
+
+**Timeline** — a board-wide Gantt across every ticket. Rows are grouped by
+project and sorted by last activity; the axis is real time with gridlines, a
+"now" line, day/week/month/all zoom presets and horizontal pan (wheel, drag, or
+arrow keys). One bar per stage the trail has evidence for: accent for the stage
+the ticket is in now, a neutral ramp by recency for earlier stages, and a hatch
+overlay for bars estimated from comment timestamps rather than metrics footers.
+The active bar pulses. Hovering or focusing a bar shows stage, round, duration,
+tokens in/out and whether it is estimated. Stage chips and a "hide backlog"
+toggle filter the view; clicking or pressing Enter on a row opens the drawer.
+
 ## Metrics
 
 The dashboard reads per-ticket metrics instrumented by the stage plugins (dev, qa, ship). See [metrics specification](../../docs/superpowers/specs/2026-08-10-dashboard-design.md) for the convention (section "Stage metrics instrumentation").

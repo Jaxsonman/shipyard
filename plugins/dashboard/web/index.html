@@ -12,7 +12,10 @@
 
   <div class="nav">
     <div class="nav-brand">Shipyard</div>
-    <a href="#" aria-current="page">Tickets</a>
+    <div class="view-tabs" role="tablist" aria-label="View">
+      <button id="view-tickets" class="view-tab" role="tab" aria-selected="true">Tickets</button>
+      <button id="view-timeline" class="view-tab" role="tab" aria-selected="false">Timeline</button>
+    </div>
     <div class="nav-right">
       <input id="search" class="input nav-search" placeholder="Search tickets…">
       <button id="new-prd-btn" class="btn btn-primary" title="Run /prd in Claude Code">New PRD</button>
@@ -31,6 +34,7 @@
 
   <div id="drawer-root"></div>
   <div id="dialog-root"></div>
+  <div id="tl-tip" class="tl-tip" role="tooltip" hidden></div>
 
 </div>
 <script src="/timeline-scale.js"></script>

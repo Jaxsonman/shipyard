@@ -231,3 +231,102 @@ body { margin: 0; }
 .dialog-field { margin-bottom: var(--space-3); }
 .dialog-hint { font-size: 12px; margin-top: 6px; }
 .dialog-err { color: var(--color-accent); font-size: 12px; margin-top: var(--space-2); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   View switcher
+   ══════════════════════════════════════════════════════════════════════ */
+.view-tabs { display: flex; gap: var(--space-2); }
+.view-tab {
+  background: transparent; border: none; cursor: pointer;
+  font-family: inherit; font-size: 14px; color: var(--color-neutral-600);
+  padding: var(--space-1) 0;
+}
+.view-tab[aria-selected="true"] {
+  color: var(--color-text); border-bottom: 2px solid var(--color-accent);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Timeline view
+   ══════════════════════════════════════════════════════════════════════ */
+.tl-controls {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.zoom-group, .chip-group { display: flex; gap: var(--space-1); }
+.hide-backlog-field {
+  display: flex; align-items: center; gap: 6px; font-size: 13px;
+  color: var(--color-neutral-600); cursor: pointer; margin-left: auto;
+}
+
+.chip {
+  font-family: inherit; font-size: 12px; cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface); color: var(--color-neutral-600);
+  border: 1px solid var(--color-divider);
+}
+.chip[aria-pressed="true"] {
+  background: var(--color-accent-100); color: var(--color-accent-700);
+  border-color: var(--color-accent);
+}
+
+.tl { position: relative; border: 1px solid var(--color-divider); }
+.tl-axis-row, .tl-row {
+  display: grid; grid-template-columns: 240px 1fr; align-items: center;
+}
+.tl-axis-row { border-bottom: 1px solid var(--color-divider); }
+.tl-axis-label { height: 100%; }
+.tl-axis { position: relative; height: 28px; }
+.tl-tick {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  left: var(--tick-x); font-size: 10px; color: var(--color-neutral-500);
+  white-space: nowrap;
+}
+.tl-tick-major { color: var(--color-neutral-700); font-weight: 600; }
+
+.tl-body { display: flex; flex-direction: column; }
+.tl-group-head {
+  grid-column: 1 / -1; padding: var(--space-2) var(--space-3);
+  font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--color-neutral-600); background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider);
+}
+.tl-row {
+  border-bottom: 1px solid var(--color-divider); cursor: pointer;
+  min-height: 34px;
+}
+.tl-row:hover { background: var(--color-surface); }
+.tl-row-label {
+  padding: 0 var(--space-3); font-size: 13px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.tl-num { font-family: monospace; color: var(--color-neutral-600); margin-right: 4px; }
+
+.tl-track { padding: var(--space-1) var(--space-3) var(--space-1) 0; }
+.tl-track-layer { position: relative; height: 16px; touch-action: pan-y; }
+
+.tl-grid-line { position: absolute; top: -8px; bottom: -8px; width: 1px; left: var(--tick-x); background: var(--color-divider); }
+.tl-grid-line-major { opacity: 0.7; }
+.tl-grid-line-minor { opacity: 0.35; }
+
+.tl-now { position: absolute; top: -8px; bottom: -8px; width: 1px; left: var(--now-x); background: var(--color-accent); }
+
+.tl-bar { position: absolute; top: 0; height: 16px; left: var(--x); width: var(--w); }
+.tl-bar-current { background: var(--color-accent); }
+.tl-bar-past-1 { background: var(--color-neutral-700); }
+.tl-bar-past-2 { background: var(--color-neutral-600); }
+.tl-bar-past-3 { background: var(--color-neutral-500); }
+.tl-bar-past-4 { background: var(--color-neutral-400); }
+.tl-bar-past-5 { background: var(--color-neutral-300); }
+.tl-bar-est {
+  background-image: repeating-linear-gradient(45deg, transparent 0 4px, color-mix(in srgb, var(--color-bg) 55%, transparent) 4px 8px);
+}
+.tl-bar-running { animation: pulse 1.6s ease-in-out infinite; }
+
+.tl-empty { padding: var(--space-6); }
+
+.tl-tip {
+  position: fixed; transform: translate(-50%, calc(-100% - 8px));
+  background: var(--color-neutral-900); color: var(--color-neutral-100);
+  font-size: 11px; padding: 4px 8px; white-space: nowrap;
+  pointer-events: none; z-index: 30; box-shadow: var(--shadow-md);
+}

@@ -23,12 +23,27 @@ const state = {
   ghOk: true,
   boardWarning: null,
   search: '',
+  // Timeline view (Task 8).
+  view: 'tickets',
+  zoom: 'week',
+  panMs: 0,
+  stageFilter: new Set(),
+  hideBacklog: false,
 };
 
 // Last-fetched raw payloads, kept for stringify-compare polling.
 let lastTicketsJson = null;
 let lastAllTicketsJson = null;
 let lastHealthJson = null;
+let lastTimelineJson = null;
+
+// Latest /api/timeline payload ({ now, domain, groups, rows, warnings }).
+let timelineData = null;
+// Scale in effect for the last timeline render — reused by wheel/drag/keyboard
+// pan handlers so they don't have to recompute domain+width themselves.
+let tlScale = null;
+let tlDragState = null;
+let tlResizeTimer = null;
 
 // ---- helpers --------------------------------------------------------
 
@@ -101,7 +116,7 @@ async function loadTickets({ preserve = false } = {}) {
   state.tickets = data.tickets || [];
   if (!preserve) state.page = 0;
   renderSidebar();
-  renderTable();
+  renderMain();
 }
 
 async function loadAllTicketsForCounts() {
@@ -111,6 +126,16 @@ async function loadAllTicketsForCounts() {
   lastAllTicketsJson = json;
   state.allTickets = data.tickets || [];
   renderSidebar();
+}
+
+async function loadTimeline() {
+  const url = '/api/timeline?project=' + encodeURIComponent(state.activeProjectId);
+  const data = await fetchJson(url);
+  const json = JSON.stringify(data);
+  if (json === lastTimelineJson) return;
+  lastTimelineJson = json;
+  timelineData = data;
+  renderMain();
 }
 
 async function loadHealth() {
@@ -195,6 +220,7 @@ function renderSidebar() {
       state.page = 0;
       renderSidebar();
       loadTickets({ preserve: true });
+      loadTimeline().catch((err) => console.error('load timeline failed', err));
     });
   });
 
@@ -207,6 +233,16 @@ function renderSidebar() {
         console.log('Add project dialog not yet implemented (Task 6).');
       }
     });
+  }
+}
+
+// ---- render: main (dispatch) --------------------------------------------
+
+function renderMain() {
+  if (state.view === 'timeline') {
+    renderTimeline();
+  } else {
+    renderTable();
   }
 }
 
@@ -304,17 +340,353 @@ function renderTable() {
   if (prevBtn) {
     prevBtn.addEventListener('click', () => {
       state.page = Math.max(state.page - 1, 0);
-      renderTable();
+      renderMain();
     });
   }
   const nextBtn = document.getElementById('next-page');
   if (nextBtn) {
     nextBtn.addEventListener('click', () => {
       state.page = Math.min(state.page + 1, pageCount - 1);
-      renderTable();
+      renderMain();
     });
   }
 }
+
+// ---- render: timeline -----------------------------------------------------
+
+// Rank of a past segment by recency within its row: newest past = 1, capped
+// at 5 (matches the .tl-bar-past-1..5 neutral ramp in app.css).
+function pastRecencyRanks(segments) {
+  const pastIdx = [];
+  segments.forEach((seg, i) => {
+    if (seg.state === 'past') pastIdx.push(i);
+  });
+  const ranks = new Map();
+  let rank = 1;
+  for (let i = pastIdx.length - 1; i >= 0; i--) {
+    ranks.set(pastIdx[i], Math.min(rank, 5));
+    rank++;
+  }
+  return ranks;
+}
+
+function segmentBarClass(seg, rank, running) {
+  const cls = ['tl-bar'];
+  if (seg.state === 'current') {
+    cls.push('tl-bar-current');
+    if (running) cls.push('tl-bar-running');
+  } else {
+    cls.push(`tl-bar-past-${rank || 5}`);
+  }
+  if (seg.estimated) cls.push('tl-bar-est');
+  return cls.join(' ');
+}
+
+function segmentTooltipText(seg) {
+  const parts = [seg.stage];
+  if (seg.round) parts.push(`round ${seg.round}`);
+  if (seg.durationLabel) parts.push(seg.durationLabel);
+  if (seg.tokensLabel) parts.push(seg.tokensLabel);
+  if (seg.estimated) parts.push('estimated');
+  return parts.join(' · ');
+}
+
+function timelineRowsForProject() {
+  if (!timelineData) return { groups: [], rowsByProject: new Map() };
+  const groups = timelineData.groups || [];
+  const rows = timelineData.rows || [];
+  const rowsByProject = new Map();
+  rows.forEach((r) => {
+    if (state.hideBacklog && r.backlog) return;
+    if (!rowsByProject.has(r.project)) rowsByProject.set(r.project, []);
+    rowsByProject.get(r.project).push(r);
+  });
+  return { groups, rowsByProject };
+}
+
+function tlPanBySpan(fraction) {
+  if (!tlScale) return;
+  const spanMs = tlScale.end - tlScale.start;
+  applyTlPan(state.panMs + spanMs * fraction);
+}
+
+function applyTlPan(panMs) {
+  if (!timelineData) return;
+  const preset = TimelineScale.ZOOM_PRESETS.find((p) => p.id === state.zoom) || TimelineScale.ZOOM_PRESETS[1];
+  const spanMs = preset.spanMs === null ? (tlScale ? tlScale.end - tlScale.start : 0) : preset.spanMs;
+  state.panMs = TimelineScale.clampPan(panMs, spanMs, {
+    now: timelineData.now,
+    dataStart: timelineData.domain.start,
+    dataEnd: timelineData.domain.end,
+  });
+  renderTimeline();
+}
+
+function hideTlTip() {
+  const tip = document.getElementById('tl-tip');
+  if (tip) tip.hidden = true;
+}
+
+function showTlTip(barEl, text) {
+  const tip = document.getElementById('tl-tip');
+  if (!tip) return;
+  tip.textContent = text;
+  tip.hidden = false;
+  const barRect = barEl.getBoundingClientRect();
+  tip.style.left = `${barRect.left + barRect.width / 2}px`;
+  tip.style.top = `${barRect.top}px`;
+}
+
+// Whether a row has at least one segment matching the active stage filter.
+// Stage-name based only (no geometry needed), so this can run before the
+// track width is known — it decides which rows even get a <div> at all.
+function rowMatchesStageFilter(row) {
+  if (state.stageFilter.size === 0) return true;
+  return (row.segments || []).some((s) => state.stageFilter.has(s.stage));
+}
+
+function renderTimeline() {
+  const el = document.getElementById('main');
+  if (!el) return;
+
+  if (!timelineData) {
+    el.innerHTML = '<div class="page-head"><h2 class="page-title">Timeline</h2></div><div class="page-body"><p class="text-muted">Loading…</p></div>';
+    return;
+  }
+
+  const zoomHtml = TimelineScale.ZOOM_PRESETS.map((p) => {
+    const cls = state.zoom === p.id ? 'btn btn-secondary' : 'btn btn-ghost';
+    return `<button class="${cls}" data-zoom="${esc(p.id)}">${esc(p.label)}</button>`;
+  }).join('');
+
+  const chipsHtml = TimelineScale.STAGE_ROWS.map((stage) => {
+    const pressed = state.stageFilter.has(stage);
+    return `<button class="chip" data-stage="${esc(stage)}" aria-pressed="${pressed ? 'true' : 'false'}">${esc(stage)}</button>`;
+  }).join('');
+
+  const { groups, rowsByProject } = timelineRowsForProject();
+
+  // Phase 1: pick which rows render (stage-name filter only — no geometry
+  // needed yet) and build a skeleton with empty track layers so we can
+  // measure the real column width the CSS grid gives us.
+  const renderedRows = [];
+  const groupsHtml = groups
+    .map((g) => {
+      const rows = (rowsByProject.get(g.projectId) || []).filter(rowMatchesStageFilter);
+      if (!rows.length) return '';
+      const rowsHtml = rows
+        .map((row) => {
+          const rowIdx = renderedRows.length;
+          renderedRows.push(row);
+          const label = `${row.title}, stage ${row.stage}`;
+          return `
+            <div class="tl-row" tabindex="0" role="button" data-project="${esc(row.project)}" data-number="${esc(row.number)}" aria-label="${esc(label)}">
+              <div class="tl-row-label"><span class="tl-num">#${esc(row.number)}</span> ${esc(row.title)}</div>
+              <div class="tl-track">
+                <div class="tl-track-layer" data-row-idx="${rowIdx}"></div>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+      return `
+        <div class="tl-group">
+          <div class="tl-group-head">${esc(g.projectName)} · ${esc(g.count)}</div>
+          ${rowsHtml}
+        </div>
+      `;
+    })
+    .join('');
+
+  el.innerHTML = `
+    <div class="page-head">
+      <h2 class="page-title">Timeline</h2>
+      <p class="text-muted page-sub">Board-wide stage progress across every ticket.</p>
+    </div>
+    <div class="page-body">
+      <div class="tl-controls">
+        <div class="zoom-group">${zoomHtml}</div>
+        <div class="chip-group">${chipsHtml}</div>
+        <label class="hide-backlog-field" for="hide-backlog">
+          <input type="checkbox" id="hide-backlog" ${state.hideBacklog ? 'checked' : ''}>
+          Hide backlog
+        </label>
+      </div>
+      <div class="tl" id="tl" tabindex="0">
+        <div class="tl-axis-row">
+          <div class="tl-axis-label"></div>
+          <div class="tl-axis" id="tl-axis"></div>
+        </div>
+        <div class="tl-body" id="tl-body">
+          ${groupsHtml || '<p class="text-muted tl-empty">No tickets match the current filters.</p>'}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Phase 2: now that the grid has laid out, measure the real track column
+  // width and compute the scale, ticks and bar rects against it.
+  const firstLayer = el.querySelector('.tl-track-layer');
+  const trackWidth = firstLayer ? firstLayer.clientWidth : Math.max((el.clientWidth || 900) - 272, 200);
+
+  const domain = TimelineScale.resolveDomain(state.zoom, {
+    dataStart: timelineData.domain.start,
+    dataEnd: timelineData.domain.end,
+    now: timelineData.now,
+    panMs: state.panMs,
+  });
+  const scale = TimelineScale.createScale({ start: domain.start, end: domain.end, width: trackWidth });
+  tlScale = scale;
+
+  const tickList = TimelineScale.ticks(domain.start, domain.end, trackWidth);
+  const gridlinesHtml = tickList
+    .map((tk) => {
+      const x = scale.toX(tk.t);
+      const cls = tk.major ? 'tl-grid-line tl-grid-line-major' : 'tl-grid-line tl-grid-line-minor';
+      return `<div class="${cls}" style="--tick-x:${x}px"></div>`;
+    })
+    .join('');
+  const nowInDomain = timelineData.now >= domain.start && timelineData.now <= domain.end;
+  const nowLineHtml = nowInDomain
+    ? `<div class="tl-now" style="--now-x:${scale.toX(timelineData.now)}px"></div>`
+    : '';
+
+  const axisEl = document.getElementById('tl-axis');
+  if (axisEl) {
+    axisEl.innerHTML = tickList
+      .map((tk) => {
+        const x = scale.toX(tk.t);
+        const cls = tk.major ? 'tl-tick tl-tick-major' : 'tl-tick tl-tick-minor';
+        return `<div class="${cls}" style="--tick-x:${x}px">${esc(tk.label)}</div>`;
+      })
+      .join('');
+  }
+
+  el.querySelectorAll('.tl-track-layer').forEach((layerEl) => {
+    const row = renderedRows[Number(layerEl.getAttribute('data-row-idx'))];
+    if (!row) return;
+    const segments = row.segments || [];
+    const rects = TimelineScale.segmentRects(segments, scale, { now: timelineData.now, running: row.running });
+    // segmentRects drops segments outside the visible window, so its indices do
+    // NOT line up with `segments` — rank and label off the rects themselves.
+    const ranks = pastRecencyRanks(rects);
+    const barsHtml = rects
+      .map((r, i) => {
+        if (state.stageFilter.size > 0 && !state.stageFilter.has(r.stage)) return '';
+        const cls = segmentBarClass(r, ranks.get(i), row.running);
+        const tip = segmentTooltipText(r);
+        return `<div class="${cls}" tabindex="-1" style="--x:${r.x}px;--w:${r.w}px" title="${esc(tip)}" data-tip="${esc(tip)}"></div>`;
+      })
+      .join('');
+    layerEl.innerHTML = gridlinesHtml + nowLineHtml + barsHtml;
+  });
+
+  wireTimelineControls();
+}
+
+function wireTimelineControls() {
+  document.querySelectorAll('[data-zoom]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.zoom = btn.getAttribute('data-zoom');
+      state.panMs = 0;
+      renderTimeline();
+    });
+  });
+
+  document.querySelectorAll('[data-stage]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const stage = btn.getAttribute('data-stage');
+      if (state.stageFilter.has(stage)) {
+        state.stageFilter.delete(stage);
+      } else {
+        state.stageFilter.add(stage);
+      }
+      renderTimeline();
+    });
+  });
+
+  const hideBacklogEl = document.getElementById('hide-backlog');
+  if (hideBacklogEl) {
+    hideBacklogEl.addEventListener('change', () => {
+      state.hideBacklog = hideBacklogEl.checked;
+      renderTimeline();
+    });
+  }
+
+  document.querySelectorAll('.tl-bar').forEach((barEl) => {
+    const tip = barEl.getAttribute('data-tip') || '';
+    barEl.addEventListener('mouseenter', () => showTlTip(barEl, tip));
+    barEl.addEventListener('mouseleave', hideTlTip);
+    barEl.addEventListener('focus', () => showTlTip(barEl, tip));
+    barEl.addEventListener('blur', hideTlTip);
+  });
+
+  document.querySelectorAll('.tl-row').forEach((rowEl) => {
+    const openThisRow = () => {
+      const project = rowEl.getAttribute('data-project');
+      const number = Number(rowEl.getAttribute('data-number'));
+      const ticket = (state.tickets.length ? state.tickets : state.allTickets).find(
+        (t) => t.project === project && t.number === number
+      ) || null;
+      state.selectedTicket = ticket || { project, number };
+      openDrawer(project, number);
+    };
+    rowEl.addEventListener('click', openThisRow);
+    rowEl.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        openThisRow();
+      } else if (ev.key === ' ') {
+        ev.preventDefault();
+        openThisRow();
+      }
+    });
+  });
+
+  const tlEl = document.getElementById('tl');
+  if (tlEl) {
+    tlEl.addEventListener('keydown', (ev) => {
+      if (ev.target !== tlEl) return;
+      if (ev.key === 'ArrowLeft') {
+        tlPanBySpan(-0.1);
+      } else if (ev.key === 'ArrowRight') {
+        tlPanBySpan(0.1);
+      } else if (ev.key === 'Home') {
+        applyTlPan(0);
+      }
+    });
+
+    tlEl.addEventListener('wheel', (ev) => {
+      const delta = ev.deltaX !== 0 ? ev.deltaX : (ev.shiftKey ? ev.deltaY : 0);
+      if (delta === 0 || !tlScale || !tlScale.pxPerMs) return;
+      ev.preventDefault();
+      applyTlPan(state.panMs + delta / tlScale.pxPerMs);
+    }, { passive: false });
+  }
+
+  document.querySelectorAll('.tl-track-layer').forEach((layerEl) => {
+    layerEl.addEventListener('pointerdown', (ev) => {
+      tlDragState = { startX: ev.clientX, startPanMs: state.panMs };
+      layerEl.setPointerCapture(ev.pointerId);
+    });
+    layerEl.addEventListener('pointermove', (ev) => {
+      if (!tlDragState || !tlScale || !tlScale.pxPerMs) return;
+      const dx = ev.clientX - tlDragState.startX;
+      applyTlPan(tlDragState.startPanMs - dx / tlScale.pxPerMs);
+    });
+    const endDrag = () => {
+      tlDragState = null;
+    };
+    layerEl.addEventListener('pointerup', endDrag);
+    layerEl.addEventListener('pointercancel', endDrag);
+  });
+}
+
+window.addEventListener('resize', () => {
+  clearTimeout(tlResizeTimer);
+  tlResizeTimer = setTimeout(() => {
+    if (state.view === 'timeline') renderTimeline();
+  }, 100);
+});
 
 // ---- render: drawer -----------------------------------------------------
 
@@ -683,15 +1055,28 @@ window.openAddDialog = openAddDialog;
 
 // ---- search / nav wiring -----------------------------------------------
 
+function setView(view) {
+  state.view = view;
+  const ticketsTab = document.getElementById('view-tickets');
+  const timelineTab = document.getElementById('view-timeline');
+  if (ticketsTab) ticketsTab.setAttribute('aria-selected', String(view === 'tickets'));
+  if (timelineTab) timelineTab.setAttribute('aria-selected', String(view === 'timeline'));
+  renderMain();
+}
+
 function wireStaticControls() {
   const search = document.getElementById('search');
   if (search) {
     search.addEventListener('input', () => {
       state.search = search.value;
       state.page = 0;
-      renderTable();
+      renderMain();
     });
   }
+  const ticketsTab = document.getElementById('view-tickets');
+  if (ticketsTab) ticketsTab.addEventListener('click', () => setView('tickets'));
+  const timelineTab = document.getElementById('view-timeline');
+  if (timelineTab) timelineTab.addEventListener('click', () => setView('timeline'));
   // "New PRD" is inert in v1 — tooltip only, per brief.
 }
 
@@ -701,6 +1086,7 @@ function startPolling() {
   setInterval(() => {
     loadTickets({ preserve: true }).catch((err) => console.error('poll tickets failed', err));
     loadAllTicketsForCounts().catch((err) => console.error('poll ticket counts failed', err));
+    loadTimeline().catch((err) => console.error('poll timeline failed', err));
     loadHealth().catch((err) => console.error('poll health failed', err));
   }, POLL_MS);
 }
@@ -713,7 +1099,7 @@ async function boot() {
   renderSidebar();
   renderTable();
   try {
-    await Promise.all([loadProjects(), loadTickets(), loadAllTicketsForCounts(), loadHealth()]);
+    await Promise.all([loadProjects(), loadTickets(), loadAllTicketsForCounts(), loadTimeline(), loadHealth()]);
   } catch (err) {
     console.error('Failed to load dashboard data', err);
   }

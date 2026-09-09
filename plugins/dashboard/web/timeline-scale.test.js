@@ -116,3 +116,30 @@ test('segmentRects ignores segments with non-numeric timestamps', () => {
   const out = TS.segmentRects([{ stage: 'Spec', state: 'past', start: null, end: null }], scale, { now: NOW, running: false });
   assert.deepEqual(out, []);
 });
+
+test('segmentRects never stretches an estimated current segment to now', () => {
+  // Regression: the estimated-only ticket rendered one hatched bar spanning the
+  // whole window, because a zero-duration marker was being grown to `now`.
+  const scale = TS.createScale({ start: NOW - DAY, end: NOW, width: 100 });
+  const [r] = TS.segmentRects(
+    [{ stage: 'Dev', state: 'current', estimated: true, start: NOW - DAY / 2, end: NOW - DAY / 2 }],
+    scale, { now: NOW, running: true });
+  assert.equal(r.w, TS.MIN_BAR_PX);
+  assert.equal(r.clipped, false);
+});
+
+test('segmentRects output is self-describing so callers need not index back into the input', () => {
+  const scale = TS.createScale({ start: NOW - DAY, end: NOW, width: 100 });
+  const out = TS.segmentRects([
+    { stage: 'Spec', state: 'past', estimated: false, start: NOW - 90 * DAY, end: NOW - 89 * DAY, round: null, durationLabel: '1h 0m', tokensLabel: '5/1' },
+    { stage: 'Dev', state: 'current', estimated: false, start: NOW - DAY / 2, end: NOW - DAY / 4, round: 2, durationLabel: '6h 0m', tokensLabel: '9/2' },
+  ], scale, { now: NOW, running: false });
+  // The first segment is outside the window and dropped, so index 0 of the
+  // result is the Dev segment — it must carry its own labels.
+  assert.equal(out.length, 1);
+  assert.equal(out[0].stage, 'Dev');
+  assert.equal(out[0].round, 2);
+  assert.equal(out[0].durationLabel, '6h 0m');
+  assert.equal(out[0].tokensLabel, '9/2');
+  assert.equal(out[0].state, 'current');
+});

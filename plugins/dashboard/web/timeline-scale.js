@@ -170,7 +170,10 @@ function segmentRects(segments, scale, opts) {
     var start = seg.start;
     var end = seg.end;
     if (typeof start !== 'number' || typeof end !== 'number') continue;
-    if (running && seg.state === 'current' && now > end) end = now;
+    // Only a measured, still-open stage grows to `now`. An estimated segment
+    // is a zero-width marker derived from a comment timestamp — it has no
+    // real end, and stretching it would invent a bar spanning the window.
+    if (running && seg.state === 'current' && !seg.estimated && now > end) end = now;
     if (end < start) end = start;
 
     if (end < scale.start || start > scale.end) continue;

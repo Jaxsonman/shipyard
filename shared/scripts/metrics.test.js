@@ -60,3 +60,34 @@ test('footer rejects an invalid stage and a non-ISO timestamp', () => {
   assert.throws(() => m.footer({ stage: 'nope', started: '2026-09-08T12:00:00Z' }));
   assert.throws(() => m.footer({ stage: 'dev', started: 'yesterday' }));
 });
+
+test('footer rejects non-integer or negative tokensIn/tokensOut', () => {
+  assert.throws(() => m.footer({ stage: 'dev', started: '2026-09-08T12:00:00Z', tokensIn: -5 }));
+  assert.throws(() => m.footer({ stage: 'dev', started: '2026-09-08T12:00:00Z', tokensIn: 1.5 }));
+  assert.throws(() => m.footer({ stage: 'dev', started: '2026-09-08T12:00:00Z', tokensOut: NaN }));
+});
+
+test('CLI: --tokens-in / --tokens-out reject "abc", "-5", "1.5" — exit 2, nothing on stdout', () => {
+  const { execFileSync } = require('node:child_process');
+  const path = require('node:path');
+  for (const bad of ['abc', '-5', '1.5']) {
+    let threw = false;
+    let stdout = '';
+    let stderr = '';
+    try {
+      stdout = execFileSync(
+        process.execPath,
+        [path.join(__dirname, 'metrics.js'), 'footer', '--stage', 'dev', '--started', '2026-09-08T12:00:00Z', '--tokens-in', bad],
+        { stdio: ['ignore', 'pipe', 'pipe'] }
+      ).toString();
+    } catch (e) {
+      threw = true;
+      stderr = String(e.stderr);
+      assert.equal(e.status, 2, bad);
+      stdout = String(e.stdout || '');
+    }
+    assert.ok(threw, `expected --tokens-in ${bad} to fail`);
+    assert.equal(stdout, '', `expected nothing on stdout for --tokens-in ${bad}`);
+    assert.ok(stderr.length > 0, bad);
+  }
+});

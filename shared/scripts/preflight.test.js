@@ -58,6 +58,48 @@ test('an unknown stage is a usage error', () => {
   assert.throws(() => preflight({ stage: 'nope' }), /stage/);
 });
 
+test('stage=ship reads backend/target from kanban.config.json and baseBranch/loopCap/approvers/qa from ship.config.json (contract §12, fixture-based)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-splitcfg-'));
+  execFileSync('git', ['init', '-q', dir]);
+  fs.mkdirSync(path.join(dir, '.claude'));
+  fs.writeFileSync(path.join(dir, '.claude', 'kanban.config.json'), JSON.stringify({
+    version: 1, backend: 'github', target: 'owner/repo',
+  }, null, 2));
+  // A ship config written exactly as contract §12.2 shows — no backend/target.
+  fs.writeFileSync(path.join(dir, '.claude', 'ship.config.json'), JSON.stringify({
+    version: 1, baseBranch: 'main', loopCap: 3, approvers: [],
+  }, null, 2));
+
+  const r = preflight({ stage: 'ship', ticket: 1, cwd: dir, exec: fakeExec({
+    'gh --version': { code: 0, stdout: 'gh version 2.0.0\n', stderr: '' },
+    'gh auth status': { code: 0, stdout: '', stderr: '' },
+    'gh repo view': { code: 0, stdout: '', stderr: '' },
+  }) });
+
+  const configCheck = r.checks.find(c => c.id === 'config');
+  assert.equal(configCheck.ok, true, JSON.stringify(configCheck));
+  assert.match(configCheck.message, /backend=github/);
+  assert.match(configCheck.message, /target=owner\/repo/);
+});
+
+test('CLI: a flag-shaped token is not swallowed as the value of a preceding flag (--cwd --quiet)', () => {
+  let threw = false;
+  let stderr = '';
+  try {
+    execFileSync(
+      process.execPath,
+      [path.join(__dirname, 'preflight.js'), '--stage', 'prd', '--cwd', '--quiet'],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+  } catch (e) {
+    threw = true;
+    stderr = String(e.stderr);
+    assert.equal(e.status, 2);
+  }
+  assert.ok(threw, 'expected the CLI to exit non-zero');
+  assert.ok(/usage/i.test(stderr), stderr);
+});
+
 test('the report is JSON-serialisable and lists reasons for every failed error check', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-nogit2-'));
   const r = preflight({ stage: 'qa', ticket: 7, cwd: dir, exec: fakeExec({}) });

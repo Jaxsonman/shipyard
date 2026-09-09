@@ -165,6 +165,20 @@ test('an untrusted dev handoff never advances the round', () => {
   assert.equal(st.phase, 'unstarted');
 });
 
+test('a stray round-2 verdict with no round-2 (or round-1) dev handoff reports BOTH verdict-without-handoff and round-gap (L-19/9)', () => {
+  const issue = {
+    comments: [
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T12:00:00Z', url: 'u1',
+        body: 'ship:qa verdict FAIL round 2/3 tier=full verified 1/1\n\n## Findings' },
+    ],
+    labels: [],
+  };
+  const events = bt.parseEvents(issue, { viewer: 'Jaxsonman' });
+  const state = bt.reconcile(events, { cap: 3 });
+  assert.ok(state.irreconcilable.some(i => i.code === 'verdict-without-handoff'), JSON.stringify(state.irreconcilable));
+  assert.ok(state.irreconcilable.some(i => i.code === 'round-gap'), JSON.stringify(state.irreconcilable));
+});
+
 test('parse --stdin with a null comment entry is a usage error (exit 2), not a stack trace', () => {
   const { execFileSync } = require('node:child_process');
   let threw = false;

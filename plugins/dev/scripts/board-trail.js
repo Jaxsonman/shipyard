@@ -373,10 +373,15 @@ function reconcile(events, opts = {}) {
     }
   }
 
-  // Round gaps.
+  // Round gaps: based on the presence of a dev handoff per round, not mere
+  // key existence — a round that exists only because it carries a QA
+  // verdict or metrics comment does not satisfy "round N-1 has a handoff"
+  // (§9, code `round-gap`).
   const devRounds = roundNumbers.filter((n) => state.rounds[String(n)].dev);
-  for (const n of devRounds) {
-    if (n > 1 && !state.rounds[String(n - 1)]) {
+  for (const n of roundNumbers) {
+    if (n <= 1) continue;
+    const prev = state.rounds[String(n - 1)];
+    if (!prev || !prev.dev) {
       bad('round-gap', `round ${n} has a dev handoff but round ${n - 1} does not`);
     }
   }

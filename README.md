@@ -231,6 +231,9 @@ claude plugin validate .               # plugin manifests
 
 The pre-commit hook and `.github/workflows/ci.yml` both run all three.
 
+`plugins/pr/evals/README.md` records the `pr` stage's four intended eval
+cases; graded suites for every plugin land with the verification epic.
+
 ## Contributing
 
 Adding or changing a plugin? Update this README's install steps and pipeline

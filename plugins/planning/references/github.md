@@ -35,7 +35,8 @@ gh issue edit <id> --repo <owner/repo> --body-file <temp-file-path>
 
 ## Set status
 
-Statuses map to labels: `Spec'd` → `ship:specced`; `Planned` → `ship:planned`.
+Colours and descriptions are contract §4 — copy them from
+`references/contract.md`, never retype them.
 
 1. Ensure the target label exists (idempotent — `--force` updates an
    existing label instead of erroring):

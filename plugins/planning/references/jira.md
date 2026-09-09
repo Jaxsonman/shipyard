@@ -41,17 +41,14 @@ Prefer a real workflow transition:
 
 1. Call `mcp__plugin_planning_atlassian__getTransitionsForJiraIssue`
    (`{"issueIdOrKey": "<id>"}`).
-2. Look for a transition whose target status name matches the intended
-   status, case-insensitively, accepting close variants: for `Spec'd`
-   match "Spec'd" / "Specced" / "Spec"; for `Planned` match "Planned" /
-   "Planning done".
+2. Match the workflow status and, when nothing matches, fall back to the
+   hyphenated labels — both maps are contract §4 (Jira equivalent). Never
+   silently fail and never skip the user-facing explanation.
 3. If found, call `mcp__plugin_planning_atlassian__transitionJiraIssue`
    with that transition's id.
-4. **If no transition matches**, tell the user their workflow has no
-   matching status and fall back to labels via `editJiraIssue`: add
-   `ship-specced` or `ship-planned` to the issue's labels and remove the
-   other `ship-*` label if present. Never silently fail and never skip the
-   user-facing explanation.
+4. **If no transition matches**, fall back to labels via `editJiraIssue`:
+   add the matching hyphenated label to the issue's labels and remove the
+   other `ship-*` label if present.
 
 ## Post comment
 
@@ -60,4 +57,6 @@ Call `mcp__plugin_planning_atlassian__addCommentToJiraIssue` with:
 ```json
 { "issueIdOrKey": "<id>", "commentBody": "<comment markdown>" }
 ```
+
+Jira comments carry no metrics footer (contract §2, §10).
 

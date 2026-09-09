@@ -127,8 +127,13 @@ After installing `planning`, run these per ticket, in order:
 
 A guided PM/UX session that aligns on what the ticket really means — what
 "done" looks like, UX intent, edge cases, and the context an implementer
-needs. It writes `docs/ship/42/spec.md`, marks the ticket `Spec'd`, and
-fixes the ticket body on the board if the session reveals it was unclear.
+needs, persisting answers after each one to `docs/ship/42/spec.draft.md` so
+an interrupted session resumes on the next `/spec` run. It writes
+`docs/ship/42/spec.md` (validated against the required section headings
+before it's committed), marks the ticket `Spec'd`, fixes the ticket body on
+the board if the session reveals it was unclear, and posts a
+contract-shaped `ship:spec approved` comment carrying a metrics footer on
+GitHub (Jira comments carry none).
 
 ```
 /plan 42
@@ -136,8 +141,11 @@ fixes the ticket body on the board if the session reveals it was unclear.
 
 An engineer session over the approved spec: architecture options and
 trade-offs discussed with you, security and testing approach, then an
-ordered, executable task list in `docs/ship/42/plan.md`. The ticket is
-marked `Planned` — ready for the autonomous stages (or hand execution).
+ordered, executable task list in `docs/ship/42/plan.md`, validated against
+its required sections before it's committed. The ticket is marked
+`Planned` — ready for the autonomous stages (or hand execution) — and the
+session posts a contract-shaped `ship:plan approved` comment with a
+metrics footer on GitHub.
 
 After installing `qa`, run:
 

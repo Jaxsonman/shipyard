@@ -368,7 +368,7 @@ git commit -m "feat(kanban): run manifest, client-side dedupe, preflight and rat
 - Consumes: the draft-file convention from Task 1.
 - Produces: comments matching contract §5.1 and §5.2 exactly; both are read by `board-trail.js`.
 
-- [ ] **Step 1: Replace Step 1 of both skills with preflight + config.js**
+- [x] **Step 1: Replace Step 1 of both skills with preflight + config.js**
 
 Both skills get the same Step 1, `--stage spec` in speccing and `--stage plan` in planning:
 
@@ -398,7 +398,7 @@ Capture the stage start now — it goes in the comment's metrics footer:
     node "${CLAUDE_PLUGIN_ROOT}/scripts/metrics.js" now
 ```
 
-- [ ] **Step 2: Delete the self-model-detection step from planning-tickets**
+- [x] **Step 2: Delete the self-model-detection step from planning-tickets**
 
 Replace the whole of `## Step 3: Model check` with an unconditional recommendation (no attempt to detect the running model — a session cannot reliably read its own model):
 
@@ -411,7 +411,7 @@ checking anything, that the user run `/plan <id>` on Fable or Opus (`/model`).
 This is a recommendation, not a gate — continue if they say to.
 ```
 
-- [ ] **Step 3: PRD glob behavior in speccing Step 3**
+- [x] **Step 3: PRD glob behavior in speccing Step 3**
 
 Replace the one-line PRD lookup with:
 
@@ -424,7 +424,7 @@ Replace the one-line PRD lookup with:
   - **>1 match** → list the matches and ask the user which one; never guess.
 ```
 
-- [ ] **Step 4: Spec draft persistence**
+- [x] **Step 4: Spec draft persistence**
 
 Add to speccing's interview step:
 
@@ -438,7 +438,7 @@ Add to speccing's interview step:
 
 Add `spec.draft.md` handling to Step 2's existing-artifact branch so the two cases do not collide: `spec.md` exists → revise / finish board updates / abort (unchanged); only `spec.draft.md` exists → resume / start over.
 
-- [ ] **Step 5: `validate-artifact.js` gate before the commit in both skills**
+- [x] **Step 5: `validate-artifact.js` gate before the commit in both skills**
 
 In each skill's Step 7 "Land", before `git add`:
 
@@ -455,7 +455,7 @@ In each skill's Step 7 "Land", before `git add`:
 
 (`plan docs/ship/<id>/plan.md` in the planning skill.)
 
-- [ ] **Step 6: Contract-shaped approval comments with footers**
+- [x] **Step 6: Contract-shaped approval comments with footers**
 
 Replace the comment block in speccing's Step 7 with:
 
@@ -474,11 +474,11 @@ Replace the comment block in speccing's Step 7 with:
 
 The planning skill gets the same block with `ship:plan approved` / contract §5.2 / `--stage plan`.
 
-- [ ] **Step 7: Status ladder cited, not restated**
+- [x] **Step 7: Status ladder cited, not restated**
 
 In both skills, replace every hardcoded status/label name in prose with a citation: "Set status → `Spec'd` via the backend reference; the ladder, its labels, colours and descriptions are contract §4." Step 2's "already past this stage" check cites §4's ordering instead of listing `Planned`/`ship:planned`/`ship-planned` variants.
 
-- [ ] **Step 8: Static label descriptions and contract alignment in `references/github.md`**
+- [x] **Step 8: Static label descriptions and contract alignment in `references/github.md`**
 
 Replace the two `gh label create` lines whose `--description` interpolates `<id>` with the **static** descriptions from contract §4 (they must be byte-identical to the table, and a label description is repo-global — it cannot name one ticket):
 
@@ -488,25 +488,25 @@ gh label create "ship:specced" --repo <owner/repo> --color "1D76DB" --descriptio
 
 becomes the contract §4 row's description verbatim, with no per-ticket substitution. Add one line above the block: "Colours and descriptions are contract §4 — copy them from `references/contract.md`, never retype them." Remove the status→label mapping sentence in favour of the same citation; keep only the GitHub-specific commands (auth check, fetch, edit body, add/remove label, post comment).
 
-- [ ] **Step 9: Align `references/jira.md` with the contract**
+- [x] **Step 9: Align `references/jira.md` with the contract**
 
 Delete the restated status-name variant list ("Spec'd"/"Specced"/"Spec", "Planned"/"Planning done") and the hyphenated fallback label names; replace with: "Match the workflow status and, when nothing matches, fall back to the hyphenated labels — both maps are contract §4 (Jira equivalent). Never silently fail and never skip the user-facing explanation." Add: "Jira comments carry no metrics footer (contract §2, §10)." Keep only the MCP tool calls.
 
-- [ ] **Step 10: Line budgets**
+- [x] **Step 10: Line budgets**
 
 Run: `wc -l plugins/planning/skills/*/SKILL.md`
 Expected: speccing ≤ 208, planning ≤ 196. Cut restated backend prose to fit.
 
-- [ ] **Step 11: README + version**
+- [x] **Step 11: README + version**
 
 Update the `/spec` and `/plan` paragraphs: spec-interview draft persistence and resume, the `validate-artifact.js` gate before commit, and that both post a contract-shaped `ship:spec approved` / `ship:plan approved` comment with a metrics footer on GitHub. Bump `plugins/planning/.claude-plugin/plugin.json` to `1.1.0`.
 
-- [ ] **Step 12: Verify**
+- [x] **Step 12: Verify**
 
 Run: `claude plugin validate .`
 Expected: passes.
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add plugins/planning README.md

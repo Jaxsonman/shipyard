@@ -13,5 +13,6 @@ derived criteria require confirmation, board status is never touched.
 
 If the input contains `--env-check`, strip the flag from the input
 before resolution (the remainder, if any, is the branch) and run the
-skill's env-check mode: resolve, bring up, report, tear down — no
-tests, no E2E, no comment.
+skill's env-check mode: resolve, bring up, launch one headless page and
+report browser availability, report, tear down — no tests, no E2E, no
+comment. Invoke it as exactly `/qa --env-check`.

@@ -140,8 +140,12 @@ Verifies the current branch — or target one directly with `/qa 42` (a
 ticket) or `/qa feat/42-login` (a branch). Runs the project's test suite
 plus real per-criterion end-to-end checks in a headless browser, then
 posts a tiered verdict (`full`, `tests-only`, or `static`) with evidence
-as a board comment. `/qa --env-check` resolves and confirms the QA
-environment ahead of time without running any checks. The first run
+as a board comment, with the key evidence for each failing criterion
+inlined — `.qa/` evidence paths exist only on the machine that ran QA.
+`/qa --env-check` resolves and confirms the QA environment ahead of time:
+it brings the app up, launches one headless page against the health URL,
+and reports whether a browser is actually available, so a later `/ship`
+run cannot discover that only at verification time. The first run
 downloads a headless browser via `npx @playwright/mcp`.
 
 After installing `dev`, implement a planned ticket:

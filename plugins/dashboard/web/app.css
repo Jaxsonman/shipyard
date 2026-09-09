@@ -18,6 +18,15 @@
     --color-text: #f3f2f2;
     --color-divider: color-mix(in srgb, #f3f2f2 32%, transparent);
 
+    /* Accent must be re-toned for the dark ground, not just carried over.
+       #ec3013 on --color-bg #1a1918 measures 4.18:1 and on --color-surface
+       3.68:1 — below WCAG AA 4.5:1, and these tokens are used as TEXT colour
+       (links, .btn-ghost, .drawer-err, .gantt-label.is-active, .dialog-err) and
+       as the focus-ring colour. The dark ramp's own 500 step gives 5.56:1 while
+       keeping the same mono-accent hue. */
+    --color-accent: #ff563c;
+    --color-accent-2: #ef6853;
+
     --color-neutral-100: #2d2b2b;
     --color-neutral-200: #444141;
     --color-neutral-300: #605d5d;
@@ -58,6 +67,15 @@
   --color-surface: #262423;
   --color-text: #f3f2f2;
   --color-divider: color-mix(in srgb, #f3f2f2 32%, transparent);
+
+  /* Accent must be re-toned for the dark ground, not just carried over.
+     #ec3013 on --color-bg #1a1918 measures 4.18:1 and on --color-surface
+     3.68:1 — below WCAG AA 4.5:1, and these tokens are used as TEXT colour
+     (links, .btn-ghost, .drawer-err, .gantt-label.is-active, .dialog-err) and
+     as the focus-ring colour. The dark ramp's own 500 step gives 5.56:1 while
+     keeping the same mono-accent hue. */
+  --color-accent: #ff563c;
+  --color-accent-2: #ef6853;
 
   --color-neutral-100: #2d2b2b;
   --color-neutral-200: #444141;
@@ -322,6 +340,11 @@ body { margin: 0; }
 
 .tl-track { padding: var(--space-1) var(--space-3) var(--space-1) 0; }
 .tl-track-layer { position: relative; height: 16px; touch-action: pan-y; }
+/* Pan is real only in the day/week/month presets — resolveDomain('all')
+   always fits the data and ignores panMs, so don't offer a grab cursor
+   the drag cannot honour. */
+.tl.is-pannable .tl-track-layer { cursor: grab; }
+.tl.is-pannable .tl-track-layer:active { cursor: grabbing; }
 
 .tl-grid-line { position: absolute; top: -8px; bottom: -8px; width: 1px; left: var(--tick-x); background: var(--color-divider); }
 .tl-grid-line-major { opacity: 0.7; }

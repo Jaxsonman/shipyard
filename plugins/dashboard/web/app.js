@@ -97,7 +97,9 @@ async function fetchJson(url) {
 function causeForTicket(project, number) {
   if (!timelineData || !Array.isArray(timelineData.rows)) return null;
   const row = timelineData.rows.find((r) => r.project === project && r.number === number);
-  return row && row.escalation ? row.escalation.cause : null;
+  // A malformed `ship:escalation` header yields escalation.cause === null —
+  // surface it as "unknown" rather than silently dropping it (C7).
+  return row && row.escalation ? (row.escalation.cause || 'unknown') : null;
 }
 
 function ticketsForProject(projectId) {
@@ -150,11 +152,16 @@ async function loadAllTicketsForCounts() {
 async function loadTimeline() {
   const url = '/api/timeline?project=' + encodeURIComponent(state.activeProjectId);
   const data = await fetchJson(url);
-  const json = JSON.stringify(data);
+  // `now` changes on every request even when the board hasn't — compare on
+  // the stable content only, or an unchanged board would force a re-render
+  // on every 30s poll and blow away any focus inside the open timeline (C8).
+  const { now, ...comparable } = data;
+  const json = JSON.stringify(comparable);
+  timelineData = data;
   if (json === lastTimelineJson) return;
   lastTimelineJson = json;
-  timelineData = data;
   renderMain();
+  renderStats();
 }
 
 async function loadStats() {
@@ -202,7 +209,47 @@ function renderBanner() {
 
 // ---- render: stats strip -----------------------------------------------------
 
-const CAUSE_ORDER = ['cap', 'static', 'stage-error', 'reconcile'];
+const CAUSE_ORDER = ['cap', 'static', 'stage-error', 'reconcile', 'unknown'];
+
+// Rows from the loaded timeline data that survive the same visibility
+// predicate the Timeline/Tickets views use — project scope is already baked
+// into timelineData (it's fetched per activeProjectId), so this layers on
+// stage chips, hide-backlog, the cause-chip filter and the search box. Used
+// by the stats strip (C4) so its numbers track what's actually on screen
+// instead of always the unfiltered per-project payload.
+function visibleTimelineRows() {
+  if (!timelineData || !Array.isArray(timelineData.rows)) return null;
+  const q = state.search.trim().toLowerCase();
+  return timelineData.rows.filter((r) => {
+    if (state.hideBacklog && r.backlog) return false;
+    if (!rowMatchesStageFilter(r)) return false;
+    if (!rowMatchesCauseFilter(r)) return false;
+    if (q) {
+      const num = String(r.number).toLowerCase();
+      const title = (r.title || '').toLowerCase();
+      if (!num.includes(q) && !title.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+// Whether any client-side filter that would narrow the visible ticket set is
+// currently active — the trigger for recomputing the stats strip client-side
+// instead of showing the server's unfiltered-per-project payload (C4).
+function hasActiveClientFilter() {
+  return state.stageFilter.size > 0 || state.hideBacklog || !!state.causeFilter || state.search.trim().length > 0;
+}
+
+// Picks the stats payload to render: client-recomputed over the currently
+// visible timeline rows when a client-side filter narrows the view and
+// timeline data has loaded, otherwise the server's per-project payload.
+function computeDisplayStats() {
+  if (hasActiveClientFilter() && timelineData && window.PipelineStats) {
+    const rows = visibleTimelineRows();
+    if (rows) return window.PipelineStats.buildStats({ rows, now: timelineData.now });
+  }
+  return state.stats;
+}
 
 function statTile(label, valueHtml) {
   return `
@@ -217,7 +264,7 @@ function renderStats() {
   const el = document.getElementById('stats');
   if (!el) return;
 
-  const s = state.stats;
+  const s = computeDisplayStats();
   if (!s) {
     el.innerHTML = '';
     return;
@@ -269,6 +316,8 @@ function renderStats() {
       state.page = 0;
       renderStats();
       renderMain();
+      const refocus = document.querySelector(`[data-cause="${CSS.escape(cause)}"]`);
+      if (refocus) refocus.focus();
     });
   });
 }
@@ -550,13 +599,16 @@ function timelineRowsForProject() {
 }
 
 function tlPanBySpan(fraction) {
-  if (!tlScale) return;
+  if (!tlScale || state.zoom === 'all') return;
   const spanMs = tlScale.end - tlScale.start;
   applyTlPan(state.panMs + spanMs * fraction);
 }
 
 function applyTlPan(panMs) {
-  if (!timelineData) return;
+  // resolveDomain('all', …) always fits the full data range and ignores
+  // panMs by design — accumulating it here would be a silent no-op the next
+  // render throws away, so don't pretend pan does anything in this preset (C5).
+  if (!timelineData || state.zoom === 'all') return;
   const preset = TimelineScale.ZOOM_PRESETS.find((p) => p.id === state.zoom) || TimelineScale.ZOOM_PRESETS[1];
   const spanMs = preset.spanMs === null ? (tlScale ? tlScale.end - tlScale.start : 0) : preset.spanMs;
   state.panMs = TimelineScale.clampPan(panMs, spanMs, {
@@ -594,7 +646,9 @@ function rowMatchesStageFilter(row) {
 // newest escalation matches the active chip. No-op when no chip is pressed.
 function rowMatchesCauseFilter(row) {
   if (!state.causeFilter) return true;
-  return row.stage === 'Needs Human' && !!row.escalation && row.escalation.cause === state.causeFilter;
+  if (row.stage !== 'Needs Human' || !row.escalation) return false;
+  const cause = row.escalation.cause || 'unknown';
+  return cause === state.causeFilter;
 }
 
 function renderTimeline() {
@@ -664,7 +718,7 @@ function renderTimeline() {
           Hide backlog
         </label>
       </div>
-      <div class="tl" id="tl" tabindex="0">
+      <div class="tl${state.zoom === 'all' ? '' : ' is-pannable'}" id="tl" tabindex="0">
         <div class="tl-axis-row">
           <div class="tl-axis-label"></div>
           <div class="tl-axis" id="tl-axis"></div>
@@ -727,7 +781,7 @@ function renderTimeline() {
         if (state.stageFilter.size > 0 && !state.stageFilter.has(r.stage)) return '';
         const cls = segmentBarClass(r, ranks.get(i), row.running);
         const tip = segmentTooltipText(r);
-        return `<div class="${cls}" tabindex="-1" style="--x:${r.x}px;--w:${r.w}px" title="${esc(tip)}" data-tip="${esc(tip)}"></div>`;
+        return `<div class="${cls}" tabindex="0" style="--x:${r.x}px;--w:${r.w}px" title="${esc(tip)}" data-tip="${esc(tip)}" aria-label="${esc(tip)}"></div>`;
       })
       .join('');
     layerEl.innerHTML = gridlinesHtml + nowLineHtml + barsHtml;
@@ -739,9 +793,15 @@ function renderTimeline() {
 function wireTimelineControls() {
   document.querySelectorAll('[data-zoom]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      state.zoom = btn.getAttribute('data-zoom');
+      const zoomId = btn.getAttribute('data-zoom');
+      state.zoom = zoomId;
       state.panMs = 0;
       renderTimeline();
+      // Re-render replaces this button's node — refocus the equivalent
+      // button in the new DOM so keyboard activation doesn't strand focus
+      // on <body> (C2).
+      const refocus = document.querySelector(`[data-zoom="${CSS.escape(zoomId)}"]`);
+      if (refocus) refocus.focus();
     });
   });
 
@@ -754,6 +814,9 @@ function wireTimelineControls() {
         state.stageFilter.add(stage);
       }
       renderTimeline();
+      renderStats();
+      const refocus = document.querySelector(`[data-stage="${CSS.escape(stage)}"]`);
+      if (refocus) refocus.focus();
     });
   });
 
@@ -762,6 +825,9 @@ function wireTimelineControls() {
     hideBacklogEl.addEventListener('change', () => {
       state.hideBacklog = hideBacklogEl.checked;
       renderTimeline();
+      renderStats();
+      const refocus = document.getElementById('hide-backlog');
+      if (refocus) refocus.focus();
     });
   }
 
@@ -792,7 +858,11 @@ function wireTimelineControls() {
   const tlEl = document.getElementById('tl');
   if (tlEl) {
     tlEl.addEventListener('keydown', (ev) => {
-      if (ev.target !== tlEl) return;
+      // Any element inside the track (a row, or now a focusable bar) should
+      // still pan on Left/Right/Home — only require the event to have
+      // originated within #tl, not exactly on it, so bars don't swallow the
+      // row's pan keys (C3).
+      if (!tlEl.contains(ev.target)) return;
       if (ev.key === 'ArrowLeft') {
         tlPanBySpan(-0.1);
       } else if (ev.key === 'ArrowRight') {
@@ -803,6 +873,7 @@ function wireTimelineControls() {
     });
 
     tlEl.addEventListener('wheel', (ev) => {
+      if (state.zoom === 'all') return;
       const delta = ev.deltaX !== 0 ? ev.deltaX : (ev.shiftKey ? ev.deltaY : 0);
       if (delta === 0 || !tlScale || !tlScale.pxPerMs) return;
       ev.preventDefault();
@@ -885,9 +956,36 @@ function approveEligibility(stage) {
   return { enabled: false, label: 'Approve' };
 }
 
+// Re-rendering the drawer (a tab click, or the approve/reassign refresh)
+// replaces #drawer-root's innerHTML wholesale, destroying whatever element
+// had focus and leaving document.activeElement === document.body. Capture
+// what was focused *before* the replacement and what identifies its
+// equivalent afterward (the same data-tab, or the same id), so the caller
+// can restore focus to a sensible control instead of leaving it on <body> (C1).
+function drawerFocusSnapshot(el) {
+  const activeEl = document.activeElement;
+  if (!el.contains(activeEl) || activeEl === el) return null;
+  return {
+    id: activeEl.id || null,
+    tab: activeEl.getAttribute && activeEl.getAttribute('data-tab'),
+  };
+}
+
+function restoreDrawerFocus(el, snapshot) {
+  if (!snapshot) return;
+  let target = null;
+  if (snapshot.id) target = document.getElementById(snapshot.id);
+  if (target && target.disabled) target = null; // e.g. approve became disabled after the stage moved
+  if (!target && snapshot.tab) target = el.querySelector(`[data-tab="${CSS.escape(snapshot.tab)}"]`);
+  if (!target) target = el.querySelector('#drawer-close');
+  if (target) target.focus();
+}
+
 function renderDrawer() {
   const el = document.getElementById('drawer-root');
   if (!el) return;
+
+  const focusSnapshot = drawerFocusSnapshot(el);
 
   if (!state.selectedTicket) {
     el.innerHTML = '';
@@ -914,6 +1012,7 @@ function renderDrawer() {
     if (panelEl) panelEl.addEventListener('click', (ev) => ev.stopPropagation());
     const closeBtnEl = document.getElementById('drawer-close');
     if (closeBtnEl) closeBtnEl.addEventListener('click', () => closeDrawer());
+    restoreDrawerFocus(el, focusSnapshot);
     return;
   }
 
@@ -1076,6 +1175,8 @@ function renderDrawer() {
       }
     });
   }
+
+  restoreDrawerFocus(el, focusSnapshot);
 }
 
 window.renderDrawer = renderDrawer;
@@ -1241,6 +1342,7 @@ function wireStaticControls() {
       state.search = search.value;
       state.page = 0;
       renderMain();
+      renderStats();
     });
   }
   const ticketsTab = document.getElementById('view-tickets');
@@ -1262,6 +1364,15 @@ function trapTabKey(ev, panelEl) {
   if (!focusables.length) return;
   const first = focusables[0];
   const last = focusables[focusables.length - 1];
+  // A re-render inside the open panel (e.g. a drawer tab click) can destroy
+  // whatever had focus, leaving document.activeElement === document.body —
+  // which matches neither `first` nor `last` below, so Tab would otherwise
+  // escape the trap entirely. Catch that hole first (C1).
+  if (!panelEl.contains(document.activeElement)) {
+    ev.preventDefault();
+    first.focus();
+    return;
+  }
   if (ev.shiftKey && document.activeElement === first) {
     ev.preventDefault();
     last.focus();

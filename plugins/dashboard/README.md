@@ -115,10 +115,22 @@ ticket's Stage cell also shows its cause as an outline tag.
 **Tickets** — the paginated table, one row per ticket, grouped by the project
 picked in the sidebar.
 
+The **stats strip** sits above both views. It shows tickets per stage, median
+and p90 stage duration, total tokens in/out and throughput (tickets reaching
+Awaiting Review per week), plus a chip per escalation cause (`cap`, `static`,
+`stage-error`, `reconcile`, and `unknown` for a malformed `ship:escalation`
+header) that filters both views. The numbers track what is actually visible:
+with no client-side filter applied they come straight from `GET /api/stats`,
+and as soon as a stage chip, "hide backlog", a cause chip or the search box
+narrows the set they are recomputed in the browser from the visible timeline
+rows using `web/pipeline-stats.js` — the same module the server runs, so the
+two can never disagree.
+
 **Timeline** — a board-wide Gantt across every ticket. Rows are grouped by
 project and sorted by last activity; the axis is real time with gridlines, a
-"now" line, day/week/month/all zoom presets and horizontal pan (wheel, drag, or
-arrow keys). One bar per stage the trail has evidence for: accent for the stage
+"now" line and day/week/month/all zoom presets. Horizontal pan (wheel, drag or
+arrow keys) applies to the day/week/month presets; `all` always fits the full
+data range, so pan is inactive there and the track shows no grab cursor. One bar per stage the trail has evidence for: accent for the stage
 the ticket is in now, a neutral ramp by recency for earlier stages, and a hatch
 overlay for bars estimated from comment timestamps rather than metrics footers.
 The active bar pulses. Hovering or focusing a bar shows stage, round, duration,

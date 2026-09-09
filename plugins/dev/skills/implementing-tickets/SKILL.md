@@ -30,10 +30,12 @@ a step says "via the backend reference," read the file matching
 `config.backend` and follow its named operation exactly (auth check,
 fetch ticket, post comment). Brief templates live in
 `../../references/briefs.md`; the practices text in
-`../../references/practices.md`. Wire strings this skill cites — header
-grammar, body sections, the metrics footer — are defined once in
-`../../references/contract.md`; read the cited section for the exact
-text rather than relying on this file to restate it.
+`../../references/practices.md`.
+
+**Contract:** `${CLAUDE_PLUGIN_ROOT}/references/contract.md` (contract v1). "§N" means that file's section N; open the cited section when a step references it.
+Wire strings this skill cites — header grammar, body sections, the
+metrics footer — are defined there once; read the cited section for the
+exact text rather than relying on this file to restate it.
 
 ## Step 1: Config, ticket, and metrics start
 

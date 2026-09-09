@@ -11,10 +11,10 @@ round. Ship owns no worker logic: dev implements, QA verifies, ship
 conducts. v1 is single-ticket only — wave mode, claims and merge
 strategies are v2.
 
+**Contract:** `${CLAUDE_PLUGIN_ROOT}/references/contract.md` (contract v1). "§N" means that file's section N; open the cited section when a step references it.
 Every wire string ship emits or parses — labels, headers, escalation
-causes, the metrics footer, the repost shape, round arithmetic — lives in
-`${CLAUDE_PLUGIN_ROOT}/references/contract.md` (v1). Read the section a
-step cites; never invent a form or restate one from memory. Backend
+causes, the metrics footer, the repost shape, round arithmetic — is
+defined there. Never invent a form or restate one from memory. Backend
 mechanics: `${CLAUDE_PLUGIN_ROOT}/references/github.md` and `.../jira.md`.
 
 ## Hard rules

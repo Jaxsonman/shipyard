@@ -29,9 +29,12 @@ Board mechanics live in `../../references/github.md` and
 says "via the backend reference," read the file matching `config.backend`
 (from `.claude/kanban.config.json`) and follow its named operation
 exactly (auth check, fetch ticket, post comment). Environment detection
-recipes live in `../../references/environments.md`. Wire strings this
-skill must produce, but does not own, are cited by section number from
-`${CLAUDE_PLUGIN_ROOT}/references/contract.md`.
+recipes live in `../../references/environments.md`.
+
+**Contract:** `${CLAUDE_PLUGIN_ROOT}/references/contract.md` (contract v1). "§N" means that file's section N; open the cited section when a step references it.
+Wire strings this skill must produce but does not own — the verdict
+header, the tier table, the metrics footer — are cited by section number
+rather than restated here.
 
 Capture the start time now, at this skill's first step:
 `node "${CLAUDE_PLUGIN_ROOT}/scripts/metrics.js" now` → `<started>`. Step

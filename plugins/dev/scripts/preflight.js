@@ -256,10 +256,16 @@ function preflight(opts = {}) {
       const counts = exec('git', ['rev-list', '--left-right', '--count', `${branch}...origin/${branch}`]);
       const [ahead, behind] = String(counts.stdout || '').trim().split(/\s+/).map(Number);
       const diverged = counts.code === 0 && (ahead > 0 && behind > 0);
-      add('branch-divergence', !diverged, diverged ? 'error' : 'warn',
+      // For pr, being merely *behind* is fatal too: the PR head would be
+      // origin/<branch>, so a merge check against the local ref would test a
+      // tree that is not the one the pull request proposes.
+      const behindOnly = stage === 'pr' && counts.code === 0 && !diverged && behind > 0;
+      add('branch-divergence', !diverged && !behindOnly,
+        (diverged || behindOnly) ? 'error' : 'warn',
         counts.code !== 0 ? `cannot compare ${branch} with origin/${branch}`
           : diverged ? `${branch} has diverged from origin/${branch}: ${ahead} ahead, ${behind} behind`
-            : `${branch} vs origin/${branch}: ${ahead || 0} ahead, ${behind || 0} behind`);
+            : behindOnly ? `${branch} is behind origin/${branch}: ${ahead || 0} ahead, ${behind} behind — the PR head would not be the tree that was merge-checked; fast-forward or pull first`
+              : `${branch} vs origin/${branch}: ${ahead || 0} ahead, ${behind || 0} behind`);
     }
 
     const wt = exec('git', ['worktree', 'list', '--porcelain']);
@@ -276,9 +282,17 @@ function preflight(opts = {}) {
     if (!branch) {
       skip('worktree-elsewhere', 'error', 'no single matching branch');
     } else if (holders[branch] && path.resolve(holders[branch]) !== here) {
-      add('worktree-elsewhere', false, 'error',
-        `branch ${branch} is checked out in another worktree: ${holders[branch]}`,
-        { path: holders[branch] });
+      // pr *wants* the ship worktree that holds the branch — it works from it
+      // rather than creating a second one, so this is information, not a block.
+      if (stage === 'pr') {
+        add('worktree-elsewhere', true, 'warn',
+          `branch ${branch} is checked out in another worktree: ${holders[branch]} — /pr will work from there`,
+          { path: holders[branch] });
+      } else {
+        add('worktree-elsewhere', false, 'error',
+          `branch ${branch} is checked out in another worktree: ${holders[branch]}`,
+          { path: holders[branch] });
+      }
     } else {
       add('worktree-elsewhere', true, 'error',
         holders[branch] ? `branch ${branch} is checked out here` : `branch ${branch} is not checked out elsewhere`);
@@ -324,7 +338,13 @@ function preflight(opts = {}) {
         add('pr-gate', false, 'error',
           `${target}#${ticket} carries multiple ship:* labels: ${shipLabels.join(', ')} — resolve to one before continuing`);
       } else if (shipLabels.includes('ship:approved')) {
-        add('pr-gate', true, 'error', `${target}#${ticket} carries ship:approved`);
+        add('pr-gate', true, 'error', `${target}#${ticket} carries ship:approved`, { mode: 'open' });
+      } else if (shipLabels.includes('ship:pr-open')) {
+        // A re-run after a partial failure (PR opened, comment or label step
+        // lost) must be able to finish the job rather than strand the board.
+        add('pr-gate', true, 'error',
+          `${target}#${ticket} is already ship:pr-open — reconcile the existing PR rather than opening another`,
+          { mode: 'reconcile' });
       } else {
         add('pr-gate', false, 'error',
           `${target}#${ticket} is not ship:approved (current: ${shipLabels[0] || 'no ship:* label'}) — the review gate must approve the review packet first`);

@@ -189,3 +189,115 @@ test('non-pr stages skip the pr checks', () => {
   assert.equal(r.checks.find((x) => x.id === 'pr-gate').skipped, true);
   assert.equal(r.checks.find((x) => x.id === 'pr-existing').skipped, true);
 });
+
+test('stage pr treats a branch held by the ship worktree as a warning, not a refusal', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pr-'));
+  execFileSync('git', ['init', '-q', dir]);
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'ship.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r', baseBranch: 'main', loopCap: 3, approvers: [] }));
+  fs.writeFileSync(path.join(dir, '.claude', 'kanban.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r' }));
+  const r = preflight({ stage: 'pr', ticket: 42, cwd: dir, exec: fakeExec({
+    'git branch': { code: 0, stdout: 'feat/42-login\n', stderr: '' },
+    'git worktree list': { code: 0, stdout: 'worktree /tmp/other-wt\nHEAD abc\nbranch refs/heads/feat/42-login\n', stderr: '' },
+    'gh issue view': { code: 0, stdout: JSON.stringify({ labels: [{ name: 'ship:approved' }] }), stderr: '' },
+    'gh pr list': { code: 0, stdout: '[]', stderr: '' },
+  }) });
+  const c = r.checks.find((x) => x.id === 'worktree-elsewhere');
+  assert.equal(c.ok, true);
+  assert.equal(c.level, 'warn');
+  assert.equal(c.path, '/tmp/other-wt');
+  assert.ok(!r.reasons.some((s) => /\/other-wt\//.test(s)));
+});
+
+test('stage ship still refuses a branch checked out elsewhere', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pr-'));
+  execFileSync('git', ['init', '-q', dir]);
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'ship.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r', baseBranch: 'main', loopCap: 3, approvers: [] }));
+  fs.writeFileSync(path.join(dir, '.claude', 'kanban.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r' }));
+  const r = preflight({ stage: 'ship', ticket: 42, cwd: dir, exec: fakeExec({
+    'git branch': { code: 0, stdout: 'feat/42-login\n', stderr: '' },
+    'git worktree list': { code: 0, stdout: 'worktree /tmp/other-wt\nHEAD abc\nbranch refs/heads/feat/42-login\n', stderr: '' },
+  }) });
+  const c = r.checks.find((x) => x.id === 'worktree-elsewhere');
+  assert.equal(c.ok, false);
+  assert.equal(c.level, 'error');
+});
+
+test('stage pr treats ship:pr-open as reconcile, not a refusal', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pr-'));
+  execFileSync('git', ['init', '-q', dir]);
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'ship.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r', baseBranch: 'main', loopCap: 3, approvers: [] }));
+  fs.writeFileSync(path.join(dir, '.claude', 'kanban.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r' }));
+  const r = preflight({ stage: 'pr', ticket: 42, cwd: dir, exec: fakeExec({
+    'git branch': { code: 0, stdout: 'feat/42-login\n', stderr: '' },
+    'gh issue view': { code: 0, stdout: JSON.stringify({ labels: [{ name: 'ship:pr-open' }] }), stderr: '' },
+    'gh pr list': { code: 0, stdout: '[]', stderr: '' },
+  }) });
+  const c = r.checks.find((x) => x.id === 'pr-gate');
+  assert.equal(c.ok, true);
+  assert.equal(c.mode, 'reconcile');
+});
+
+test('stage pr marks a ship:approved ticket mode=open', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pr-'));
+  execFileSync('git', ['init', '-q', dir]);
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'ship.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r', baseBranch: 'main', loopCap: 3, approvers: [] }));
+  fs.writeFileSync(path.join(dir, '.claude', 'kanban.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r' }));
+  const r = preflight({ stage: 'pr', ticket: 42, cwd: dir, exec: fakeExec({
+    'git branch': { code: 0, stdout: 'feat/42-login\n', stderr: '' },
+    'gh issue view': { code: 0, stdout: JSON.stringify({ labels: [{ name: 'ship:approved' }] }), stderr: '' },
+    'gh pr list': { code: 0, stdout: '[]', stderr: '' },
+  }) });
+  const c = r.checks.find((x) => x.id === 'pr-gate');
+  assert.equal(c.ok, true);
+  assert.equal(c.mode, 'open');
+});
+
+test('stage pr refuses a branch behind origin', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pr-'));
+  execFileSync('git', ['init', '-q', dir]);
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'ship.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r', baseBranch: 'main', loopCap: 3, approvers: [] }));
+  fs.writeFileSync(path.join(dir, '.claude', 'kanban.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r' }));
+  const r = preflight({ stage: 'pr', ticket: 42, cwd: dir, exec: fakeExec({
+    'git branch -r': { code: 0, stdout: 'origin/feat/42-login\n', stderr: '' },
+    'git branch': { code: 0, stdout: 'feat/42-login\n', stderr: '' },
+    'git rev-list': { code: 0, stdout: '0\t2\n', stderr: '' },
+    'gh issue view': { code: 0, stdout: JSON.stringify({ labels: [{ name: 'ship:approved' }] }), stderr: '' },
+    'gh pr list': { code: 0, stdout: '[]', stderr: '' },
+  }) });
+  const c = r.checks.find((x) => x.id === 'branch-divergence');
+  assert.equal(c.ok, false);
+  assert.equal(c.level, 'error');
+  assert.match(c.message, /behind/);
+});
+
+test('stage ship tolerates a branch behind origin', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pr-'));
+  execFileSync('git', ['init', '-q', dir]);
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'ship.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r', baseBranch: 'main', loopCap: 3, approvers: [] }));
+  fs.writeFileSync(path.join(dir, '.claude', 'kanban.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r' }));
+  const r = preflight({ stage: 'ship', ticket: 42, cwd: dir, exec: fakeExec({
+    'git branch -r': { code: 0, stdout: 'origin/feat/42-login\n', stderr: '' },
+    'git branch': { code: 0, stdout: 'feat/42-login\n', stderr: '' },
+    'git rev-list': { code: 0, stdout: '0\t2\n', stderr: '' },
+  }) });
+  const c = r.checks.find((x) => x.id === 'branch-divergence');
+  assert.equal(c.ok, true);
+});

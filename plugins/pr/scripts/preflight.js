@@ -50,8 +50,16 @@ const STAGE_CONFIG = {
   pr: ['kanban', 'ship'],
 };
 
-/** Stages for which a missing feat/<id>-* branch is fatal rather than expected. */
-const BRANCH_REQUIRED = ['qa', 'ship', 'pr'];
+/**
+ * Stages for which a missing feat/<id>-* branch is fatal rather than expected.
+ *
+ * `ship` and `dev` are deliberately absent: both create the branch on a first
+ * run, so zero matches is the normal starting state, not an error. They get an
+ * info-level `branch-match` carrying `willCreate: true`, which lets a skill
+ * simply trust the exit code instead of special-casing a failing check.
+ * `qa` and `pr` only ever verify or ship an existing branch.
+ */
+const BRANCH_REQUIRED = ['qa', 'pr'];
 
 const MIN_NODE_MAJOR = 18;
 
@@ -235,9 +243,13 @@ function preflight(opts = {}) {
     if (all.length === 1) {
       add('branch-match', true, 'error', `one branch matches ${prefix}*: ${all[0]}`, { branch: all[0] });
     } else if (all.length === 0) {
-      const fatal = BRANCH_REQUIRED.includes(stage);
-      add('branch-match', false, fatal ? 'error' : 'warn',
-        `no branch matches ${prefix}*${fatal ? '' : ' — it will be created from ' + base}`);
+      if (BRANCH_REQUIRED.includes(stage)) {
+        add('branch-match', false, 'error', `no branch matches ${prefix}*`);
+      } else {
+        add('branch-match', true, 'info',
+          `no branch matches ${prefix}* — it will be created from ${base}`,
+          { willCreate: true });
+      }
     } else {
       add('branch-match', false, 'error',
         `${all.length} branches match ${prefix}*: ${all.join(', ')} — resolve to one before continuing`);
@@ -279,27 +291,36 @@ function preflight(opts = {}) {
       }
     }
     const here = path.resolve(cwd);
+    const repoDir = path.basename(here);
+    // The ticket's own worktree path (contract §13). Computed before the
+    // checked-out-elsewhere test because a branch sitting *here* is the normal
+    // state of a resume, not a fault: dev and ship run from the main checkout
+    // while their worktree lives beside it, so a plain "is it checked out
+    // somewhere other than cwd" test fails every resume.
+    const conventional = path.resolve(here, '..', `${repoDir}-ship`, `dev-${ticket}`);
+
     if (!branch) {
       skip('worktree-elsewhere', 'error', 'no single matching branch');
-    } else if (holders[branch] && path.resolve(holders[branch]) !== here) {
-      // pr *wants* the ship worktree that holds the branch — it works from it
-      // rather than creating a second one, so this is information, not a block.
-      if (stage === 'pr') {
-        add('worktree-elsewhere', true, 'warn',
-          `branch ${branch} is checked out in another worktree: ${holders[branch]} — /pr will work from there`,
-          { path: holders[branch] });
-      } else {
-        add('worktree-elsewhere', false, 'error',
-          `branch ${branch} is checked out in another worktree: ${holders[branch]}`,
-          { path: holders[branch] });
-      }
+    } else if (!holders[branch]) {
+      add('worktree-elsewhere', true, 'error', `branch ${branch} is not checked out elsewhere`);
+    } else if (path.resolve(holders[branch]) === here) {
+      add('worktree-elsewhere', true, 'error', `branch ${branch} is checked out here`);
+    } else if (path.resolve(holders[branch]) === conventional) {
+      add('worktree-elsewhere', true, 'info',
+        `branch ${branch} is checked out in this ticket's own worktree: ${holders[branch]} — resume it`,
+        { resumeWorktree: holders[branch] });
+    } else if (stage === 'pr') {
+      // pr only reads the branch and pushes it; it works from whatever tree
+      // already holds it rather than creating a second one, so a holder that
+      // is not the conventional path is still information, not a block.
+      add('worktree-elsewhere', true, 'warn',
+        `branch ${branch} is checked out in another worktree: ${holders[branch]} — /pr will work from there`,
+        { path: holders[branch] });
     } else {
-      add('worktree-elsewhere', true, 'error',
-        holders[branch] ? `branch ${branch} is checked out here` : `branch ${branch} is not checked out elsewhere`);
+      add('worktree-elsewhere', false, 'error',
+        `branch ${branch} is checked out in another worktree: ${holders[branch]}`,
+        { path: holders[branch] });
     }
-
-    const repoDir = path.basename(here);
-    const conventional = path.resolve(here, '..', `${repoDir}-ship`, `dev-${ticket}`);
     const takenBy = Object.entries(holders).find(([, p]) => path.resolve(p) === conventional);
     if (takenBy && branch && takenBy[0] !== branch) {
       add('worktree-collision', false, 'error',

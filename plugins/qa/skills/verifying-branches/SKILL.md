@@ -7,6 +7,9 @@ description: Verification session — run a project's test suite plus real per-c
 
 One invocation = one verdict. QA never moves ticket status, never
 prescribes fixes, and writes nothing into the feature branch's diff.
+Everything QA writes under `.qa/` is **QA-owned** (contract §13): it
+never enters the branch diff, and dev's resume and ship's cleanup ignore
+it — even inside a worktree ship created.
 
 Two modes, decided by how this skill was entered:
 
@@ -28,19 +31,33 @@ says "via the backend reference," read the file matching `config.backend`
 exactly (auth check, fetch ticket, post comment). Environment detection
 recipes live in `../../references/environments.md`.
 
+**Contract:** `${CLAUDE_PLUGIN_ROOT}/references/contract.md` (contract v1). "§N" means that file's section N; open the cited section when a step references it.
+Wire strings this skill must produce but does not own — the verdict
+header, the tier table, the metrics footer — are cited by section number
+rather than restated here.
+
+Capture the start time now, at this skill's first step:
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/metrics.js" now` → `<started>`. Step
+8 uses it for the metrics footer.
+
 ## Step 1: Resolve
 
 Turn the input into `(branch, ticket?, criteria, criteria-source)`:
 
 | Input | Resolves via |
 |-------|--------------|
-| ticket id (`42`, `PROJ-12`, URL) | ticket → its branch: a worktree claim comment on the ticket, else a branch whose name contains the id (`feat/42-*`) |
+| ticket id (`42`, `PROJ-12`, URL) | ticket → its branch: a branch whose name matches `feat/<id>-*` (contract §13) |
 | branch name | branch → ticket: id parsed from the branch name, else from its commit messages (`#42`, `PROJ-12`) |
 | empty | the current branch, then as above |
 
 Fetch the ticket via the backend reference when one resolved. Ticket or
 branch not found → fail fast with the exact error; no artifacts, no
 comment, no verdict.
+
+**`--env-check` skips this whole step's board half:** it needs no ticket
+and performs no board operation, so it never fetches a ticket, never runs
+the auth check, and never bootstraps a board config. Resolution reduces to
+branch + config; go straight to Step 2.
 
 `.claude/kanban.config.json` missing + standalone → bootstrap it exactly as
 kanban/planning do (two questions: backend github|jira, target owner/repo or
@@ -68,31 +85,15 @@ header says `standalone`. QA never enforces the loop cap — that is ship's.
 
 ## Step 2: Environment config
 
-Config is the `qa` block of `.claude/ship.config.json`:
-
-```json
-"qa": {
-  "setup":       "npm ci",
-  "seed":        "npm run db:seed",
-  "run":         "npm run dev",
-  "test":        "npm test",
-  "health":      "http://localhost:{PORT}/",
-  "basePort":    41000,
-  "envFile":     ".env.qa.local",
-  "requiredEnv": ["DATABASE_URL"],
-  "e2e":         "auto"
-}
-```
-
-Optional: `healthTimeoutSeconds` (default 120). `e2e: auto` resolves at
-interview time: health URL serves HTML → `browser`; CLI-only repo →
-`cli`. No secrets ever — `requiredEnv` holds variable *names*; values
+Config is the `qa` block of `.claude/ship.config.json` — schema and
+example in contract §12.3. Optional `healthTimeoutSeconds` defaults to
+`120`. No secrets ever: `requiredEnv` holds variable *names*; values
 live in the gitignored `envFile`.
 
 The interview persists the *resolved* value. If a confirmed block still
-contains `auto`, resolve it at run start without rewriting config: the
-block has a `run` command and the health URL serves HTML → `browser`;
-no `run` command → `cli`.
+contains `auto` for `e2e`, resolve it at run start without rewriting
+config: the block has a `run` command and the health URL serves HTML →
+`browser`; no `run` command → `cli`.
 
 - Block present → use it. Never re-detect over a confirmed block.
 - Missing + **standalone** → first-run interview: detect using the first
@@ -107,15 +108,19 @@ no `run` command → `cli`.
 
 ## Step 3: Worktree and artifacts
 
-- **standalone:** `git worktree add <repo>/.qa/worktrees/<branch-slug> <branch>`
+- **standalone:** `git worktree add <main-root>/.qa/worktrees/<branch-slug> <branch>`
   and verify there. Record the path for teardown. The user's checkout is
   never touched.
 - **ship-invoked:** use the worktree path ship passed; QA did not create
-  it and must not remove it.
-- **Artifacts dir:** `<main-root>/.qa/<id|branch-slug>/round-<N|standalone>/`,
-  where `<main-root>` is the main checkout's top level:
-  `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`.
-  This works identically from the main checkout and from any linked worktree.
+  it and must not remove it. Anything QA writes inside it (under `.qa/`,
+  and the `info/exclude` entry) is QA-owned per contract §13 — dev's
+  resume and ship's cleanup treat it as if it doesn't exist.
+- **Artifacts dir and `<main-root>`:** paths are `<main-root>/.qa/...`
+  throughout, per contract §13 — `<main-root>` is always
+  `dirname "$(git rev-parse --path-format=absolute --git-common-dir)"`,
+  the same definition from the main checkout and from any linked
+  worktree. The QA evidence dir is
+  `<main-root>/.qa/<id|branch-slug>/round-<N|standalone>/`.
 - Before writing anything, ensure `.qa/` is listed in
   `"$(git rev-parse --path-format=absolute --git-common-dir)/info/exclude"` —
   the shared exclude file (usable from linked worktrees, where `.git` is a
@@ -134,28 +139,66 @@ no `run` command → `cli`.
 In `cli` mode: run the env preflight, setup, and seed; skip port,
 launch, and health — then continue to Step 5.
 
-1. **Port:** probe upward from `basePort` for the first free port.
-   Export it as `PORT` and substitute `{PORT}` in the health URL and run
-   command. Probing (not arithmetic) is what makes parallel waves
-   collision-proof.
+1. **Port, bind-and-hold:** probe upward from `basePort`. For each
+   candidate, actually **bind** a listener on it (do not just check
+   liveness) and keep that listener process running — it now holds the
+   port against every other parallel run. Continue env preflight, setup,
+   and seed while the holder sits on the port. Immediately before
+   executing `run`, kill the holder and launch `run` in the same step, so
+   no other code runs in the gap between release and takeover. Export the
+   won port as `PORT` and substitute `{PORT}` in the health URL and run
+   command. This is what makes parallel waves collision-proof — a plain
+   probe-then-launch leaves a window a concurrent run can win.
 2. **Env preflight:** every name in `requiredEnv` must exist in the
    environment or in `envFile`. Missing → record the *names* (never
    values), skip launch, continue on the tests-only path.
 3. **setup → seed → launch → health:** setup (10-minute timeout), seed
    (5-minute timeout), then launch `run` in its own process group with
    stdout+stderr redirected to `<artifacts>/app.log` and its PID written
-   to `<artifacts>/app.pid`. Poll the health URL every 2s until HTTP 200
-   or `healthTimeoutSeconds` elapses.
-4. **Any bring-up failure:** capture the last 50 lines of `app.log` as
-   evidence and continue on the tests-only path — never abort the whole
-   run because the app wouldn't start.
+   to `<artifacts>/app.pid`. Poll the health URL every 2s until
+   `healthTimeoutSeconds` elapses. A response counts as **green** only
+   when both hold: the expected HTTP status, AND the response comes from
+   the app this run launched. Check the second by **process group**, not
+   by PID — for the common `run: "npm run dev"`, `app.pid` is npm's and
+   the listener is a forked child, so comparing PIDs directly would
+   reject every healthy run:
 
-**`--env-check` mode stops here:** print a report (resolved config,
-allocated port, health result, app-log tail), tear down, and exit. No
-tests, no E2E, no board comment. This is the debugging path and the way
-to run the first-run interview ahead of time. Env-check needs no ticket
-and performs no board operations — resolution reduces to branch +
-config; skip ticket fetch and auth entirely.
+   ```bash
+   LPID=$(lsof -ti:"$PORT" | head -1)
+   [ "$(ps -o pgid= -p "$LPID" | tr -d ' ')" = "$(ps -o pgid= -p "$(cat <artifacts>/app.pid)" | tr -d ' ')" ]
+   ```
+
+   Same process group → green. A different group means a stray listener
+   won the port, not our app: treat health as never green (cause: "port
+   occupied by another process") and continue on the tests-only path. If
+   the listener PID cannot be resolved at all (no `lsof`, permissions),
+   do **not** fail on that alone — fall back to asserting an
+   app-identifying signal in the response body or headers, and only when
+   that too is unavailable treat health as never green, naming which
+   check was impossible.
+4. **Any bring-up failure:** capture evidence as
+   `tail -n 50 <artifacts>/app.log | node "${CLAUDE_PLUGIN_ROOT}/scripts/redact.js"`
+   and continue on the tests-only path — never abort the whole run
+   because the app wouldn't start. Every `app.log` excerpt that can reach
+   a board comment or a report goes through this exact pipeline, capped
+   at 50 lines; nothing unredacted ever leaves the artifacts dir.
+
+**`--env-check` mode stops here.** Launch exactly one headless page
+against the resolved health URL with this plugin's Playwright MCP tools,
+then close it, and report **browser availability**: `available`, or
+`unavailable (<one-line cause>)` — e.g. Playwright missing, browser
+download blocked, navigation timeout. Report it **on every path**: when
+health never went green, still launch the page so the answer separates
+"the browser is unavailable" from "the app did not start" — those need
+different fixes, and a ship run will hit both. In `cli` mode there is no
+page to launch — report `browser: n/a (cli mode)` instead. Print the full report (resolved config, allocated port, health
+result, redacted app-log tail, browser availability), tear down, and
+exit. No tests, no per-criterion E2E, no board comment. This is the
+debugging path and the way to run the first-run interview ahead of time
+— it is what makes env-check a real precondition for a ship run. Env-check
+needs no ticket and performs no board operations — resolution reduces to
+branch + config; skip ticket fetch and auth entirely. The invocation is
+always `/qa --env-check`.
 
 ## Teardown — unconditional
 
@@ -220,62 +263,77 @@ Per-criterion result:
 
 ## Step 7: Tier and verdict
 
-| Tier | Condition | Reason wording |
-|------|-----------|----------------|
-| `full` | E2E ran on ≥1 criterion AND the suite ran — or the repo has no suite at all ("no test suite found" recorded in the body) | — |
-| `tests-only` | suite ran; launch/E2E impossible (health never green, missing env vars, Playwright or browser unavailable) | `tier=tests-only (launch: <one-line cause>)` |
-| `static` | nothing executed (setup failed, no runnable test command, no confirmed env in ship mode) | `tier=static (<phase>: <cause>)` |
+Tier conditions and reason wording are contract §7. Cited in full there;
+the one clarification the table's one-liner doesn't carry:
 
-**Verdict rule:** FAIL if any criterion failed or any regression finding
-exists. PASS requires zero fails; unverifiable criteria do not block
-PASS but appear in the header count (`verified 4/5`) and are itemized. A
-`static` PASS must state in the comment that it cannot advance a ticket.
+> A repo with no test suite can still earn `full` when E2E ran: QA
+> executed everything that *exists*, and the missing suite is flagged in
+> the verdict body rather than punishing the tier. The strict reading of
+> decision 4 ("tests + E2E both ran") would make `full` permanently
+> unreachable for suite-less repos.
+
+So "no runnable test command" alone never produces `static` — it only
+does when E2E *also* did not run (nothing executed at all). `static` is
+reserved for setup failing, or no confirmed env in ship mode.
+
+**Verdict rule** (contract §6): FAIL if any criterion failed or any
+regression finding exists. PASS requires zero fails; unverifiable
+criteria do not block PASS but appear in the header count
+(`verified 4/5`) and are itemized. A `static` PASS must state in the
+comment that it cannot advance a ticket.
 
 ## Step 8: Record
 
 1. Write `verdict.json` and `comment.md` to the artifacts dir **before**
-   any board call — the verdict must survive a board failure.
-2. Ticket known → post the comment via the backend reference:
+   any board call — the verdict must survive a board failure. `comment.md`
+   already carries the metrics footer (below) so a repost carries it too
+   (contract §11).
+2. Header and body shape are contract §5.5 — do not restate the grammar,
+   produce it. Two things the contract does not spell out that this
+   step owns:
+   - **Evidence paths are machine-local.** The comment must say so in
+     plain words (evidence under `.qa/` exists only on the machine that
+     ran QA, not in the repo) — and paths alone are never sufficient.
+     So for every **FAILING** criterion, inline the evidence itself in
+     the comment body, not just its path. **Put every inlined excerpt in
+     a fenced block**, and keep the finding's own prose — symptom, repro,
+     criterion, evidence path — outside the fence. That split is
+     load-bearing in both directions: dev's fix-list reads the prose, and
+     ship's no-progress detector (§9) hashes the findings section with
+     fenced blocks removed, so a log tail whose timestamps differ every
+     round cannot disguise two byte-identical defects as progress. The
+     evidence for each failing criterion:
+     - the **key excerpt** in a fenced block — the failing assertion,
+       error or log lines, always through
+       `tail -n 50 <artifacts>/app.log | node "${CLAUDE_PLUGIN_ROOT}/scripts/redact.js"`;
+     - plus, for a screenshot, a one-to-three-line description of what it
+       shows at the assertion point (what was expected, what was on
+       screen instead). Do **not** embed the image as a base64 `data:`
+       URI: GitHub sanitizes those out of comment bodies, so it renders
+       as nothing and the evidence is silently lost. Uploading the file
+       is out of scope for a comment-only stage — keep the path for
+       whoever has the machine, and make the words carry the finding.
 
-   ```
-   ship:qa verdict FAIL round 2/3 tier=full verified 4/5
-
-   | # | Criterion | Verdict | Evidence |
-   |---|-----------|---------|----------|
-   | 1 | <text> | pass | .qa/42/round-2/c1.png |
-   | 2 | <text> | pass | .qa/42/round-2/c2.png |
-   | 3 | <text> | pass | .qa/42/round-2/c3.png |
-   | 4 | <text> | FAIL | .qa/42/round-2/f1.png |
-   | 5 | <text> | unverifiable | — |
-
-   ## Findings
-   1. <symptom>. Repro: <numbered steps>. Violates criterion #4.
-
-   ## Unverifiable
-   - <criterion>: <why>
-
-   Suite: 41 passed, 1 failed (1 pre-existing, not counted) — `npm test`
-   Repro: PORT=41007 npm run dev
-   Artifacts: .qa/42/round-2/   (gitignored)
-   ```
-
-   `verified k/n`: `k` = criteria whose result is `pass` or `fail`
-   (actually exercised and judged); `n` = total criteria.
-
-   Omit empty sections. Standalone header:
-   `ship:qa verdict PASS standalone tier=full verified 5/5`. When
+     A reader with no access to the QA machine must be able to act on the
+     comment alone.
+   - **Findings are findings, never solutions.** Symptom, repro steps,
+     criterion violated, evidence path plus the inlined evidence above.
+     The dev agent owns the how. Every finding must be reproducible by a
+     human from its steps alone.
+3. Metrics footer (contract §10), GitHub only — Jira comments carry no
+   footer. Append as the comment's last line:
+   `node "${CLAUDE_PLUGIN_ROOT}/scripts/metrics.js" footer --stage qa --started <started> --finished <node ".../metrics.js" now> [--tokens-in <n> --tokens-out <n>]`,
+   including the token flags only when the harness reported real
+   numbers. Nothing here is hand-written.
+4. Ticket known → post the comment via the backend reference. Standalone
+   header: `ship:qa verdict PASS standalone tier=full verified 5/5`. When
    `criteriaSource` is `derived`, append ` criteria=derived` to the
-   header (omit entirely when the source is `spec`), e.g.:
-   `ship:qa verdict PASS standalone tier=full verified 5/5 criteria=derived`.
-   Post fails → retry once → on second failure set
-   `commentPosted: false` (the comment is already saved to disk; ship or
-   a human reposts it).
-3. No ticket resolved → print the comment to the terminal; zero board
+   header (omit entirely when the source is `spec`). Post fails → retry
+   once → on second failure set `commentPosted: false` (the comment is
+   already saved to disk; ship or a human reposts it).
+5. No ticket resolved → print the comment to the terminal; zero board
    operations.
-4. **Findings are findings, never solutions.** Symptom, repro steps,
-   criterion violated, evidence path. The dev agent owns the how. Every
-   finding must be reproducible by a human from its steps alone.
-5. Final output:
+6. Final output:
    - **ship-invoked:** the agent's final message is **exactly** this
      JSON object, no prose around it:
 
@@ -315,7 +373,8 @@ PASS but appear in the header count (`verified 4/5`) and are itemized. A
      criteria in `static`; all in `tests-only`). `unverifiable` entries
      are `{"criterion": <id>, "why": "<one line>"}`.
    - **standalone:** summarize conversationally — verdict, tier, the
-     criteria table, findings, artifact paths, repro command.
+     criteria table, findings (with inlined evidence), artifact paths,
+     repro command.
 
 ## Error handling
 
@@ -336,9 +395,9 @@ verdict. Standalone fail-fast paths report the same facts as prose.
 |---------|----------|
 | Ticket or branch not found | Fail fast, exact error; no artifacts, no comment |
 | No spec.md, ship-invoked | Fail fast (error, not verdict) — never invent criteria |
-| No confirmed env, ship-invoked | Verdict `tier=static`, reason names `--env-check` |
+| No confirmed env, ship-invoked | Verdict `tier=static`, reason names `/qa --env-check` |
 | Missing required env vars | Report names only; tests-only path |
-| Health never green | Tests-only path; app-log tail as evidence |
+| Health never green (timeout, or port held by a different PID) | Tests-only path; redacted app-log tail as evidence |
 | Playwright unavailable / browser download blocked | Tests-only; reason names it explicitly |
 | Classification worktree fails | Failures count, marked "unclassified — may be pre-existing" |
 | Board auth fails, ship-invoked | Verify anyway; `commentPosted: false`; verdict JSON still returned |
@@ -351,7 +410,13 @@ verdict. Standalone fail-fast paths report the same facts as prose.
 - Findings never prescribe solutions.
 - A `static` PASS never advances a ticket and must say so.
 - Nothing QA produces enters the feature branch's diff — including the
-  `.qa/` ignore rule (`.git/info/exclude`, never `.gitignore`).
+  `.qa/` ignore rule (`.git/info/exclude`, never `.gitignore`). This
+  holds even when QA runs inside a worktree ship created: everything
+  under `.qa/` there is QA-owned (contract §13) and invisible to dev's
+  resume and ship's cleanup.
 - Every autonomous path runs headless with zero prompts. Anything
   interactive (interview, derived-criteria confirmation, OAuth) exists
   only on the standalone path.
+- No unredacted log excerpt ever reaches a board comment, a report, or
+  `--env-check` output — always through `redact.js`, always capped at 50
+  lines.

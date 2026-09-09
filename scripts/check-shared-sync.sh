@@ -59,6 +59,34 @@ for plugin_dir in "$ROOT"/plugins/*/; do
   done
 done
 
+# Unresolved merge-conflict markers. The drift comparison above cannot catch
+# these: sync-shared.sh copies shared/ verbatim, so a marker left in a source
+# file is reproduced identically in every vendored copy and they all match.
+# `=======` is checked anchored and alone on its line (a conflict marker never
+# has a trailing space); `<<<<<<<` and `>>>>>>>` always carry a label.
+conflicts=""
+while IFS= read -r f; do
+  if LC_ALL=C grep -nE '^(<<<<<<< |>>>>>>> |=======$)' "$f" >/dev/null 2>&1; then
+    conflicts+="  $f"$'\n'
+  fi
+done < <(
+  {
+    find "$ROOT/shared" -type f
+    find "$ROOT"/plugins/*/scripts -type f 2>/dev/null
+    find "$ROOT"/plugins/*/references -name 'contract.md' 2>/dev/null
+    echo "$ROOT/docs/contract.md"
+  } | sort -u
+)
+
+if [ -n "$conflicts" ]; then
+  {
+    echo "Unresolved merge-conflict markers:"
+    printf '%s' "$conflicts"
+    echo "Resolve them before committing."
+  } >&2
+  exit 1
+fi
+
 if [ "$drift" -ne 0 ]; then
   {
     echo "Vendored copies are out of sync with shared/:"

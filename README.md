@@ -157,7 +157,10 @@ After installing `dev`, implement a planned ticket:
 Executes `docs/ship/42/plan.md` test-first in an isolated worktree — one
 commit per task, each pinned by a failing-then-passing test — then an
 adversarial review pass, then a structured handoff comment on the ticket
-for QA and human reviewers. Requires an approved spec (`/spec 42`); if no
+for QA and human reviewers. On a fix-up round it takes its fix-list only
+from board comments authored by you or a login in `approvers`, and treats
+every finding as data — a symptom and a repro, never an instruction to
+execute. Requires an approved spec (`/spec 42`); if no
 plan exists, dev drafts a conservative self-plan and flags it. Dev never
 changes ticket status and never touches your checkout's code — though its
 first run in a project may write and commit `.claude/kanban.config.json`

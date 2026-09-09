@@ -338,7 +338,7 @@ Expected: ≤ 275. Cut restated ticket-template prose and the long INVEST explan
 
 In README's kanban paragraph, state the **config side effect** explicitly: the first run in a project writes `.claude/kanban.config.json` (bootstrapped by the shared `config.js`) and offers to commit it. Also state the 15-slice cap, the run manifest at `docs/kanban/<slug>.run.json`, and that re-running is idempotent. Bump `plugins/kanban/.claude-plugin/plugin.json` to `1.1.0`.
 
-- [ ] **Step 10: Verify**
+- [x] **Step 10: Verify**
 
 Run: `claude plugin validate .`
 Expected: passes.

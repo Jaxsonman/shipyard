@@ -117,7 +117,10 @@ the list and Claude creates the tickets on your board in dependency order,
 tracking progress in a run manifest at `docs/kanban/<slug>.run.json`.
 Re-running `/kanban` on the same PRD is idempotent: already-created tickets
 are recognized from the manifest and never duplicated, and only the
-remaining pending/failed tickets are attempted.
+remaining pending/failed tickets are attempted. A client-side scan of the
+board for each ticket's `Source PRD:` line runs alongside the manifest, so a
+ticket created in the instant before an interrupted run could record it is
+still recognized rather than duplicated.
 
 After installing `planning`, run these per ticket, in order:
 

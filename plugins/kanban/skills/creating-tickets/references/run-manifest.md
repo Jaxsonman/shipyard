@@ -56,8 +56,14 @@ after every single create attempt**, so a run killed mid-flight is resumable.
    Confirmed → report it under **Already exists** and never re-create it.
    Gone (deleted on the board) → set `state` back to `pending` and say so.
 3. Tickets in `pending`, `failed` or `skipped` are the remaining work; they
-   keep their `index`, `title` and `body`.
+   keep their `index`, `title` and `body`. **Before re-creating any of them,
+   match each one against the Step 4 board scan by title.** A run killed
+   mid-create leaves a ticket on the board with its manifest entry still
+   `pending` — the board scan is the only thing that catches it. A match →
+   adopt its `ref` and `url`, set `state: "created"`, and report it under
+   **Already exists**; never create a second copy.
 4. `deferred[]` entries are offered as the next batch once nothing is pending.
-5. The manifest is the authority. The `Source PRD:` body scan (Step 4) is the
-   backstop for tickets created before the manifest existed, or created by
-   someone else.
+5. The manifest is the authority for *what was approved*; the `Source PRD:`
+   body scan (Step 4) is the authority for *what is actually on the board*.
+   Run both every time. The scan also covers tickets created before the
+   manifest existed, or created by someone else.

@@ -54,6 +54,12 @@ This slug is embedded in every ticket's `Source PRD:` line and is what Step
 
 ## Step 3: Propose the vertical-slice ticket breakdown
 
+**First, check for a previous run.** If `docs/kanban/<slug>.run.json` exists,
+do not decompose the PRD again — load the approved proposal from the manifest
+and follow `references/run-manifest.md` "Reconciling on a re-run". Re-deriving
+a second, independent breakdown would not line up with the stored one. The
+rest of this step applies only to a first run, or to the deferred batch.
+
 Decompose the PRD into vertical slices using judgment — there is no fixed
 ratio of tickets to PRD sections. For each candidate slice, apply INVEST-style
 criteria:

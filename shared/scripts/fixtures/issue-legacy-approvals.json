@@ -1,0 +1,38 @@
+{
+  "number": 42,
+  "title": "Add login form",
+  "state": "OPEN",
+  "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42",
+  "author": {
+    "login": "Jaxsonman"
+  },
+  "labels": [
+    {
+      "name": "ship:planned",
+      "description": "",
+      "color": "1d76db"
+    }
+  ],
+  "comments": [
+    {
+      "author": {
+        "login": "Jaxsonman"
+      },
+      "authorAssociation": "OWNER",
+      "body": "📋 Spec approved — `docs/ship/42/spec.md`\n\n- A user can sign in\n\nNext: /plan 42",
+      "createdAt": "2026-09-08T09:20:00Z",
+      "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42#issuecomment-19",
+      "id": "IC_19"
+    },
+    {
+      "author": {
+        "login": "Jaxsonman"
+      },
+      "authorAssociation": "OWNER",
+      "body": "🗺️ Plan approved — `docs/ship/42/plan.md`\n\n- Session cookie plus a server-side store\n\nNext: /ship 42",
+      "createdAt": "2026-09-08T09:50:00Z",
+      "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42#issuecomment-20",
+      "id": "IC_20"
+    }
+  ]
+}

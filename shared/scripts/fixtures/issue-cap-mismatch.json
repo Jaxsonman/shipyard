@@ -1,0 +1,28 @@
+{
+  "number": 42,
+  "title": "Add login form",
+  "state": "OPEN",
+  "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42",
+  "author": {
+    "login": "Jaxsonman"
+  },
+  "labels": [
+    {
+      "name": "ship:in-dev",
+      "description": "",
+      "color": "1d76db"
+    }
+  ],
+  "comments": [
+    {
+      "author": {
+        "login": "Jaxsonman"
+      },
+      "authorAssociation": "OWNER",
+      "body": "ship:dev round 1/5\n\n## What changed and why\n- Task 1: add the login form — a1b2c3d\n\n## How to run it\nnpm ci && npm run dev\n\n## Criteria coverage\n| Criterion (spec \"Done means\") | Where implemented | How tested |\n|---|---|---|\n| 1 | src/login.js | tests/login.test.js |\n\n## Deviations\nnone\n\n## Known limitations\nnone\n\n<!-- shipyard-metrics {\"stage\":\"dev\",\"started\":\"2026-09-08T12:00:00Z\",\"finished\":\"2026-09-08T12:34:56Z\"} -->",
+      "createdAt": "2026-09-08T12:34:56Z",
+      "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42#issuecomment-14",
+      "id": "IC_14"
+    }
+  ]
+}

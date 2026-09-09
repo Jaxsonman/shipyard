@@ -8,6 +8,11 @@
             "type": "command",
             "command": "bash .claude/hooks/check-readme-updated.sh",
             "if": "Bash(git commit *)"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/check-shared-and-validate.sh",
+            "if": "Bash(git commit *)"
           }
         ]
       }

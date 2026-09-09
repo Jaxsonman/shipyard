@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Unit tests
+        run: node --test shared/scripts/*.test.js
+
+      - name: Vendored copies are in sync
+        run: bash scripts/check-shared-sync.sh
+
+      - name: Plugin manifests validate
+        run: npx --yes @anthropic-ai/claude-code plugin validate .

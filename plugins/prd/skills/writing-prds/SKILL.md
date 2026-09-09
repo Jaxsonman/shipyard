@@ -8,6 +8,10 @@ description: Turns a raw product idea into a structured PRD through a one-questi
 Turn an idea into a Product Requirements Document through a short guided
 interview, then write the finished PRD into the user's project.
 
+**Contract:** `${CLAUDE_PLUGIN_ROOT}/references/contract.md` (contract v1).
+"§N" in this skill means that file's section N; open the cited section
+when a step references it.
+
 ## Step 1: Preflight
 
 Run before asking anything:

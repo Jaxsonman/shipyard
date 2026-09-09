@@ -12,6 +12,10 @@ even if it touches multiple layers (DB, API, UI) — as opposed to a
 horizontal slice ("all the backend," "all the frontend") that nothing can
 demo until every layer is done.
 
+**Contract:** `${CLAUDE_PLUGIN_ROOT}/references/contract.md` (contract v1).
+"§N" in this skill means that file's section N; open the cited section
+when a step references it.
+
 ## Step 1: Preflight
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.js" --stage kanban

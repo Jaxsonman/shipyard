@@ -15,6 +15,10 @@ step says "via the backend reference," read the file matching
 `config.backend` and follow its named operation exactly (fetch ticket, edit
 ticket body, set status, post comment).
 
+**Contract:** `${CLAUDE_PLUGIN_ROOT}/references/contract.md` (contract v1).
+"§N" in this skill means that file's section N; open the cited section
+when a step references it.
+
 ## Step 1: Preflight and ticket
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.js" --stage plan

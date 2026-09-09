@@ -109,6 +109,17 @@ The active bar pulses. Hovering or focusing a bar shows stage, round, duration,
 tokens in/out and whether it is estimated. Stage chips and a "hide backlog"
 toggle filter the view; clicking or pressing Enter on a row opens the drawer.
 
+## Accessibility
+
+Sidebar project rows, ticket table rows and timeline rows are keyboard
+operable: `Tab` reaches them, `Enter`/`Space` activate, and `ArrowUp`/`ArrowDown`
+move focus between sibling rows (wrapping at the ends). The ticket drawer and
+the add-project dialog are proper modal dialogs (`role="dialog"
+aria-modal="true"`): opening one moves focus to its first interactive control
+and remembers what was focused before, `Tab`/`Shift+Tab` cycle within the
+panel without escaping it, `Escape` closes it from anywhere, and closing
+restores focus to what was focused before it opened.
+
 ## Metrics
 
 The dashboard reads per-ticket metrics instrumented by the stage plugins (dev, qa, ship). See [metrics specification](../../docs/superpowers/specs/2026-08-10-dashboard-design.md) for the convention (section "Stage metrics instrumentation").

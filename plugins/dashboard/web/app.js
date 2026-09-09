@@ -273,6 +273,33 @@ function renderStats() {
   });
 }
 
+// ---- keyboard row navigation (Task 10) -----------------------------------
+
+// Shared roving-focus behavior for a list of sibling rows (sidebar project
+// rows, ticket table rows, timeline rows): Enter/Space activate the row
+// under focus, ArrowUp/ArrowDown move focus to the previous/next row and
+// wrap at the ends. `rows` is any iterable of elements that already have
+// tabindex="0"; `activateFn` receives the row element.
+function wireRowNav(rows, activateFn) {
+  const list = Array.from(rows);
+  list.forEach((rowEl, idx) => {
+    rowEl.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        activateFn(rowEl);
+      } else if (ev.key === ' ') {
+        ev.preventDefault();
+        activateFn(rowEl);
+      } else if (ev.key === 'ArrowDown') {
+        ev.preventDefault();
+        list[(idx + 1) % list.length].focus();
+      } else if (ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        list[(idx - 1 + list.length) % list.length].focus();
+      }
+    });
+  });
+}
+
 // ---- render: sidebar -----------------------------------------------------
 
 function renderSidebar() {
@@ -302,8 +329,9 @@ function renderSidebar() {
     .map((r) => {
       const isActive = state.activeProjectId === r.id;
       const rowCls = isActive ? 'proj-row is-active focusable' : 'proj-row focusable';
+      const label = `${r.name}, ${r.count} tickets`;
       return `
-        <div class="${rowCls}" data-project-id="${esc(r.id)}">
+        <div class="${rowCls}" tabindex="0" aria-label="${esc(label)}" data-project-id="${esc(r.id)}">
           <div class="proj-row-text">
             <div class="proj-name">${esc(r.name)}</div>
             <div class="proj-repo">${esc(r.repo)}</div>
@@ -316,16 +344,23 @@ function renderSidebar() {
 
   el.innerHTML = header + rowsHtml;
 
-  el.querySelectorAll('.proj-row').forEach((rowEl) => {
-    rowEl.addEventListener('click', () => {
-      state.activeProjectId = rowEl.getAttribute('data-project-id');
-      state.page = 0;
-      renderSidebar();
-      loadTickets({ preserve: true });
-      loadTimeline().catch((err) => console.error('load timeline failed', err));
-      loadStats().catch((err) => console.error('load stats failed', err));
-    });
+  function activateProjRow(rowEl) {
+    const projectId = rowEl.getAttribute('data-project-id');
+    state.activeProjectId = projectId;
+    state.page = 0;
+    renderSidebar();
+    const refocus = document.querySelector(`.proj-row[data-project-id="${CSS.escape(projectId)}"]`);
+    if (refocus) refocus.focus();
+    loadTickets({ preserve: true });
+    loadTimeline().catch((err) => console.error('load timeline failed', err));
+    loadStats().catch((err) => console.error('load stats failed', err));
+  }
+
+  const projRows = el.querySelectorAll('.proj-row');
+  projRows.forEach((rowEl) => {
+    rowEl.addEventListener('click', () => activateProjRow(rowEl));
   });
+  wireRowNav(projRows, activateProjRow);
 
   const addBtn = document.getElementById('add-project-btn');
   if (addBtn) {
@@ -382,8 +417,9 @@ function renderTable() {
         : '<span class="text-muted">—</span>';
       const cause = t.stage === 'Needs Human' ? causeForTicket(t.project, t.number) : null;
       const causeTag = cause ? ` <span class="tag tag-outline">${esc(cause)}</span>` : '';
+      const rowLabel = `#${t.number} ${t.title}, stage ${t.stage}`;
       return `
-        <tr class="ticket-row row-click focusable" data-project="${esc(t.project)}" data-number="${esc(t.number)}">
+        <tr class="ticket-row row-click focusable" tabindex="0" aria-label="${esc(rowLabel)}" data-project="${esc(t.project)}" data-number="${esc(t.number)}">
           <td>#${esc(t.number)}</td>
           <td>${esc(t.title)}</td>
           <td><span class="tag tag-neutral"${stageTitle}>${esc(t.stage)}</span>${causeTag}${dot}</td>
@@ -426,20 +462,24 @@ function renderTable() {
     </div>
   `;
 
-  el.querySelectorAll('.ticket-row').forEach((rowEl) => {
-    rowEl.addEventListener('click', () => {
-      const project = rowEl.getAttribute('data-project');
-      const number = Number(rowEl.getAttribute('data-number'));
-      const ticket = state.tickets.find((t) => t.project === project && t.number === number) || null;
-      state.selectedTicket = ticket;
-      if (ticket && typeof window.openDrawer === 'function') {
-        window.openDrawer(project, number);
-      } else if (typeof window.renderDrawer === 'function') {
-        state.activeDrawerTab = 'Overview';
-        window.renderDrawer();
-      }
-    });
+  function activateTicketRow(rowEl) {
+    const project = rowEl.getAttribute('data-project');
+    const number = Number(rowEl.getAttribute('data-number'));
+    const ticket = state.tickets.find((t) => t.project === project && t.number === number) || null;
+    state.selectedTicket = ticket;
+    if (ticket && typeof window.openDrawer === 'function') {
+      window.openDrawer(project, number);
+    } else if (typeof window.renderDrawer === 'function') {
+      state.activeDrawerTab = 'Overview';
+      window.renderDrawer();
+    }
+  }
+
+  const ticketRows = el.querySelectorAll('.ticket-row');
+  ticketRows.forEach((rowEl) => {
+    rowEl.addEventListener('click', () => activateTicketRow(rowEl));
   });
+  wireRowNav(ticketRows, activateTicketRow);
 
   const prevBtn = document.getElementById('prev-page');
   if (prevBtn) {
@@ -733,26 +773,21 @@ function wireTimelineControls() {
     barEl.addEventListener('blur', hideTlTip);
   });
 
-  document.querySelectorAll('.tl-row').forEach((rowEl) => {
-    const openThisRow = () => {
-      const project = rowEl.getAttribute('data-project');
-      const number = Number(rowEl.getAttribute('data-number'));
-      const ticket = (state.tickets.length ? state.tickets : state.allTickets).find(
-        (t) => t.project === project && t.number === number
-      ) || null;
-      state.selectedTicket = ticket || { project, number };
-      openDrawer(project, number);
-    };
-    rowEl.addEventListener('click', openThisRow);
-    rowEl.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter') {
-        openThisRow();
-      } else if (ev.key === ' ') {
-        ev.preventDefault();
-        openThisRow();
-      }
-    });
+  function openTlRow(rowEl) {
+    const project = rowEl.getAttribute('data-project');
+    const number = Number(rowEl.getAttribute('data-number'));
+    const ticket = (state.tickets.length ? state.tickets : state.allTickets).find(
+      (t) => t.project === project && t.number === number
+    ) || null;
+    state.selectedTicket = ticket || { project, number };
+    openDrawer(project, number);
+  }
+
+  const tlRows = document.querySelectorAll('.tl-row');
+  tlRows.forEach((rowEl) => {
+    rowEl.addEventListener('click', () => openTlRow(rowEl));
   });
+  wireRowNav(tlRows, openTlRow);
 
   const tlEl = document.getElementById('tl');
   if (tlEl) {
@@ -808,8 +843,15 @@ window.addEventListener('resize', () => {
 let drawerDetail = null;
 let drawerError = '';
 
+// Element to restore focus to when the drawer closes (Task 10). Set once per
+// genuine open (not on a preserveTab refresh after approve/reassign).
+let drawerLastFocus = null;
+
 async function openDrawer(project, number, { preserveTab = false } = {}) {
-  if (!preserveTab) state.activeDrawerTab = 'Overview';
+  if (!preserveTab) {
+    state.activeDrawerTab = 'Overview';
+    drawerLastFocus = document.activeElement;
+  }
   drawerError = '';
   try {
     const data = await fetchJson(`/api/tickets/${encodeURIComponent(project)}/${encodeURIComponent(number)}`);
@@ -820,6 +862,10 @@ async function openDrawer(project, number, { preserveTab = false } = {}) {
     drawerError = (err && err.message) || String(err);
   }
   renderDrawer();
+  if (!preserveTab) {
+    const closeBtnEl = document.getElementById('drawer-close');
+    if (closeBtnEl) closeBtnEl.focus();
+  }
 }
 
 function closeDrawer() {
@@ -827,6 +873,10 @@ function closeDrawer() {
   drawerDetail = null;
   drawerError = '';
   renderDrawer();
+  if (drawerLastFocus && document.body.contains(drawerLastFocus)) {
+    drawerLastFocus.focus();
+  }
+  drawerLastFocus = null;
 }
 
 function approveEligibility(stage) {
@@ -848,7 +898,7 @@ function renderDrawer() {
     el.innerHTML = drawerError
       ? `
         <div class="drawer-backdrop" id="drawer-backdrop">
-          <div class="drawer-panel" id="drawer-panel">
+          <div class="drawer-panel" id="drawer-panel" role="dialog" aria-modal="true">
             <div class="drawer-head">
               <h4 class="drawer-title">Failed to load ticket</h4>
               <button class="btn btn-icon btn-ghost" id="drawer-close">×</button>
@@ -921,7 +971,7 @@ function renderDrawer() {
 
   el.innerHTML = `
     <div class="drawer-backdrop" id="drawer-backdrop">
-      <div class="drawer-panel" id="drawer-panel">
+      <div class="drawer-panel" id="drawer-panel" role="dialog" aria-modal="true">
         <div class="drawer-head">
           <div>
             <div class="card-kicker">#${esc(t.number)} · ${esc(t.projectName)}</div>
@@ -1038,19 +1088,28 @@ let pickedFolderName = '';
 let newProjectName = '';
 let newProjectPath = '';
 let addDialogError = '';
+// Element to restore focus to when the add-project dialog closes (Task 10).
+let addDialogLastFocus = null;
 
 function openAddDialog() {
+  addDialogLastFocus = document.activeElement;
   addDialogOpen = true;
   pickedFolderName = '';
   newProjectName = '';
   newProjectPath = '';
   addDialogError = '';
   renderAddDialog();
+  const folderInput = document.getElementById('add-dialog-folder');
+  if (folderInput) folderInput.focus();
 }
 
 function closeAddDialog() {
   addDialogOpen = false;
   renderAddDialog();
+  if (addDialogLastFocus && document.body.contains(addDialogLastFocus)) {
+    addDialogLastFocus.focus();
+  }
+  addDialogLastFocus = null;
 }
 
 function renderAddDialog() {
@@ -1069,7 +1128,7 @@ function renderAddDialog() {
 
   el.innerHTML = `
     <div class="dialog-backdrop" id="add-dialog-backdrop">
-      <div class="dialog" id="add-dialog">
+      <div class="dialog" id="add-dialog" role="dialog" aria-modal="true">
         <div class="dialog-title">Link a local codebase</div>
         <div class="dialog-body">
           <div class="field dialog-field">
@@ -1146,8 +1205,7 @@ function renderAddDialog() {
         if (!res.ok) {
           throw new Error(body.error || `link failed: ${res.status}`);
         }
-        addDialogOpen = false;
-        renderAddDialog();
+        closeAddDialog();
         await loadProjects();
         if (body.project && body.project.id) {
           state.activeProjectId = body.project.id;
@@ -1190,6 +1248,51 @@ function wireStaticControls() {
   const timelineTab = document.getElementById('view-timeline');
   if (timelineTab) timelineTab.addEventListener('click', () => setView('timeline'));
   // "New PRD" is inert in v1 — tooltip only, per brief.
+
+  wireGlobalKeyboard();
+}
+
+// ---- focus trap (Task 10) -----------------------------------------------
+
+// Elements a Tab-key focus trap should cycle over, per the drawer/dialog spec.
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+function trapTabKey(ev, panelEl) {
+  const focusables = Array.from(panelEl.querySelectorAll(FOCUSABLE_SELECTOR));
+  if (!focusables.length) return;
+  const first = focusables[0];
+  const last = focusables[focusables.length - 1];
+  if (ev.shiftKey && document.activeElement === first) {
+    ev.preventDefault();
+    last.focus();
+  } else if (!ev.shiftKey && document.activeElement === last) {
+    ev.preventDefault();
+    first.focus();
+  }
+}
+
+// One global listener handles both "Escape closes the open drawer/dialog
+// from anywhere" and the Tab focus trap while either is open, rather than
+// wiring per-panel listeners that would need re-attaching on every re-render.
+function wireGlobalKeyboard() {
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') {
+      if (state.selectedTicket) {
+        closeDrawer();
+      } else if (addDialogOpen) {
+        closeAddDialog();
+      }
+      return;
+    }
+    if (ev.key !== 'Tab') return;
+    if (state.selectedTicket) {
+      const panelEl = document.getElementById('drawer-panel');
+      if (panelEl) trapTabKey(ev, panelEl);
+    } else if (addDialogOpen) {
+      const dialogEl = document.getElementById('add-dialog');
+      if (dialogEl) trapTabKey(ev, dialogEl);
+    }
+  });
 }
 
 // ---- polling -----------------------------------------------------

@@ -54,17 +54,25 @@ function validateConfig(kind, obj) {
     value.qa = input.qa;
   }
 
+  // Board identity (backend/target) is owned by kanban.config.json (contract
+  // §12). `kanban` always requires them. `ship` only validates them when
+  // present — a ship config need not (and per contract should not) carry
+  // board identity of its own.
   const backend = value.backend;
-  if (!backend || !VALID_BACKENDS.includes(backend)) {
+  const backendRequired = kind === 'kanban' || Object.prototype.hasOwnProperty.call(input, 'backend');
+  if (backendRequired && (!backend || !VALID_BACKENDS.includes(backend))) {
     errors.push(`invalid or missing "backend" (must be one of ${VALID_BACKENDS.join('/')})`);
   }
 
   const target = value.target;
-  if (!target || (typeof target === 'string' && target.trim() === '')) {
-    errors.push('missing or empty "target"');
-  } else if (typeof target === 'string' && backend && VALID_BACKENDS.includes(backend)) {
-    const err = targetError(backend, target);
-    if (err) errors.push(err);
+  const targetRequired = kind === 'kanban' || Object.prototype.hasOwnProperty.call(input, 'target');
+  if (targetRequired) {
+    if (!target || (typeof target === 'string' && target.trim() === '')) {
+      errors.push('missing or empty "target"');
+    } else if (typeof target === 'string' && backend && VALID_BACKENDS.includes(backend)) {
+      const err = targetError(backend, target);
+      if (err) errors.push(err);
+    }
   }
 
   if (kind === 'ship') {

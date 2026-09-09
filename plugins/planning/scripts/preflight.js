@@ -29,16 +29,22 @@ const STAGES = ['prd', 'kanban', 'spec', 'plan', 'dev', 'qa', 'ship', 'pr'];
 /** Stages that operate on a ticket branch. */
 const TICKET_STAGES = ['spec', 'plan', 'dev', 'qa', 'ship', 'pr'];
 
-/** Which config a stage needs. `null` means none. */
+/**
+ * Which config kind(s) a stage needs, in order. Board identity (`backend`,
+ * `target`) lives only in kanban.config.json (contract §12); ship.config.json
+ * never carries it. Stages that run against a ticket branch (dev/qa/ship/pr)
+ * need both: board identity from kanban, run parameters (baseBranch,
+ * loopCap, approvers, qa) from ship.
+ */
 const STAGE_CONFIG = {
-  prd: null,
-  kanban: 'kanban',
-  spec: 'kanban',
-  plan: 'kanban',
-  dev: 'ship',
-  qa: 'ship',
-  ship: 'ship',
-  pr: 'ship',
+  prd: [],
+  kanban: ['kanban'],
+  spec: ['kanban'],
+  plan: ['kanban'],
+  dev: ['kanban', 'ship'],
+  qa: ['kanban', 'ship'],
+  ship: ['kanban', 'ship'],
+  pr: ['kanban', 'ship'],
 };
 
 /** Stages for which a missing feat/<id>-* branch is fatal rather than expected. */
@@ -120,16 +126,41 @@ function preflight(opts = {}) {
       : `Node ${process.versions.node} is below the required ${MIN_NODE_MAJOR}`);
 
   // --- config -------------------------------------------------------------
-  const kind = STAGE_CONFIG[stage];
-  let cfg = null;
-  if (!kind) {
+  // Board identity (backend/target) is owned by kanban.config.json; run
+  // parameters (baseBranch/loopCap/approvers/qa) are owned by
+  // ship.config.json. A stage may need one or both (contract §12).
+  const kinds = STAGE_CONFIG[stage] || [];
+  let cfg = null; // merged view: backend/target from kanban, the rest from ship.
+  if (kinds.length === 0) {
     skip('config', 'error', `stage ${stage} needs no board config`);
   } else {
-    const loaded = config.load({ kind, cwd });
-    cfg = loaded.ok ? loaded.value : null;
-    add('config', loaded.ok, 'error',
-      loaded.ok ? `.claude/${kind}.config.json is valid (backend=${loaded.value.backend}, target=${loaded.value.target})`
-        : `.claude/${kind}.config.json: ${(loaded.errors || ['unreadable']).join('; ')}`);
+    let allOk = true;
+    const messages = [];
+    const merged = {};
+    for (const kind of kinds) {
+      const loaded = config.load({ kind, cwd });
+      if (!loaded.ok) {
+        allOk = false;
+        messages.push(`.claude/${kind}.config.json: ${(loaded.errors || ['unreadable']).join('; ')}`);
+        continue;
+      }
+      if (kind === 'kanban') {
+        merged.backend = loaded.value.backend;
+        merged.target = loaded.value.target;
+      } else {
+        // ship.config.json owns everything except board identity — never
+        // let a stray backend/target on it clobber kanban's (contract §12).
+        const { backend, target, ...rest } = loaded.value;
+        Object.assign(merged, rest);
+      }
+    }
+    if (allOk) {
+      cfg = merged;
+      add('config', true, 'error',
+        `${kinds.map((k) => `.claude/${k}.config.json`).join(', ')} valid (backend=${merged.backend}, target=${merged.target})`);
+    } else {
+      add('config', false, 'error', messages.join('; '));
+    }
   }
 
   // --- gh ------------------------------------------------------------------
@@ -265,20 +296,44 @@ function preflight(opts = {}) {
 
 // ---------------------------------------------------------------- CLI ----
 
+class UsageError extends Error {}
+
+function takeValue(argv, i, flagName) {
+  const v = argv[i + 1];
+  if (v === undefined) {
+    throw new UsageError(`${flagName} requires a value`);
+  }
+  if (v.startsWith('--')) {
+    throw new UsageError(`${flagName} requires a value (got flag-like token "${v}")`);
+  }
+  return v;
+}
+
 function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--json' || a === '--quiet') out[a.slice(2)] = true;
     else if (a === '--help' || a === '-h') out.help = true;
-    else if (a.startsWith('--')) out[a.slice(2)] = argv[++i];
-    else out._.push(a);
+    else if (a.startsWith('--')) {
+      out[a.slice(2)] = takeValue(argv, i, a);
+      i++;
+    } else out._.push(a);
   }
   return out;
 }
 
 function main(argv) {
-  const args = parseArgs(argv);
+  let args;
+  try {
+    args = parseArgs(argv);
+  } catch (err) {
+    if (err instanceof UsageError) {
+      process.stderr.write(err.message + '\n\n' + USAGE + '\n');
+      process.exit(2);
+    }
+    throw err;
+  }
   if (args.help || argv.length === 0) {
     process.stdout.write(USAGE + '\n');
     process.exit(0);

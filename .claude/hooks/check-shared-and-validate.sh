@@ -8,7 +8,7 @@
 # or .claude-plugin/, so ordinary commits pay nothing.
 set -euo pipefail
 
-changed=$(git diff --cached --name-only 2>/dev/null || true)
+changed=$(git -c core.quotePath=false diff --cached --name-only 2>/dev/null || true)
 
 if ! echo "$changed" | grep -qE '^(shared/|plugins/|scripts/|\.claude-plugin/)'; then
   exit 0

@@ -77,6 +77,16 @@ test('the metrics footer is extracted onto the event', () => {
   assert.match(dev.metrics.started, /^\d{4}-/);
 });
 
+test('a legacy repost header suffix " (reposted by ship)" is accepted on read, sets reposted true, not malformed', () => {
+  const ev = mk('ship:qa verdict PASS round 1/3 tier=full verified 1/1 (reposted by ship)');
+  assert.equal(ev.length, 1);
+  assert.equal(ev[0].type, 'qa-verdict');
+  assert.equal(ev[0].malformed, false);
+  assert.equal(ev[0].reposted, true);
+  assert.equal(ev[0].verdict, 'PASS');
+  assert.equal(ev[0].round, 1);
+});
+
 test('a reposted verdict is flagged', () => {
   const ev = bt.parseEvents({
     comments: [{ author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T12:00:00Z', url: 'u',
@@ -153,6 +163,76 @@ test('an untrusted dev handoff never advances the round', () => {
   assert.equal(st.round, 0);
   assert.equal(st.trusted, false);
   assert.equal(st.phase, 'unstarted');
+});
+
+test('a stray round-2 verdict with no round-2 (or round-1) dev handoff reports BOTH verdict-without-handoff and round-gap (L-19/9)', () => {
+  const issue = {
+    comments: [
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T12:00:00Z', url: 'u1',
+        body: 'ship:qa verdict FAIL round 2/3 tier=full verified 1/1\n\n## Findings' },
+    ],
+    labels: [],
+  };
+  const events = bt.parseEvents(issue, { viewer: 'Jaxsonman' });
+  const state = bt.reconcile(events, { cap: 3 });
+  assert.ok(state.irreconcilable.some(i => i.code === 'verdict-without-handoff'), JSON.stringify(state.irreconcilable));
+  assert.ok(state.irreconcilable.some(i => i.code === 'round-gap'), JSON.stringify(state.irreconcilable));
+});
+
+test('a malformed header from an untrusted author is still counted in state.untrusted', () => {
+  const ev = bt.parseEvents(
+    { comments: [{ author: { login: 'stranger' }, createdAt: '2026-09-08T12:00:00Z', url: 'u', body: 'ship:something weird' }], labels: [] },
+    { viewer: 'Jaxsonman' }
+  );
+  const st = bt.reconcile(ev, { cap: 3 });
+  assert.ok(st.untrusted.some(u => u.author === 'stranger'), JSON.stringify(st.untrusted));
+  assert.ok(st.irreconcilable.some(i => i.code === 'malformed-header'));
+});
+
+test('the latest escalation (by createdAt) wins, consistent with round selection', () => {
+  const issue = {
+    comments: [
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T15:00:00Z', url: 'u-late', body: 'ship:escalation cap round 3/3' },
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T12:00:00Z', url: 'u-early', body: 'ship:escalation stage-error round 2/3' },
+    ],
+    labels: [],
+  };
+  const events = bt.parseEvents(issue, { viewer: 'Jaxsonman' });
+  const state = bt.reconcile(events, { cap: 3 });
+  assert.equal(state.escalation.url, 'u-late');
+});
+
+test('the latest pr-opened (by createdAt) wins, consistent with round selection', () => {
+  const issue = {
+    comments: [
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T15:00:00Z', url: 'u-late', body: 'ship:pr opened https://example.com/pr/2' },
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T12:00:00Z', url: 'u-early', body: 'ship:pr opened https://example.com/pr/1' },
+    ],
+    labels: [],
+  };
+  const events = bt.parseEvents(issue, { viewer: 'Jaxsonman' });
+  const state = bt.reconcile(events, { cap: 3 });
+  assert.equal(state.prUrl, 'https://example.com/pr/2');
+});
+
+test('parse --stdin with a null comment entry is a usage error (exit 2), not a stack trace', () => {
+  const { execFileSync } = require('node:child_process');
+  let threw = false;
+  let stderr = '';
+  try {
+    execFileSync('node', [path.join(__dirname, 'board-trail.js'), 'parse', '--stdin', '--viewer', 'Jaxsonman'],
+      { input: JSON.stringify({ comments: [null], labels: [] }), stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch (e) {
+    threw = true;
+    stderr = String(e.stderr);
+    assert.equal(e.status, 2);
+  }
+  assert.ok(threw, 'expected the CLI to exit non-zero');
+  assert.ok(!/TypeError|at Object|node:internal/.test(stderr), stderr);
+});
+
+test('parseEvents throws a plain TypeError (not a raw crash) on a non-object comment entry', () => {
+  assert.throws(() => bt.parseEvents({ comments: [null], labels: [] }, { viewer: 'x' }), /comment/i);
 });
 
 test('parseEvents tolerates a missing comments key and a missing author', () => {

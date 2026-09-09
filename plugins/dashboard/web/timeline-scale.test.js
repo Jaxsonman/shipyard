@@ -195,3 +195,56 @@ dstTest('ticks terminates on a huge span without runaway iteration', () => {
   const out = TS.ticks(0, Date.UTC(2100, 0, 1), 900);
   assert.ok(out.length >= 2 && out.length <= 1000);
 });
+
+// --- Fit preset (phase 2 polish) ---
+
+test("resolveDomain 'fit' pads the handed extent by 5% each side", () => {
+  const d = TS.resolveDomain('fit', { dataStart: 0, dataEnd: 1000, now: NOW });
+  assert.equal(d.start, -50);
+  assert.equal(d.end, 1050);
+});
+
+test("'fit' pads more than 'all' over the same extent", () => {
+  const fit = TS.resolveDomain('fit', { dataStart: 0, dataEnd: 1000, now: NOW });
+  const all = TS.resolveDomain('all', { dataStart: 0, dataEnd: 1000, now: NOW });
+  assert.ok((fit.end - fit.start) > (all.end - all.start));
+});
+
+test("'fit' over a single-instant extent still yields a non-zero span", () => {
+  const d = TS.resolveDomain('fit', { dataStart: NOW, dataEnd: NOW, now: NOW });
+  assert.ok(d.end > d.start);
+});
+
+test("'fit' ignores pan, like 'all' — both always fit their extent", () => {
+  const a = TS.resolveDomain('fit', { dataStart: 0, dataEnd: 1000, now: NOW, panMs: 0 });
+  const b = TS.resolveDomain('fit', { dataStart: 0, dataEnd: 1000, now: NOW, panMs: 99 * DAY });
+  assert.deepEqual(a, b);
+});
+
+test('the preset list exposes fit first and names the empty-board fallback', () => {
+  assert.equal(TS.ZOOM_PRESETS[0].id, 'fit');
+  assert.equal(TS.DEFAULT_PRESET_ID, 'fit');
+  assert.equal(TS.EMPTY_BOARD_PRESET_ID, 'week');
+  assert.ok(TS.ZOOM_PRESETS.some((p) => p.id === TS.EMPTY_BOARD_PRESET_ID));
+});
+
+// --- Minimum bar width: a short stage must stay visible and clickable ---
+
+test('a one-second segment on a month-wide domain still renders at least 3px, inside the track', () => {
+  const scale = TS.createScale({ start: NOW - 30 * DAY, end: NOW, width: 900 });
+  const [r] = TS.segmentRects(
+    [{ stage: 'QA', state: 'past', estimated: false, start: NOW - 15 * DAY, end: NOW - 15 * DAY + 1000 }],
+    scale, { now: NOW, running: false });
+  assert.ok(r.w >= 3, `expected >= 3px, got ${r.w}`);
+  assert.ok(r.x >= 0);
+  assert.ok(r.x + r.w <= 900 + 0.001, 'bar escaped the right edge of the track');
+});
+
+test('a min-width bar at the very end of the domain is pulled inside the track', () => {
+  const scale = TS.createScale({ start: NOW - 30 * DAY, end: NOW, width: 900 });
+  const [r] = TS.segmentRects(
+    [{ stage: 'PR', state: 'past', estimated: false, start: NOW, end: NOW }],
+    scale, { now: NOW, running: false });
+  assert.equal(r.w, TS.MIN_BAR_PX);
+  assert.ok(r.x + r.w <= 900 + 0.001);
+});

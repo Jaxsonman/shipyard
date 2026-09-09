@@ -9,12 +9,22 @@ var DAY = 24 * HOUR;
 
 var STAGE_ROWS = ['Spec', 'Plan', 'Dev', 'QA', 'Review', 'PR'];
 
+// `fit` and `all` are both fitting presets (spanMs null) — they differ in the
+// extent the caller hands them: `fit` gets the VISIBLE rows' data extent,
+// `all` gets the whole board's domain. `fit` pads more so the outermost bars
+// don't sit flush against the track edge.
 var ZOOM_PRESETS = [
+  { id: 'fit', label: 'Fit', spanMs: null, padFraction: 0.05 },
   { id: 'day', label: 'Day', spanMs: DAY },
   { id: 'week', label: 'Week', spanMs: 7 * DAY },
   { id: 'month', label: 'Month', spanMs: 30 * DAY },
-  { id: 'all', label: 'All', spanMs: null },
+  { id: 'all', label: 'All', spanMs: null, padFraction: 0.02 },
 ];
+
+// What `state.zoom` should be when the board has any segment at all; an empty
+// board has no extent to fit, so it falls back to a fixed window.
+var DEFAULT_PRESET_ID = 'fit';
+var EMPTY_BOARD_PRESET_ID = 'week';
 
 // Minimum gridline spacing in px. Steps are chosen so no two ticks sit closer.
 var MIN_TICK_PX = 90;
@@ -61,12 +71,12 @@ function resolveDomain(presetId, opts) {
   var now = typeof o.now === 'number' ? o.now : Date.now();
   var dataStart = typeof o.dataStart === 'number' ? o.dataStart : now - 7 * DAY;
   var dataEnd = typeof o.dataEnd === 'number' ? o.dataEnd : now;
-  var preset = presetById(presetId) || presetById('week');
+  var preset = presetById(presetId) || presetById(EMPTY_BOARD_PRESET_ID);
 
   if (preset.spanMs === null) {
     var span = dataEnd - dataStart;
-    if (!(span > 0)) span = DAY;
-    var margin = span * 0.02;
+    if (!(span > 0)) span = DAY; // a single instant still needs a visible window
+    var margin = span * (preset.padFraction || 0.02);
     return { start: dataStart - margin, end: dataEnd + margin };
   }
 
@@ -243,6 +253,8 @@ function segmentRects(segments, scale, opts) {
 
 var TimelineScale = {
   ZOOM_PRESETS: ZOOM_PRESETS,
+  DEFAULT_PRESET_ID: DEFAULT_PRESET_ID,
+  EMPTY_BOARD_PRESET_ID: EMPTY_BOARD_PRESET_ID,
   STAGE_ROWS: STAGE_ROWS,
   MIN_BAR_PX: MIN_BAR_PX,
   resolveDomain: resolveDomain,

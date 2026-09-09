@@ -88,6 +88,12 @@ Uninstall plugins before removing the marketplace they came from.
 | 5 | `qa` | ✅ Available | Autonomous verification — tests plus real end-to-end checks |
 | 6 | `pr` | ✅ Available | Open the PR for an approved ticket and hand off to your CI/CD |
 | — | `ship` | ✅ Available | Conductor — drives one planned ticket through the dev ⇄ QA loop (v1) |
+| — | `dashboard` | ✅ Available | Visual dashboard — local web UI over the board: stages, timelines, approve/reassign |
+
+`planning`'s `/spec` and `/plan`, `dev`, `qa`, and `ship` each append a
+hidden `<!-- shipyard-metrics {...} -->` footer to their primary handoff
+comment (spec/plan approval, dev handoff, qa verdict, ship review packet)
+so the `dashboard` plugin can build accurate per-stage timelines.
 
 ## Usage
 
@@ -254,6 +260,39 @@ pipeline that pushes**; every other stage works locally. Jira is
 best-effort: the ticket side goes through the Atlassian MCP server, the PR
 is still opened with `gh`, and Jira comments carry no metrics footer.
 
+After installing `dashboard`, open the pipeline dashboard:
+
+```
+/dashboard
+```
+
+Starts a zero-dependency local server bound to `127.0.0.1` (it never listens
+on a public interface) and opens it in your browser. Two views over every
+linked project's board: a **Tickets** table and a board-wide **Timeline**
+(Gantt) with a real time axis, per-stage bars, zoom presets and hover
+tooltips carrying each stage's duration and token cost. A stats strip above
+both shows tickets per stage, median and p90 stage duration, total tokens,
+throughput, and a filterable tag for each `Needs Human` escalation cause.
+
+Link a project with **+ Add** in the sidebar; the repo is derived from the
+folder's git remote and stored in `~/.claude/shipyard-dashboard.json`.
+
+The dashboard performs **board writes only, and never launches pipeline
+runs** — it will not start a dev round, a QA pass, or a `/pr`. The only
+writes it makes are:
+
+- **Approve** on `Awaiting Review` — swaps `ship:awaiting-review` for
+  `ship:approved`, handing the ticket to `/pr`. It does **not** close the
+  issue; the issue closes when the PR merges.
+- **Approve** on `Needs Human` — resets the ticket to `ship:planned`, the
+  documented human recovery that lets it re-enter the loop.
+- **Reassign** — changes the assignee.
+
+Approve is disabled on every other stage, including `Approved` and
+`PR Open`. Comments are read under contract v1's trust rule: anything not
+authored by your own `gh` account or a login in the project's `approvers`
+is displayed but never acted on.
+
 ## Shared scripts
 
 Every plugin's skills call the same six scripts:
@@ -336,6 +375,10 @@ stage table in the same change — a merged plugin that isn't reflected here is
 effectively undiscoverable. A Claude Code `PreToolUse` hook blocks
 `git commit` in-session when files under `plugins/` or `.claude-plugin/` are
 staged without `README.md`; see `.claude/hooks/check-readme-updated.sh` (wired up in `.claude/settings.json`).
+
+Plugin `plugin.json` files must include `name`, `description`, `version`, `author` (with `name` and `email`),
+`repository`, and `license` fields, plus a `keywords` array matching the marketplace entry. See
+`plugins/ship/.claude-plugin/plugin.json` as the field-shape reference for all plugins.
 
 ## License
 

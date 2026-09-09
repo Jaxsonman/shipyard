@@ -1,0 +1,394 @@
+/* Shipyard dashboard — app-specific styles. styles.css (the Modernist design
+   system) is verbatim and never edited; this file only (a) swaps token
+   *values* for a dark theme, using the exact same token names, and (b) adds
+   component classes built from those tokens for the dashboard's own markup.
+   No color literal appears outside the two dark-theme blocks below; every
+   component rule references var(--color-*), var(--space-*) or var(--radius-*). */
+
+:root { color-scheme: light dark; }
+
+/* ── Dark theme: same token names as styles.css, dark values. Light stays
+   the :root default in styles.css. Order matters — the [data-theme] block
+   comes last so an explicit choice wins over the media query in both
+   directions. ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #1a1918;
+    --color-surface: #262423;
+    --color-text: #f3f2f2;
+    --color-divider: color-mix(in srgb, #f3f2f2 32%, transparent);
+
+    /* Accent must be re-toned for the dark ground, not just carried over.
+       #ec3013 on --color-bg #1a1918 measures 4.18:1 and on --color-surface
+       3.68:1 — below WCAG AA 4.5:1, and these tokens are used as TEXT colour
+       (links, .btn-ghost, .drawer-err, .gantt-label.is-active, .dialog-err) and
+       as the focus-ring colour. The dark ramp's own 500 step gives 5.56:1 while
+       keeping the same mono-accent hue. */
+    --color-accent: #ff563c;
+    --color-accent-2: #ef6853;
+
+    --color-neutral-100: #2d2b2b;
+    --color-neutral-200: #444141;
+    --color-neutral-300: #605d5d;
+    --color-neutral-400: #7d7979;
+    --color-neutral-500: #9b9797;
+    --color-neutral-600: #bab6b6;
+    --color-neutral-700: #d7d3d3;
+    --color-neutral-800: #eae7e7;
+    --color-neutral-900: #f8f4f4;
+
+    --color-accent-100: #4d170e;
+    --color-accent-200: #7c1405;
+    --color-accent-300: #ae1800;
+    --color-accent-400: #dd2b0f;
+    --color-accent-500: #ff563c;
+    --color-accent-600: #ff9783;
+    --color-accent-700: #ffc4b8;
+    --color-accent-800: #ffe0d9;
+    --color-accent-900: #fff2ef;
+
+    --color-accent-2-100: #471d16;
+    --color-accent-2-200: #71261b;
+    --color-accent-2-300: #9e3526;
+    --color-accent-2-400: #c94b39;
+    --color-accent-2-500: #ef6853;
+    --color-accent-2-600: #ff9784;
+    --color-accent-2-700: #ffc4b9;
+    --color-accent-2-800: #ffe0da;
+    --color-accent-2-900: #fff2ef;
+
+    --shadow-sm: 0 0 0 1px color-mix(in srgb, #f3f2f2 10%, transparent);
+    --shadow-md: 0 0 0 1px color-mix(in srgb, #f3f2f2 12%, transparent), 0 3px 10px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 0 0 1px color-mix(in srgb, #f3f2f2 14%, transparent), 0 12px 32px rgb(0 0 0 / 0.6);
+  }
+}
+:root[data-theme="dark"] {
+  --color-bg: #1a1918;
+  --color-surface: #262423;
+  --color-text: #f3f2f2;
+  --color-divider: color-mix(in srgb, #f3f2f2 32%, transparent);
+
+  /* Accent must be re-toned for the dark ground, not just carried over.
+     #ec3013 on --color-bg #1a1918 measures 4.18:1 and on --color-surface
+     3.68:1 — below WCAG AA 4.5:1, and these tokens are used as TEXT colour
+     (links, .btn-ghost, .drawer-err, .gantt-label.is-active, .dialog-err) and
+     as the focus-ring colour. The dark ramp's own 500 step gives 5.56:1 while
+     keeping the same mono-accent hue. */
+  --color-accent: #ff563c;
+  --color-accent-2: #ef6853;
+
+  --color-neutral-100: #2d2b2b;
+  --color-neutral-200: #444141;
+  --color-neutral-300: #605d5d;
+  --color-neutral-400: #7d7979;
+  --color-neutral-500: #9b9797;
+  --color-neutral-600: #bab6b6;
+  --color-neutral-700: #d7d3d3;
+  --color-neutral-800: #eae7e7;
+  --color-neutral-900: #f8f4f4;
+
+  --color-accent-100: #4d170e;
+  --color-accent-200: #7c1405;
+  --color-accent-300: #ae1800;
+  --color-accent-400: #dd2b0f;
+  --color-accent-500: #ff563c;
+  --color-accent-600: #ff9783;
+  --color-accent-700: #ffc4b8;
+  --color-accent-800: #ffe0d9;
+  --color-accent-900: #fff2ef;
+
+  --color-accent-2-100: #471d16;
+  --color-accent-2-200: #71261b;
+  --color-accent-2-300: #9e3526;
+  --color-accent-2-400: #c94b39;
+  --color-accent-2-500: #ef6853;
+  --color-accent-2-600: #ff9784;
+  --color-accent-2-700: #ffc4b9;
+  --color-accent-2-800: #ffe0da;
+  --color-accent-2-900: #fff2ef;
+
+  --shadow-sm: 0 0 0 1px color-mix(in srgb, #f3f2f2 10%, transparent);
+  --shadow-md: 0 0 0 1px color-mix(in srgb, #f3f2f2 12%, transparent), 0 3px 10px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 0 0 1px color-mix(in srgb, #f3f2f2 14%, transparent), 0 12px 32px rgb(0 0 0 / 0.6);
+}
+
+/* ── Prototype styles not covered by the Modernist design system (moved
+   verbatim from index.html's <head> <style> block). ── */
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
+body { margin: 0; }
+.dot-running {
+  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--color-accent); margin-left: 6px;
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.gantt-track { position: relative; height: 14px; background: var(--color-surface); }
+.gantt-bar {
+  position: absolute; top: 0; bottom: 0;
+  left: var(--bar-left); width: var(--bar-width);
+}
+.drawer-backdrop {
+  position: fixed; inset: 0; z-index: 20;
+  background: color-mix(in srgb, var(--color-neutral-900) 45%, transparent);
+}
+.drawer-panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: min(480px, 100%);
+  background: var(--color-bg); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; padding: var(--space-6); overflow-y: auto;
+}
+
+/* ── Focus rings. Never remove an outline without an equivalent replacement. ── */
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.proj-row:focus-visible, .ticket-row:focus-visible, .tl-row:focus-visible { outline-offset: -2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dot-running, .tl-bar-running { animation: none; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Layout shell
+   ══════════════════════════════════════════════════════════════════════ */
+.app-shell {
+  min-height: 100vh; background: var(--color-bg); color: var(--color-text);
+  display: flex; flex-direction: column;
+}
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: var(--space-4); }
+.nav-search { width: 220px; }
+.app-split { display: flex; flex: 1; min-height: 0; }
+.sidebar {
+  width: 240px; flex: none; border-right: 2px solid var(--color-divider);
+  padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-1);
+}
+.main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Banner
+   ══════════════════════════════════════════════════════════════════════ */
+.banner-warn {
+  width: 100%; padding: var(--space-2) var(--space-4);
+  background: var(--color-accent-100); color: var(--color-accent-800);
+  font-size: 13px; border-bottom: 2px solid var(--color-divider);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Stats strip
+   ══════════════════════════════════════════════════════════════════════ */
+.stats-strip {
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 2px solid var(--color-divider);
+}
+.stats-tiles { display: flex; flex-wrap: wrap; gap: var(--space-6); }
+.stat-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stat-label {
+  font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+.stat-value {
+  font-size: 20px; font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap;
+}
+.cause-row { display: flex; gap: var(--space-1); margin-top: var(--space-3); flex-wrap: wrap; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Sidebar / project rows
+   ══════════════════════════════════════════════════════════════════════ */
+.sidebar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); }
+.sidebar-head h6 { margin: 0; }
+.sidebar-add-btn { padding: 2px 6px; font-size: 12px; }
+
+.proj-row {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-2);
+  padding: var(--space-2); background: transparent; cursor: pointer;
+}
+.proj-row.is-active { background: var(--color-accent-100); }
+.proj-row-text { min-width: 0; }
+.proj-name {
+  font-size: 13px; font-weight: 600; color: var(--color-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.proj-row.is-active .proj-name { color: var(--color-accent-700); }
+.proj-repo {
+  font-size: 11px; font-family: monospace; color: var(--color-neutral-600);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.proj-count { flex: none; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Ticket table page
+   ══════════════════════════════════════════════════════════════════════ */
+.page-head { padding: var(--space-6) var(--space-6) 0; }
+.page-title { margin-bottom: 2px; }
+.page-sub { font-size: 13px; margin-bottom: var(--space-4); }
+.page-body { padding: 0 var(--space-6) var(--space-6); }
+.row-click, .focusable { cursor: pointer; }
+
+.pager { display: flex; align-items: center; justify-content: space-between; padding-top: var(--space-3); }
+.pager-summary { font-size: 12px; }
+.pager-actions { display: flex; gap: var(--space-2); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   Drawer
+   ══════════════════════════════════════════════════════════════════════ */
+.drawer-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: var(--space-2); }
+.drawer-title { margin: 2px 0 0; }
+.drawer-err { color: var(--color-accent); font-size: 12px; width: 100%; }
+.drawer-meta { margin-bottom: var(--space-4); }
+.drawer-section { margin-bottom: var(--space-4); }
+.drawer-section-title { margin-bottom: var(--space-2); }
+.gantt-list { display: flex; flex-direction: column; gap: 6px; }
+.hr-tight { margin: 0 0 var(--space-4); }
+.hr-loose { margin: var(--space-4) 0; }
+.drawer-spacer { flex: 1; }
+.drawer-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+.tab-copy { font-size: 14px; opacity: 0.85; white-space: pre-wrap; }
+
+.gantt-grid {
+  display: grid; grid-template-columns: 76px 1fr 130px; align-items: center; gap: var(--space-2);
+}
+.gantt-label {
+  font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+.gantt-label.is-active { color: var(--color-accent); }
+.gantt-stat { font-size: 11px; font-family: monospace; color: var(--color-neutral-600); text-align: right; }
+.gantt-stat.is-active { color: var(--color-accent); }
+
+.gantt-bar-current { background: var(--color-accent); }
+.gantt-bar-past { background: var(--color-neutral-400); }
+.gantt-bar-future { background: transparent; }
+
+.tabs { display: flex; gap: var(--space-1); margin-bottom: var(--space-4); }
+.logs {
+  background: var(--color-neutral-900); color: var(--color-neutral-100);
+  font-size: 12px; padding: var(--space-3); overflow-x: auto; white-space: pre-wrap; line-height: 1.5;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Add-project dialog
+   ══════════════════════════════════════════════════════════════════════ */
+.dialog-field { margin-bottom: var(--space-3); }
+.dialog-hint { font-size: 12px; margin-top: 6px; }
+.dialog-err { color: var(--color-accent); font-size: 12px; margin-top: var(--space-2); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   View switcher
+   ══════════════════════════════════════════════════════════════════════ */
+.view-tabs { display: flex; gap: var(--space-2); }
+.view-tab {
+  background: transparent; border: none; cursor: pointer;
+  font-family: inherit; font-size: 14px; color: var(--color-neutral-600);
+  padding: var(--space-1) 0;
+}
+.view-tab[aria-selected="true"] {
+  color: var(--color-text); border-bottom: 2px solid var(--color-accent);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Timeline view
+   ══════════════════════════════════════════════════════════════════════ */
+.tl-controls {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.zoom-group, .chip-group { display: flex; gap: var(--space-1); }
+.hide-backlog-field {
+  display: flex; align-items: center; gap: 6px; font-size: 13px;
+  color: var(--color-neutral-600); cursor: pointer; margin-left: auto;
+}
+
+.chip {
+  font-family: inherit; font-size: 12px; cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-surface); color: var(--color-neutral-600);
+  border: 1px solid var(--color-divider);
+}
+.chip[aria-pressed="true"] {
+  background: var(--color-accent-100); color: var(--color-accent-700);
+  border-color: var(--color-accent);
+}
+
+.tl { position: relative; border: 1px solid var(--color-divider); }
+.tl-axis-row, .tl-row {
+  display: grid; grid-template-columns: 240px 1fr 130px; align-items: center;
+}
+.tl-axis-row { border-bottom: 1px solid var(--color-divider); }
+.tl-axis-label { height: 100%; }
+.tl-axis { position: relative; height: 28px; }
+.tl-axis-stat { height: 100%; }
+.tl-tick {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  left: var(--tick-x); font-size: 10px; color: var(--color-neutral-500);
+  white-space: nowrap;
+}
+.tl-tick-major { color: var(--color-neutral-700); font-weight: 600; }
+
+.tl-body { display: flex; flex-direction: column; }
+.tl-group-head {
+  grid-column: 1 / -1; padding: var(--space-2) var(--space-3);
+  font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--color-neutral-600); background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider);
+}
+.tl-row {
+  border-bottom: 1px solid var(--color-divider); cursor: pointer;
+  min-height: 34px;
+}
+.tl-row:hover { background: var(--color-surface); }
+.tl-row-label {
+  padding: 0 var(--space-3); font-size: 13px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.tl-num { font-family: monospace; color: var(--color-neutral-600); margin-right: 4px; }
+
+/* Right-hand column: current stage tag + time-in-stage, matching the
+   drawer's .gantt-stat styling (Task 16 step 3). */
+.tl-stat {
+  font-size: 11px; font-family: monospace; color: var(--color-neutral-600);
+  text-align: right; padding: 0 var(--space-3); white-space: nowrap;
+  display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+}
+
+.tl-track { padding: var(--space-1) var(--space-3) var(--space-1) 0; }
+/* Contract v1 §3: untrusted comments are shown but never acted on. This must
+   read as a warning, not as chrome — a human scanning the Logs tab has to see
+   that some of what follows was ignored on purpose. */
+.drawer-untrusted {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-accent-100);
+  color: var(--color-text);
+  font-size: 12px;
+}
+.tl-track-layer { position: relative; height: 16px; touch-action: pan-y; }
+/* Pan is real only in the day/week/month presets — resolveDomain('all')
+   always fits the data and ignores panMs, so don't offer a grab cursor
+   the drag cannot honour. */
+.tl.is-pannable .tl-track-layer { cursor: grab; }
+.tl.is-pannable .tl-track-layer:active { cursor: grabbing; }
+
+.tl-grid-line { position: absolute; top: -8px; bottom: -8px; width: 1px; left: var(--tick-x); background: var(--color-divider); }
+.tl-grid-line-major { opacity: 0.7; }
+.tl-grid-line-minor { opacity: 0.35; }
+
+.tl-now { position: absolute; top: -8px; bottom: -8px; width: 1px; left: var(--now-x); background: var(--color-accent); }
+
+.tl-bar { position: absolute; top: 0; height: 16px; left: var(--x); width: var(--w); }
+.tl-bar-current { background: var(--color-accent); }
+.tl-bar-past-1 { background: var(--color-neutral-700); }
+.tl-bar-past-2 { background: var(--color-neutral-600); }
+.tl-bar-past-3 { background: var(--color-neutral-500); }
+.tl-bar-past-4 { background: var(--color-neutral-400); }
+.tl-bar-past-5 { background: var(--color-neutral-300); }
+.tl-bar-est {
+  background-image: repeating-linear-gradient(45deg, transparent 0 4px, color-mix(in srgb, var(--color-bg) 55%, transparent) 4px 8px);
+}
+.tl-bar-running { animation: pulse 1.6s ease-in-out infinite; }
+
+.tl-empty { padding: var(--space-6); }
+
+.tl-tip {
+  position: fixed; transform: translate(-50%, calc(-100% - 8px));
+  background: var(--color-neutral-900); color: var(--color-neutral-100);
+  font-size: 11px; padding: 4px 8px; white-space: nowrap;
+  pointer-events: none; z-index: 30; box-shadow: var(--shadow-md);
+}

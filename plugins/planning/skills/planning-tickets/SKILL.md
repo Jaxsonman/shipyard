@@ -170,6 +170,23 @@ In order:
 
    Nothing hand-writes that line. Post the file via the backend reference.
 
+   **Metrics footer (dashboard integration).** Append this hidden HTML comment as the
+   last line of the comment body, so the dashboard plugin can build stage timelines.
+   Record `started` when this stage began work on the ticket (ISO 8601 UTC) and
+   `finished` as now. `tokens_in`/`tokens_out` are optional — include them only when
+   the stage runner knows real numbers (e.g. ship fills them for dev/qa rounds from
+   the subagent usage reported in task notifications); never estimate.
+
+   ```
+   <!-- shipyard-metrics {"stage":"plan","started":"<ISO8601>","finished":"<ISO8601>","tokens_in":<n>,"tokens_out":<n>} -->
+   ```
+
+   (omit the token fields entirely when unknown — never emit placeholders)
+
+   ```
+   <!-- shipyard-metrics {"stage":"plan","started":"<ISO8601>","finished":"<ISO8601>"} -->
+   ```
+
 If a board operation fails after the commit, report the exact error
 verbatim and stop. Re-running `/plan <id>` recovers via Step 2's "finish
 board updates" option.

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shipyard Dashboard</title>
+<link rel="stylesheet" href="/styles.css">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<div class="app-shell">
+
+  <div class="nav">
+    <div class="nav-brand">Shipyard</div>
+    <div class="view-tabs" role="tablist" aria-label="View">
+      <button id="view-tickets" class="view-tab" role="tab" aria-selected="true">Tickets</button>
+      <button id="view-timeline" class="view-tab" role="tab" aria-selected="false">Timeline</button>
+    </div>
+    <div class="nav-right">
+      <input id="search" class="input nav-search" placeholder="Search tickets…">
+      <button id="new-prd-btn" class="btn btn-primary" title="Run /prd in Claude Code">New PRD</button>
+    </div>
+  </div>
+
+  <div id="banner"></div>
+
+  <div id="stats" class="stats-strip"></div>
+
+  <div class="app-split">
+    <div id="sidebar" class="sidebar"></div>
+
+    <div class="main-col">
+      <div id="main"></div>
+    </div>
+  </div>
+
+  <div id="drawer-root"></div>
+  <div id="dialog-root"></div>
+  <div id="tl-tip" class="tl-tip" role="tooltip" hidden></div>
+
+</div>
+<script src="/timeline-scale.js"></script>
+<script src="/pipeline-stats.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

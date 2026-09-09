@@ -54,6 +54,13 @@
       "description": "Pipeline exit — open the pull request for an approved ticket and move it to PR Open.",
       "category": "productivity",
       "keywords": ["pr", "pull-request", "exit", "sdlc", "github", "jira"]
+    },
+    {
+      "name": "dashboard",
+      "source": "./plugins/dashboard",
+      "description": "Visual pipeline dashboard — local web UI for tickets, stages, per-stage stats, and board actions.",
+      "category": "productivity",
+      "keywords": ["dashboard", "ui", "pipeline", "sdlc", "github"]
     }
   ]
 }

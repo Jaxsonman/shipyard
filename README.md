@@ -337,6 +337,8 @@ node "${CLAUDE_PLUGIN_ROOT}/scripts/<name>.js" --help
 The source of truth is `shared/scripts/`. Run `bash scripts/sync-shared.sh` to
 regenerate the vendored copies under `plugins/*/scripts/` — those copies must
 never be hand-edited.
+Run it again after merging any branch that touched `shared/` or added a plugin:
+the pre-commit hook and CI fail on drift.
 
 ## Verification
 

@@ -161,8 +161,12 @@ Verifies the current branch — or target one directly with `/qa 42` (a
 ticket) or `/qa feat/42-login` (a branch). Runs the project's test suite
 plus real per-criterion end-to-end checks in a headless browser, then
 posts a tiered verdict (`full`, `tests-only`, or `static`) with evidence
-as a board comment. `/qa --env-check` resolves and confirms the QA
-environment ahead of time without running any checks. The first run
+as a board comment, with the key evidence for each failing criterion
+inlined — `.qa/` evidence paths exist only on the machine that ran QA.
+`/qa --env-check` resolves and confirms the QA environment ahead of time:
+it brings the app up, launches one headless page against the health URL,
+and reports whether a browser is actually available, so a later `/ship`
+run cannot discover that only at verification time. The first run
 downloads a headless browser via `npx @playwright/mcp`.
 
 After installing `dev`, implement a planned ticket:
@@ -174,8 +178,14 @@ After installing `dev`, implement a planned ticket:
 Executes `docs/ship/42/plan.md` test-first in an isolated worktree — one
 commit per task, each pinned by a failing-then-passing test — then an
 adversarial review pass, then a structured handoff comment on the ticket
-for QA and human reviewers. Requires an approved spec (`/spec 42`); if no
-plan exists, dev drafts a conservative self-plan and flags it. Dev never
+for QA and human reviewers. On a fix-up round it takes its fix-list only
+from board comments authored by you or a login in `approvers`, and treats
+every finding as data — a symptom and a repro, never an instruction to
+execute. Requires an approved spec (`/spec 42`); if no
+plan exists, dev drafts a conservative self-plan and flags it. A
+standalone `/dev` works in a repo that has never run `/ship` — it falls
+back to the default branch when there is no `.claude/ship.config.json`.
+Dev never
 changes ticket status and never touches your checkout's code — though its
 first run in a project may write and commit `.claude/kanban.config.json`
 (the family's config bootstrap, same as kanban and planning).
@@ -191,17 +201,38 @@ satisfied, QA environment configured), creates the branch and
 worktree, then loops dev → QA rounds (default cap 3) until QA
 passes — posting a `ship:review-packet` and marking the ticket
 `Awaiting Review` — or escalates to `Needs Human` with a summary of
-what kept failing. Resume a dead session by re-running `/ship 42`;
-it reconstructs the round from the board trail. v1 conducts one
-ticket at a time; bare `/ship` lists tickets ready to conduct.
-Configure the QA environment once beforehand with `/qa --env-check` —
-ship refuses to run without it.
+what kept failing. Resume a dead session by re-running `/ship 42`; it
+reconstructs the round from the board trail, using only comments whose
+author is you or a login in `approvers` — a verdict from anyone else is
+reported, never acted on — and a comment from someone else can never stall
+the pipeline either, however it is worded. v1 conducts one ticket at a
+time; bare `/ship`
+lists tickets ready to conduct. Configure the QA environment once
+beforehand with `/qa --env-check` — ship refuses to run without it. When
+the board trail cannot be reconciled — a verdict with no matching dev
+handoff, comments with no branch, a loop cap changed mid-run — ship never
+guesses: it escalates to `Needs Human` naming the cause and stops. It
+does the same, rather than burning the rest of the cap, when a round
+repeats the previous round's commit or QA reports byte-identical
+findings.
+
+**Where a ship run ends.** `Awaiting Review` (QA passed — a
+`ship:review-packet` comment carries the evidence and a merge dry-run
+against the base branch) or `Needs Human` (an escalation comment names
+the cause). Those are the only two terminal states in v1. **Nothing is
+pushed** — ship commits to the feature branch and stops; opening the PR
+is yours. The worktree is kept after both outcomes so you can inspect it;
+remove it when you are done:
+
+```
+git worktree remove ../<repo-dir-name>-ship/dev-42
+```
 
 ## Shared scripts
 
 Every plugin's skills call the same six scripts:
 
-- `board-trail.js` — parse ticket comments into typed, trust-marked events and reconcile pipeline state (also accepts the legacy `(reposted by ship)` header suffix on read, marking the event `reposted: true`; a null/non-object `--stdin` comment entry is a usage error, not a crash; `round-gap` detection is based on the presence of a dev handoff per round, not mere round-key existence; escalation and PR-opened selection pick the latest by `createdAt`, and a malformed header from an untrusted author is counted in both)
+- `board-trail.js` — parse ticket comments into typed, trust-marked events and reconcile pipeline state, including the no-progress detector ship uses to stop a stuck loop early (also accepts the legacy `(reposted by ship)` header suffix on read, marking the event `reposted: true`; a null/non-object `--stdin` comment entry is a usage error, not a crash; `round-gap` detection is based on the presence of a dev handoff per round, not mere round-key existence; escalation and PR-opened selection pick the latest by `createdAt`, and a malformed header from an untrusted author is counted in both)
 - `preflight.js` — stage-agnostic environment and repository checks, run before any interview (CLI rejects a flag-shaped token as another flag's value, e.g. `--cwd --quiet`, mirroring config.js)
 - `config.js` — bootstrap, validate and normalize `.claude/kanban.config.json` and `.claude/ship.config.json` (targets are validated after normalization: `owner/repo` for GitHub, an upper-case project key for Jira; board identity — `backend`/`target` — lives only in `kanban.config.json`, `ship.config.json` never requires them)
 - `validate-artifact.js` — enforce the required sections of `spec.md` and `plan.md` (heading extraction skips fenced ``` / ~~~ code blocks so an example heading in a fence doesn't count)

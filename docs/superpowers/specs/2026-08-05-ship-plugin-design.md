@@ -243,6 +243,73 @@ pipeline-authored fix-lists (QA findings), per the umbrella trust
 model. Ship never forwards ticket-comment text into agent prompts as
 instructions, and quotes comments only as data in its own reports.
 
+### 11. Review gate produces `ship:approved`, not a closed issue
+
+*(Ports hardening Decision 6, `2026-09-08-hardening-program-design.md`.
+Supersedes dashboard decision 3 of 2026-08-10, which had approval close
+the issue directly.)* Approving a ticket on `Awaiting Review` swaps
+`ship:awaiting-review` → `ship:approved` rather than closing it. The
+new `pr` stage (v2, Epic D) is the sole consumer of `ship:approved`: it
+opens the PR and the issue closes only when that PR merges. Approving a
+`Needs Human` ticket still resets it to `ship:planned`, unchanged from
+decision 7's re-entry path. **What does not change for ship v1:** ship
+still ends the run at `Awaiting Review` (decision 9) and never itself
+operates the review gate — no approver checks, no `Approved` transition,
+no PR — exactly as the Non-goals section already states. The gate and
+the `pr` stage are separate components that consume the label ship
+leaves behind.
+
+### 12. Metrics ship can actually populate
+
+*(Ports hardening Decision 7.)* `started` is captured at step 1 of every
+stage by running `node scripts/metrics.js now`; the footer line is
+emitted by `metrics.js footer` — nothing is hand-written, and a field
+ship cannot populate (most often `tokens_in`/`tokens_out`) is omitted
+entirely rather than filled with a placeholder or an estimate. **Ship
+never edits a dev or QA comment to attach usage to it.** Instead, after
+each round ship posts its own `ship:metrics round N/M` comment (contract
+§5.6) whose footer carries that round's dev and QA token usage taken
+from the subagent results, with usage omitted when the harness reports
+none. Footers are emitted on the GitHub backend only; Jira comments
+carry no footer (contract §2, §10). This retires the earlier idea,
+implicit in decision 7's packet sketch, that ship fills in token counts
+by hand.
+
+### 13. Cost containment: no-progress escalation and a merge dry-run
+
+*(Ports hardening Decision 9.)* Two conditions count as "the loop is not
+converging" and short-circuit the remaining cap rather than spending it:
+a round whose dev HEAD is identical to the previous round's HEAD, and a
+round whose QA findings are byte-identical to the previous round's
+(`board-trail.js` surfaces both in `state.noProgress[]`, computed from
+git-supplied HEAD values and a hash of the QA comment's `## Findings`
+section). Either signal escalates **immediately** with cause
+`stage-error` (contract §8) — a `FAIL` verdict that only restates the
+last round's outcome is treated as a stall, not round N+1 of genuine
+work. Separately, before every review packet ship dry-runs a merge
+against `baseBranch` (`git merge-tree --write-tree`, falling back to
+`git merge --no-commit --no-ff` in a throwaway worktree when
+`merge-tree` is unavailable). A conflict is **recorded in the packet's
+`## Merge check` section, not treated as an escalation** — v1 still
+stops at `Awaiting Review` and leaves the merge decision to the human
+reviewer.
+
+### 14. A lost QA verdict is reposted in the contract's shape
+
+QA can produce a verdict and still fail to post it — the run dies, the
+API call errors — and because resume reconstructs state from the board
+trail alone (decision 8), a verdict that never reached the board would
+otherwise vanish without a trace. Per contract §11: QA writes
+`comment.md` into the verdict's artifacts directory before any board
+call, so the content survives independently of the post. When QA's
+result reports `"commentPosted": false`, ship posts that file verbatim;
+if it is absent, ship reproduces the §5.5 QA comment shape exactly — the
+same header, the literal `## Findings` heading, the criteria table.
+Either path, the reposted comment's footer carries `"reposted": true`
+(contract §10), which is how a parser tells a repost from an original
+verdict. A repost never creates a new round and never changes the
+verdict it is restating — it is purely a trail-integrity measure.
+
 ## Sequence (happy path)
 
 ```

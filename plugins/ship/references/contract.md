@@ -276,7 +276,9 @@ No other cause value is valid. A parser encountering one records it as `malforme
 | `round-gap` | Round `N` has a handoff but round `N-1` does not. |
 | `multiple-labels` | The ticket carries more than one `ship:*` label. |
 | `comments-without-branch` | Pipeline comments exist but no `feat/<id>-*` branch does. |
-| `malformed-header` | A first line starts with `ship:` but matches no form in §5. |
+| `malformed-header` | A first line starts with `ship:` but matches no form in §5, **and its author is trusted** (§3). |
+
+**Trust gates irreconcilability.** A malformed `ship:*` header from an untrusted author is recorded in `state.untrusted[]` and never contributes to `state.irreconcilable[]`. Irreconcilability moves a ticket to `Needs Human`, so deriving it from an untrusted comment would let anyone who can comment wedge a ticket with a line as innocuous as `ship: nice work` — §3 is explicit that such a comment is reported, never acted on. The same applies to every code in this table: only trusted events reach it.
 
 **No-progress escalation.** A round whose dev HEAD equals the previous round's HEAD, or whose QA findings are byte-identical to the previous round's, escalates immediately with cause `stage-error` instead of spending the remaining cap.
 

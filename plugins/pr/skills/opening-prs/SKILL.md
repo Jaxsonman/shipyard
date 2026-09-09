@@ -116,8 +116,11 @@ Step 4 uses it.
 `/pr` needs a working tree holding `<branch>` to run the merge check and
 the push from. In order:
 
-1. **The ship worktree.** If `../<repo-dir-name>-ship/dev-<id>` exists and
-   `git -C <that path> rev-parse --abbrev-ref HEAD` is `<branch>`, use it.
+1. **The ship worktree.** Preflight already found it: `worktree-elsewhere`
+   carries `resumeWorktree` when the branch sits in this ticket's own
+   `../<repo-dir-name>-ship/dev-<id>`, and `path` when some other worktree
+   holds it. Use that path — do not re-derive it, and do not create a second
+   worktree for a branch that is already checked out somewhere.
    (`<repo-dir-name>` is the basename of the main checkout; contract §13.)
 2. **The current checkout**, if it is already on `<branch>`.
 3. **A temporary worktree.** Otherwise create one and remove it in Step 8:

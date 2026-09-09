@@ -12,6 +12,26 @@ After installing the dashboard plugin, run:
 
 The dashboard server starts in the background and opens in your browser. The URL is `http://127.0.0.1:<port>`.
 
+## Stages
+
+The dashboard reads contract v1's label ladder (§4):
+
+| Stage | Label |
+|---|---|
+| Backlog | *(no `ship:*` label)* |
+| Spec'd | `ship:specced` |
+| Planned | `ship:planned` |
+| Dev | `ship:in-dev` |
+| QA | `ship:in-qa` |
+| Awaiting Review | `ship:awaiting-review` |
+| Approved | `ship:approved` |
+| PR Open | `ship:pr-open` |
+| Needs Human | `ship:needs-human` |
+
+A ticket carrying more than one `ship:*` label is flagged as a conflict in the
+UI rather than guessed at. The PR link shown on a `PR Open` ticket comes from
+the trusted `ship:pr opened <url>` comment (§5.9), never from a label.
+
 ## Requirements
 
 - **GitHub only** — v1 is GitHub-board only. Jira support is planned.
@@ -21,9 +41,16 @@ The dashboard server starts in the background and opens in your browser. The URL
 
 - View tickets across all configured pipeline stages
 - Stage timeline and per-stage metrics (time, token usage)
-- Board actions:
-  - Approve (`Awaiting Review` → close; `Needs Human` → re-plan)
-  - Reassign
+- Board actions (writes only — the dashboard never launches a pipeline run):
+  - Approve on `Awaiting Review` → swaps `ship:awaiting-review` for
+    `ship:approved`, handing the ticket to `/pr`. It does **not** close the
+    issue; the issue closes when the PR merges (contract v1 §4, program spec
+    Decision 6).
+  - Approve on `Needs Human` → resets to `ship:planned`, the documented human
+    recovery.
+  - Approve is disabled on every other stage, including `Approved` and
+    `PR Open`.
+  - Reassign → changes the assignee.
 
 ## Development
 

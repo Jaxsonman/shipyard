@@ -15,6 +15,15 @@ Coexistence with the marketplace is a non-issue by construction: the dashboard *
 1. **Delivery:** marketplace plugin, not a standalone app or hosted site.
 2. **Stage metrics:** instrument the pipeline for real per-stage time/token data (not derived-only, not mocked).
 3. **Actions:** board-only writes in v1, and only transitions that are legitimately human-owned (only ship transitions mid-pipeline labels): Approve on **Awaiting Review** = close the issue (accept); Approve on **Needs Human** = reset to `ship:planned` (re-enter pipeline, the documented human recovery); Approve disabled on all other stages. Reassign = change assignee. No launching pipeline runs. "Retry stage" from the mock is omitted from v1 UI.
+
+   > **Amended 2026-09-09 (hardening H-15).** Approve on **Awaiting Review** no
+   > longer closes the issue. It swaps `ship:awaiting-review` → `ship:approved`,
+   > per the hardening program spec's Decision 6 and contract v1 §4: the review
+   > gate hands the ticket to the `pr` plugin, which consumes `ship:approved`
+   > and swaps it for `ship:pr-open`; the issue closes when the PR merges. The
+   > Needs Human branch is unchanged. This also adds two read-only stages to the
+   > dashboard — **Approved** and **PR Open** — on both of which Approve is
+   > disabled.
 4. **Stack:** zero-dependency Node (stdlib HTTP server) + vanilla JS frontend recreating the prototype; `styles.css` design system used verbatim. GitHub-only v1 (board adapter isolated so Jira can slot in later).
 
 ## Plugin structure

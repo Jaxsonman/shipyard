@@ -1,7 +1,7 @@
 {
   "name": "dashboard",
   "description": "Visual pipeline dashboard — local web UI for tickets, stages, per-stage time/token stats, and board actions across linked projects.",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": {
     "name": "Jaxson Mansouri",
     "email": "mansouricobusiness@gmail.com"

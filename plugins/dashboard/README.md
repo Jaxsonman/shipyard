@@ -79,6 +79,21 @@ This applies to **both** views and to the drawer's per-ticket Gantt — a
 forged verdict draws no bar anywhere, including the one screen a human
 opens to inspect a single ticket.
 
+## Duration labels
+
+One helper, `formatDuration` in `web/pipeline-stats.js`, labels every duration
+the UI shows — timeline row labels, bar tooltips, the drawer's stat column and
+the stats strip. `server/metrics.js` re-exports it rather than keeping a copy,
+so the two sides cannot drift. It bands by scale, because stage durations run
+from a two-minute spec approval to a ticket parked in QA for weeks:
+
+| Duration | Label |
+|---|---|
+| < 1m | `<1m` |
+| < 1h | `42m` |
+| < 24h | `3h 5m` |
+| >= 24h | `20d 22h` (minutes dropped — noise at that scale) |
+
 ## Shared contract code
 
 `scripts/` and `references/contract.md` are **vendored copies** of `shared/scripts/`

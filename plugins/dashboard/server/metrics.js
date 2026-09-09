@@ -1,6 +1,10 @@
 'use strict';
 
 const trail = require('./trail');
+// One implementation of the label formatters, shared with the browser: the
+// timeline rows, tooltips, drawer stat labels and stats strip must all agree,
+// and web/pipeline-stats.js is the dual-mode module the page already loads.
+const { formatTokens, formatDuration } = require('../web/pipeline-stats.js');
 
 // The drawer's per-ticket Gantt now mirrors trail.STAGE_ORDER exactly, so the
 // PR stage the `pr` plugin opens is visible per ticket, not just board-wide.
@@ -21,29 +25,6 @@ const CURRENT_STAGE_INDEX = {
 
 // Thin re-export for back-compat: all comment parsing lives in trail.js now.
 const parseMetrics = trail.parseMetricsBlocks;
-
-/** 420000 -> "420K", 1500000 -> "1.5M", below 1000 verbatim. */
-function formatTokens(n) {
-  if (n >= 1000000) {
-    const v = n / 1000000;
-    return (Number.isInteger(v) ? String(v) : v.toFixed(1)) + 'M';
-  }
-  if (n >= 1000) {
-    const v = n / 1000;
-    return (Number.isInteger(v) ? String(v) : v.toFixed(1)) + 'K';
-  }
-  return String(n);
-}
-
-/** ms -> "Xh Ym", "Ym" under an hour, "<1m" under a minute. */
-function formatDuration(ms) {
-  const totalMinutes = Math.floor(ms / 60000);
-  if (totalMinutes < 1) return '<1m';
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  if (hours < 1) return `${minutes}m`;
-  return `${hours}h ${minutes}m`;
-}
 
 /**
  * Builds the pipeline Gantt timeline: one row per stage in

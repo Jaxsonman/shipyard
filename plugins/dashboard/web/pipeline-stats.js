@@ -33,14 +33,23 @@ function formatTokens(n) {
   return String(n);
 }
 
-/** ms -> "Xh Ym", "Ym" under an hour, "<1m" under a minute. */
+/**
+ * ms -> a human duration in three bands. Stage durations span minutes (a spec
+ * approval) to weeks (a ticket parked in QA), and "502h 30m" is unreadable at
+ * the top of that range — so at a day or more we switch to days plus hours and
+ * drop minutes, which are noise at that scale.
+ *   >= 24h -> "20d 22h"   >= 1h -> "3h 5m"   < 1h -> "42m"   < 1m -> "<1m"
+ */
 function formatDuration(ms) {
   var totalMinutes = Math.floor(ms / 60000);
   if (totalMinutes < 1) return '<1m';
-  var hours = Math.floor(totalMinutes / 60);
-  var minutes = totalMinutes % 60;
-  if (hours < 1) return minutes + 'm';
-  return hours + 'h ' + minutes + 'm';
+  var totalHours = Math.floor(totalMinutes / 60);
+  if (totalHours >= 24) {
+    var days = Math.floor(totalHours / 24);
+    return days + 'd ' + (totalHours % 24) + 'h';
+  }
+  if (totalHours < 1) return totalMinutes + 'm';
+  return totalHours + 'h ' + (totalMinutes % 60) + 'm';
 }
 
 /**

@@ -9,20 +9,25 @@ tools appear scoped as `mcp__plugin_kanban_atlassian__<toolName>`. The first
 call in a session triggers a one-time OAuth prompt — if a tool call returns
 an auth/consent error, tell the user to complete that prompt and retry.
 
-## Search for duplicates (Step 4 of SKILL.md)
+## List tickets for duplicate detection (Step 4 of SKILL.md)
 
 Call `mcp__plugin_kanban_atlassian__searchJiraIssuesUsingJql` with:
 
 ```json
 {
-  "jql": "project = \"<TARGET>\" AND text ~ \"Source PRD: <slug>\""
+  "jql": "project = \"<TARGET>\""
 }
 ```
 
-If the result's issue list is non-empty, those are the matches to report to
-the user (use each issue's key + a `https://<their-site>.atlassian.net/browse/<key>`
-link, or whatever URL shape the tool result returns — do not hardcode a
-site hostname, read it from the tool's response).
+fetching `key`, `summary` and `description` for each result. Filter **locally**
+for issues whose `description` contains a line exactly `Source PRD: <slug>`.
+Do not put that string in the JQL as `text ~ "Source PRD: <slug>"` — JQL
+tokenizes on the colon and the result is wrong.
+
+Report matches using each issue's key + a
+`https://<their-site>.atlassian.net/browse/<key>` link, or whatever URL shape
+the tool result returns — do not hardcode a site hostname, read it from the
+tool's response.
 
 ## Create a ticket (Step 6 of SKILL.md)
 

@@ -13,14 +13,15 @@ gh auth status
 If this fails, tell the user to run `gh auth login` and stop — do not
 attempt to create or search issues without valid auth.
 
-## Search for duplicates (Step 4 of SKILL.md)
+## List tickets for duplicate detection (Step 4 of SKILL.md)
 
 ```bash
-gh issue list --repo <owner/repo> --search "Source PRD: <slug> in:body" --state all --json number,title,url
+gh issue list --repo <owner/repo> --state all --limit 500 --json number,title,url,body
 ```
 
-Parse the JSON array. If it's non-empty, those are the matches to report to
-the user.
+Filter the returned JSON **locally** for issues whose body contains a line
+exactly `Source PRD: <slug>`. Do not put that string in `--search` with
+`in:body` — GitHub's search tokenizes on the colon and the result is wrong.
 
 ## Create a ticket (Step 6 of SKILL.md)
 

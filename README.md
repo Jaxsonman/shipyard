@@ -107,12 +107,17 @@ After installing `kanban`, run:
 /kanban docs/prd/2026-07-20-reef-tank.md
 ```
 
-The first run in a project asks once which board to use (GitHub or Jira)
-and where, then Claude proposes a full breakdown of small, vertical-slice
-tickets — each one a single outcome a human can verify end-to-end, with
-`Depends on:` links where one slice genuinely requires another. Approve
-the list and Claude creates the tickets on your board in dependency
-order.
+The first run in a project bootstraps `.claude/kanban.config.json` (asking
+once which board to use, GitHub or Jira, and where) and offers to commit it,
+then Claude proposes a full breakdown of small, vertical-slice tickets —
+each one a single outcome a human can verify end-to-end, with `Depends on:`
+links where one slice genuinely requires another, capped at 15 slices per
+run (the rest are offered as a deferred batch on a follow-up run). Approve
+the list and Claude creates the tickets on your board in dependency order,
+tracking progress in a run manifest at `docs/kanban/<slug>.run.json`.
+Re-running `/kanban` on the same PRD is idempotent: already-created tickets
+are recognized from the manifest and never duplicated, and only the
+remaining pending/failed tickets are attempted.
 
 After installing `planning`, run these per ticket, in order:
 

@@ -133,7 +133,7 @@ git commit -m "feat(prd): draft persistence, overwrite refusal, preflight gate"
 **Interfaces:**
 - Produces: `docs/kanban/<slug>.run.json`, schema below. No other plugin reads it in this epic.
 
-- [ ] **Step 1: Replace Step 1 (config check) with preflight + config.js**
+- [x] **Step 1: Replace Step 1 (config check) with preflight + config.js**
 
 Replace the whole hand-rolled config-writing section with:
 
@@ -163,7 +163,7 @@ Read the resulting config with
 schema is contract §12.1 — do not invent keys.
 ```
 
-- [ ] **Step 2: Write the run-manifest reference**
+- [x] **Step 2: Write the run-manifest reference**
 
 Create `references/run-manifest.md` containing exactly this schema and reconciliation rules:
 
@@ -233,7 +233,7 @@ after every single create attempt**, so a run killed mid-flight is resumable.
    someone else.
 ````
 
-- [ ] **Step 3: Rewrite Step 3's cap and dependency verification**
+- [x] **Step 3: Rewrite Step 3's cap and dependency verification**
 
 In the proposal step, add:
 
@@ -253,7 +253,7 @@ the link or ask the user for the right ref.
 
 Remove the now-duplicated verification sentence from Step 5 (approval gate), leaving the gate to cover only refs the *user* adds at the gate.
 
-- [ ] **Step 4: Rewrite Step 4 as client-side duplicate detection**
+- [x] **Step 4: Rewrite Step 4 as client-side duplicate detection**
 
 ```markdown
 ## Step 4: Duplicate check (client-side)
@@ -275,7 +275,7 @@ to confirm before creating anything else. Never silently skip and never
 silently duplicate.
 ```
 
-- [ ] **Step 5: Rewrite Step 6 (create) for manifest writes and rate limiting**
+- [x] **Step 5: Rewrite Step 6 (create) for manifest writes and rate limiting**
 
 ```markdown
 ## Step 6: Create tickets
@@ -300,7 +300,7 @@ next create. A run killed at any point is resumable from what is on disk.
   title in `error`; do not create it or its transitive dependents.
 ```
 
-- [ ] **Step 6: Update Step 7 (summary)**
+- [x] **Step 6: Update Step 7 (summary)**
 
 Add an `Already exists (<n>)` list to the three existing lists, and replace the closing paragraph:
 
@@ -311,7 +311,7 @@ and never re-created, and only `pending`, `failed` and `skipped` tickets are
 attempted.
 ```
 
-- [ ] **Step 7: Update the backend references**
+- [x] **Step 7: Update the backend references**
 
 In `references/github.md`, replace the "Search for duplicates" section with:
 
@@ -329,12 +329,12 @@ exactly `Source PRD: <slug>`. Do not put that string in `--search` with
 
 In `references/jira.md`, replace the JQL `text ~ "Source PRD: …"` search with a project-scoped fetch plus a local scan of each `description` for the literal line, with the same warning. Leave both files' create / list-open / verify sections otherwise unchanged.
 
-- [ ] **Step 8: Cut to fit and check line budget**
+- [x] **Step 8: Cut to fit and check line budget**
 
 Run: `wc -l plugins/kanban/skills/creating-tickets/SKILL.md`
 Expected: ≤ 275. Cut restated ticket-template prose and the long INVEST explanation to fit.
 
-- [ ] **Step 9: README + version**
+- [x] **Step 9: README + version**
 
 In README's kanban paragraph, state the **config side effect** explicitly: the first run in a project writes `.claude/kanban.config.json` (bootstrapped by the shared `config.js`) and offers to commit it. Also state the 15-slice cap, the run manifest at `docs/kanban/<slug>.run.json`, and that re-running is idempotent. Bump `plugins/kanban/.claude-plugin/plugin.json` to `1.1.0`.
 
@@ -345,7 +345,7 @@ Expected: passes.
 
 Then the **narration check**: dispatch a fresh sonnet subagent given ONLY `plugins/kanban/skills/creating-tickets/SKILL.md`, `references/run-manifest.md`, and `docs/contract.md`, asked to narrate a re-run of `/kanban` after a failure at ticket 7 of 12. It must describe loading the manifest, verifying and skipping tickets 1–6 as **Already exists**, and resuming at 7.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add plugins/kanban README.md

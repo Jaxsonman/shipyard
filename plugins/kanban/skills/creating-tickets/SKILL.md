@@ -12,43 +12,29 @@ even if it touches multiple layers (DB, API, UI) — as opposed to a
 horizontal slice ("all the backend," "all the frontend") that nothing can
 demo until every layer is done.
 
-## Step 1: Config check
+## Step 1: Preflight
 
-Look for `.claude/kanban.config.json` in the current project.
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.js" --stage kanban
 
-**If missing**, ask the user, one question at a time:
+Exit 0 → continue to Step 2. Exit 2 → usage error, stop.
 
-1. "Which board should tickets go to: GitHub or Jira?"
-2. If GitHub: "Which repo? (owner/repo format)"
-   If Jira: "Which Jira project key?"
+Exit 1 → read the JSON `reasons` array. If the only failure is the `config`
+check (id `config`), bootstrap the config: ask the user, one question at a
+time, which backend (`github` or `jira`) and the target (`owner/repo`, or the
+Jira project key), then run
 
-Write the answer to `.claude/kanban.config.json`:
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/config.js" bootstrap kanban --backend <github|jira> --target <o/r|KEY>
 
-```json
-{
-  "backend": "github",
-  "target": "owner/repo"
-}
-```
+(it normalizes `target` and stamps `"version": 1`; it never overwrites an
+existing file), and re-run preflight. Any other failure → print the reasons
+verbatim and stop.
 
-or
+Read the resulting config with
 
-```json
-{
-  "backend": "jira",
-  "target": "PROJECTKEY"
-}
-```
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/config.js" show kanban
 
-This file holds no secrets — auth is handled separately (`gh auth` for
-GitHub, an OAuth prompt on first Jira tool call for Jira). Commit it:
-
-```bash
-git add .claude/kanban.config.json
-git commit .claude/kanban.config.json -m "chore: configure kanban board target"
-```
-
-**If present**, read it and skip straight to Step 2 — never re-prompt.
+`backend` and `target` from that JSON drive every later step. The config
+schema is contract §12.1 — do not invent keys.
 
 ## Step 2: Read the PRD
 
@@ -94,6 +80,18 @@ exception, not the norm. A ticket may depend on:
 
 Reject cyclic dependencies at proposal time — if two slices each depend
 on the other, re-slice until the graph is acyclic.
+
+**Cap: at most 15 slices per run.** If the PRD yields more, propose the first
+15 (earliest phases first, respecting dependencies) and list the remainder as
+a **deferred batch** — title plus one line each — recorded in the manifest's
+`deferred[]`. Tell the user they get a second `/kanban <same PRD>` run for
+them once the first batch exists.
+
+**Verify each existing-ticket dependency as you propose it** — not at the
+gate. Before putting `Depends on: <ref>` on a slice, run the backend
+reference's "Verify a ticket exists" for that ref. A ref that fails
+verification is never proposed: say so in the proposal line and either drop
+the link or ask the user for the right ref.
 
 For each slice, write a ticket using this exact template:
 
@@ -145,16 +143,23 @@ Annotate each dependent ticket's line with `depends on:` — same-run
 siblings by their list number, existing board tickets by their real ref
 plus an `(existing)` marker.
 
-## Step 4: Duplicate check
+## Step 4: Duplicate check (client-side)
 
-Before creating anything, check whether tickets from this PRD already exist
-on the board. Read `references/github.md` or `references/jira.md`
-(whichever matches `config.backend`) for the exact search command, and
-search for the literal string `Source PRD: <slug>`.
+Two sources, in order:
 
-If any matches are found, tell the user what was found (titles + links) and
-ask them to confirm before proceeding — do not silently skip or silently
-create duplicates.
+1. **The run manifest** — `docs/kanban/<slug>.run.json`. If it exists, follow
+   `references/run-manifest.md` "Reconciling on a re-run".
+2. **The board** — list tickets from the backend reference ("List tickets for
+   duplicate detection") and filter **locally in the fetched JSON** for a body
+   line exactly equal to `Source PRD: <slug>` (contract §13).
+
+   Never push this string into a search qualifier. `in:body` on GitHub and
+   JQL `text ~` on Jira both tokenize on the colon and return wrong results —
+   fetch, then match the literal line yourself.
+
+Report matches as an **Already exists** list (title + link) and ask the user
+to confirm before creating anything else. Never silently skip and never
+silently duplicate.
 
 ## Step 5: Approval gate
 
@@ -163,38 +168,39 @@ edits (add, remove, reword slices). Only proceed to Step 6 once they approve
 the list as a whole. Do not create anything before this gate.
 
 This gate is also where the user adds, removes, or edits dependency
-links. Verify that any existing board ticket named as a dependency
-actually exists (read "Verify a ticket exists" in `references/github.md` or
-`references/jira.md`, whichever matches `config.backend`); a ref that fails
-verification is reported here and must be fixed or removed by the user
-before creation starts — never guessed at or silently dropped.
+links. Any existing-board ref the *user* adds here must pass the same
+"Verify a ticket exists" check from Step 3 before creation starts — never
+guessed at or silently dropped.
 
-## Step 6: Create tickets (best-effort)
+## Step 6: Create tickets
 
-Read `references/github.md` or `references/jira.md` (whichever matches
-`config.backend`) for the exact create command/tool call. Attempt every
-approved ticket whose dependencies succeeded, in dependency order, even if
-an unrelated ticket fails — do not stop the whole run on one failure.
+Write the manifest (`references/run-manifest.md`) with every approved slice as
+`state: "pending"` **before the first create**.
 
-Create tickets in dependency order — every ticket after the tickets it
-depends on; ties keep the proposed-list order. As each ticket is
-created, record its real number/key and substitute it into the
-`Depends on:` lines of its dependents before creating them.
+Create **sequentially**, one ticket at a time, in dependency order — never in
+parallel; concurrent creates trip GitHub's secondary rate limit. After each
+attempt, update that ticket's entry (`state`, `ref`, `url`, `error`,
+`createdAt`) and `updatedAt`, and **rewrite the manifest file** before the
+next create. A run killed at any point is resumable from what is on disk.
 
-If a ticket fails to create, do **not** create its dependents (or their
-dependents, transitively) — a dependent created without its
-`Depends on:` line would let downstream tooling start it too early.
-Record each one as skipped and continue best-effort with unrelated
-tickets.
-
-For each ticket, record whether it succeeded (with its URL) or failed (with
-the error message).
+- Skip any ticket already `state: "created"` — it exists.
+- Success → record `ref` and `url`, and substitute the real ref into the
+  `Depends on:` lines of its dependents before creating them.
+- Failure whose error names a **secondary rate limit** or asks you to retry →
+  wait 60 seconds and retry **once**. A second failure is a real failure.
+- Any other failure → `state: "failed"`, record the verbatim error, continue
+  with unrelated tickets.
+- A ticket whose dependency failed → `state: "skipped"` with the blocking
+  title in `error`; do not create it or its transitive dependents.
 
 ## Step 7: Summarize
 
-Report the results as three lists:
+Report the results as four lists:
 
 ```
+Already exists (<n>):
+- <title> — <url>
+
 Created (<n>):
 - <title> — <url>
 - <title> — <url>
@@ -206,7 +212,7 @@ Skipped (<n>):
 - <title> — dependency failed to create: <failed dep title>
 ```
 
-If anything failed, suggest the user re-run `/kanban` after fixing the
-underlying issue (e.g. re-authenticating) — re-running is safe because Step
-4's duplicate check will catch tickets that already succeeded, and the retry
-creates the failed and skipped remainder with correct `Depends on:` refs.
+Re-running `/kanban` with the same PRD is safe: the run manifest is the
+resume point — already-created tickets are reported under **Already exists**
+and never re-created, and only `pending`, `failed` and `skipped` tickets are
+attempted.

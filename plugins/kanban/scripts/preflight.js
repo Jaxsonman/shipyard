@@ -22,6 +22,9 @@ const USAGE = `Usage: node preflight.js --stage <prd|kanban|spec|plan|dev|qa|shi
   --json           Print only the JSON report (default: JSON on stdout, reasons on stderr).
   --quiet          Suppress the human-readable reasons.
 
+Stage pr additionally checks the ship:approved gate and reports an existing
+open PR for the branch (reported, never fatal).
+
 Exit codes: 0 all error-level checks passed, 1 one or more failed, 2 usage error.`;
 
 const STAGES = ['prd', 'kanban', 'spec', 'plan', 'dev', 'qa', 'ship', 'pr'];
@@ -82,6 +85,15 @@ function findGitRoot(dir) {
     const up = path.dirname(cur);
     if (up === cur) return null;
     cur = up;
+  }
+}
+
+/** Parse `gh --json` output. Returns null rather than throwing on garbage. */
+function safeJson(text) {
+  try {
+    return JSON.parse(String(text || ''));
+  } catch {
+    return null;
   }
 }
 
@@ -206,6 +218,8 @@ function preflight(opts = {}) {
   }
 
   // --- ticket-scoped checks ------------------------------------------------
+  /** The single feat/<id>-* branch, when exactly one matched. */
+  let resolvedBranch = null;
   const ticketScoped = TICKET_STAGES.includes(stage) && ticket !== null;
   if (!ticketScoped || !isRepo) {
     const why = !isRepo ? 'not a git repository'
@@ -242,6 +256,7 @@ function preflight(opts = {}) {
     }
 
     const branch = all.length === 1 ? all[0] : null;
+    resolvedBranch = branch;
 
     if (!branch) {
       skip('branch-divergence', 'warn', 'no single matching branch');
@@ -253,10 +268,16 @@ function preflight(opts = {}) {
       const counts = exec('git', ['rev-list', '--left-right', '--count', `${branch}...origin/${branch}`]);
       const [ahead, behind] = String(counts.stdout || '').trim().split(/\s+/).map(Number);
       const diverged = counts.code === 0 && (ahead > 0 && behind > 0);
-      add('branch-divergence', !diverged, diverged ? 'error' : 'warn',
+      // For pr, being merely *behind* is fatal too: the PR head would be
+      // origin/<branch>, so a merge check against the local ref would test a
+      // tree that is not the one the pull request proposes.
+      const behindOnly = stage === 'pr' && counts.code === 0 && !diverged && behind > 0;
+      add('branch-divergence', !diverged && !behindOnly,
+        (diverged || behindOnly) ? 'error' : 'warn',
         counts.code !== 0 ? `cannot compare ${branch} with origin/${branch}`
           : diverged ? `${branch} has diverged from origin/${branch}: ${ahead} ahead, ${behind} behind`
-            : `${branch} vs origin/${branch}: ${ahead || 0} ahead, ${behind || 0} behind`);
+            : behindOnly ? `${branch} is behind origin/${branch}: ${ahead || 0} ahead, ${behind} behind — the PR head would not be the tree that was merge-checked; fast-forward or pull first`
+              : `${branch} vs origin/${branch}: ${ahead || 0} ahead, ${behind || 0} behind`);
     }
 
     const wt = exec('git', ['worktree', 'list', '--porcelain']);
@@ -288,6 +309,13 @@ function preflight(opts = {}) {
       add('worktree-elsewhere', true, 'info',
         `branch ${branch} is checked out in this ticket's own worktree: ${holders[branch]} — resume it`,
         { resumeWorktree: holders[branch] });
+    } else if (stage === 'pr') {
+      // pr only reads the branch and pushes it; it works from whatever tree
+      // already holds it rather than creating a second one, so a holder that
+      // is not the conventional path is still information, not a block.
+      add('worktree-elsewhere', true, 'warn',
+        `branch ${branch} is checked out in another worktree: ${holders[branch]} — /pr will work from there`,
+        { path: holders[branch] });
     } else {
       add('worktree-elsewhere', false, 'error',
         `branch ${branch} is checked out in another worktree: ${holders[branch]}`,
@@ -301,6 +329,65 @@ function preflight(opts = {}) {
       add('worktree-collision', true, 'warn',
         takenBy ? `worktree path ${conventional} holds ${takenBy[0]}` : `worktree path ${conventional} is free`,
         { path: conventional });
+    }
+  }
+
+  // --- pr-stage gate (contract v1 §4: /pr consumes ship:approved) ---------
+  if (stage !== 'pr') {
+    skip('pr-gate', 'error', `stage ${stage} has no review gate`);
+    skip('pr-existing', 'warn', `stage ${stage} does not open pull requests`);
+  } else if (backend !== 'github') {
+    skip('pr-gate', 'error', `backend is ${backend} — the gate is checked through the Jira reference`);
+    skip('pr-existing', 'warn', `backend is ${backend} — no gh pr lookup`);
+  } else if (ticket === null) {
+    skip('pr-gate', 'error', 'no --ticket given');
+    skip('pr-existing', 'warn', 'no --ticket given');
+  } else if (!cfg || !cfg.target) {
+    skip('pr-gate', 'error', 'no target configured');
+    skip('pr-existing', 'warn', 'no target configured');
+  } else {
+    const target = String(cfg.target);
+    const view = exec('gh', ['issue', 'view', ticket, '--repo', target, '--json', 'labels']);
+    const parsed = view.code === 0 ? safeJson(view.stdout) : null;
+    if (view.code !== 0 || !parsed) {
+      add('pr-gate', false, 'error',
+        `cannot read the labels of ${target}#${ticket}: ${(view.stderr || view.stdout || 'unparseable gh output').trim()}`);
+    } else {
+      const names = (parsed.labels || []).map((l) => (typeof l === 'string' ? l : l && l.name)).filter(Boolean);
+      const shipLabels = names.filter((n) => String(n).startsWith('ship:'));
+      if (shipLabels.length > 1) {
+        add('pr-gate', false, 'error',
+          `${target}#${ticket} carries multiple ship:* labels: ${shipLabels.join(', ')} — resolve to one before continuing`);
+      } else if (shipLabels.includes('ship:approved')) {
+        add('pr-gate', true, 'error', `${target}#${ticket} carries ship:approved`, { mode: 'open' });
+      } else if (shipLabels.includes('ship:pr-open')) {
+        // A re-run after a partial failure (PR opened, comment or label step
+        // lost) must be able to finish the job rather than strand the board.
+        add('pr-gate', true, 'error',
+          `${target}#${ticket} is already ship:pr-open — reconcile the existing PR rather than opening another`,
+          { mode: 'reconcile' });
+      } else {
+        add('pr-gate', false, 'error',
+          `${target}#${ticket} is not ship:approved (current: ${shipLabels[0] || 'no ship:* label'}) — the review gate must approve the review packet first`);
+      }
+    }
+
+    if (!resolvedBranch) {
+      skip('pr-existing', 'warn', 'no single matching branch');
+    } else {
+      const list = exec('gh', ['pr', 'list', '--repo', target, '--head', resolvedBranch,
+        '--state', 'open', '--json', 'url,number']);
+      const prs = list.code === 0 ? safeJson(list.stdout) : null;
+      if (!Array.isArray(prs)) {
+        add('pr-existing', true, 'warn',
+          `could not list open PRs for ${resolvedBranch}: ${(list.stderr || 'unparseable gh output').trim()}`);
+      } else if (prs.length) {
+        add('pr-existing', true, 'warn',
+          `an open PR already exists for ${resolvedBranch}: ${prs[0].url} — reconcile it instead of opening another`,
+          { prUrl: prs[0].url, prNumber: prs[0].number });
+      } else {
+        add('pr-existing', true, 'warn', `no open PR for ${resolvedBranch}`);
+      }
     }
   }
 

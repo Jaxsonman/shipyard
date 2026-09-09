@@ -104,7 +104,9 @@ Standalone only:
   node "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.js" --stage dev --ticket <id> --base <baseBranch>
   ```
   Exit 0 → proceed, using its JSON `checks[]`. Exit 1 → refuse, quoting
-  `reasons[]` verbatim. Exit 2 → usage error — report and stop.
+  `reasons[]` verbatim — with one exception, the `worktree-elsewhere`
+  case immediately below, where the failing check names this ticket's own
+  worktree. Exit 2 → usage error — report and stop.
   - **Checked out elsewhere:** `worktree-elsewhere` failing means the
     branch is already checked out in another worktree (its `path`). If
     that path is the conventional

@@ -162,13 +162,15 @@ launch, and health — then continue to Step 5.
    a board comment or a report goes through this exact pipeline, capped
    at 50 lines; nothing unredacted ever leaves the artifacts dir.
 
-**`--env-check` mode stops here.** After health goes green, launch
-exactly one headless page against the resolved health URL with this
-plugin's Playwright MCP tools, then close it, and report **browser
-availability**: `available`, or `unavailable (<one-line cause>)` — e.g.
-Playwright missing, browser download blocked, navigation timeout. In
-`cli` mode there is no page to launch — report `browser: n/a (cli mode)`
-instead. Print the full report (resolved config, allocated port, health
+**`--env-check` mode stops here.** Launch exactly one headless page
+against the resolved health URL with this plugin's Playwright MCP tools,
+then close it, and report **browser availability**: `available`, or
+`unavailable (<one-line cause>)` — e.g. Playwright missing, browser
+download blocked, navigation timeout. Report it **on every path**: when
+health never went green, still launch the page so the answer separates
+"the browser is unavailable" from "the app did not start" — those need
+different fixes, and a ship run will hit both. In `cli` mode there is no
+page to launch — report `browser: n/a (cli mode)` instead. Print the full report (resolved config, allocated port, health
 result, redacted app-log tail, browser availability), tear down, and
 exit. No tests, no per-criterion E2E, no board comment. This is the
 debugging path and the way to run the first-run interview ahead of time
@@ -271,16 +273,21 @@ comment that it cannot advance a ticket.
    - **Evidence paths are machine-local.** The comment must say so in
      plain words (evidence under `.qa/` exists only on the machine that
      ran QA, not in the repo) — and paths alone are never sufficient.
-     For every **FAILING** criterion, inline the evidence directly in
-     the comment body, not just its path: the screenshot as an embedded
-     image where the backend renders one (GitHub: a base64 `data:` URI
-     `<img>` tag in the comment body; Jira: attach via the backend's
-     comment tool if it supports inline media, else fall back to the log
-     excerpt), or, when no screenshot exists or embedding fails, the
-     redacted excerpt —
-     `tail -n 50 <artifacts>/app.log | node "${CLAUDE_PLUGIN_ROOT}/scripts/redact.js"` —
-     in a fenced block. A reader with no access to the QA machine must
-     be able to act on the comment alone.
+     So for every **FAILING** criterion, inline the evidence itself in
+     the comment body, not just its path:
+     - the **key excerpt** in a fenced block — the failing assertion,
+       error or log lines, always through
+       `tail -n 50 <artifacts>/app.log | node "${CLAUDE_PLUGIN_ROOT}/scripts/redact.js"`;
+     - plus, for a screenshot, a one-to-three-line description of what it
+       shows at the assertion point (what was expected, what was on
+       screen instead). Do **not** embed the image as a base64 `data:`
+       URI: GitHub sanitizes those out of comment bodies, so it renders
+       as nothing and the evidence is silently lost. Uploading the file
+       is out of scope for a comment-only stage — keep the path for
+       whoever has the machine, and make the words carry the finding.
+
+     A reader with no access to the QA machine must be able to act on the
+     comment alone.
    - **Findings are findings, never solutions.** Symptom, repro steps,
      criterion violated, evidence path plus the inlined evidence above.
      The dev agent owns the how. Every finding must be reproducible by a

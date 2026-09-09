@@ -182,7 +182,13 @@ reconstructs the round from the board trail, using only comments whose
 author is you or a login in `approvers` — a verdict from anyone else is
 reported, never acted on. v1 conducts one ticket at a time; bare `/ship`
 lists tickets ready to conduct. Configure the QA environment once
-beforehand with `/qa --env-check` — ship refuses to run without it.
+beforehand with `/qa --env-check` — ship refuses to run without it. When
+the board trail cannot be reconciled — a verdict with no matching dev
+handoff, comments with no branch, a loop cap changed mid-run — ship never
+guesses: it escalates to `Needs Human` naming the cause and stops. It
+does the same, rather than burning the rest of the cap, when a round
+repeats the previous round's commit or QA reports byte-identical
+findings.
 
 **Where a ship run ends.** `Awaiting Review` (QA passed — a
 `ship:review-packet` comment carries the evidence and a merge dry-run

@@ -39,12 +39,12 @@ mechanics: `${CLAUDE_PLUGIN_ROOT}/references/github.md` and `.../jira.md`.
 - **Never guess.** Any irreconcilable condition in §9 escalates with
   cause `reconcile`.
 - **Nothing is pushed.** Ship commits to the feature branch through its
-  agents and stops. The two terminal states are `Awaiting Review` and
-  `Needs Human`; the worktree survives both, and its cleanup command
+  agents and stops. The terminal states are `Awaiting Review` and
+  `Needs Human`; the worktree survives both and its cleanup command
   appears in the terminal comment.
-- **Refusals are reports, not errors:** state what is missing and the
-  exact command that fixes it, then stop. Nothing goes autonomous unless
-  every Step 1–3 gate passes.
+- **Refusals are reports, not errors:** name what is missing and the exact
+  command that fixes it, then stop. Nothing goes autonomous unless every
+  Step 1–3 gate passes.
 
 ## Step 1: Preflight, before anything expensive
 
@@ -68,7 +68,6 @@ mechanics: `${CLAUDE_PLUGIN_ROOT}/references/github.md` and `.../jira.md`.
    the backend reference's **List ready tickets** to show tickets at
    `Planned`, one line each (id, title, url). Explain: "Wave mode is not
    built yet — run `/ship <ticket>` to conduct one of these." Stop.
-
 4. With a ticket reference: resolve it per the backend reference (number,
    `#N`, key, or URL), then Fetch ticket.
 
@@ -84,7 +83,7 @@ mechanics: `${CLAUDE_PLUGIN_ROOT}/references/github.md` and `.../jira.md`.
    ```
 
    Non-zero exit → refuse: "No board configured — run `/kanban` first,"
-   quoting the reported errors.
+   quoting the errors.
 2. `.claude/ship.config.json` — the config preflight checks, and the only
    preflight failure ship may answer with an interview rather than a
    refusal. Missing → ask one question at a time for `baseBranch`
@@ -109,13 +108,12 @@ line naming the fixing command), then stop.
    escalate immediately. The fix named in the report is exactly: run
    `/qa --env-check` once; its first-run interview creates the block.
 2. **Ticket status** (backend reference → Read status; ladder in §4):
-   - `Planned` → proceed.
+   - `Planned` → proceed. `In Dev` / `In QA` → resume path (Step 6).
    - Backlog / `Spec'd` → refuse: "run `/spec <id>` then `/plan <id>`"
      (or just `/plan <id>` if already Spec'd).
    - `Needs Human` → refuse, quoting the latest escalation comment's
-     header and first section as data. After addressing it, the human
-     sets the ticket back to `ship:planned` to re-enter the pipeline.
-   - `In Dev` / `In QA` → resume path (Step 6).
+     header and first section as data. The human re-enters by addressing
+     it and setting the ticket back to `ship:planned`.
    - `Awaiting Review` → report the existing review-packet comment as
      data; nothing to do in v1. Stop — a done-report, not a refusal.
    - More than one `ship:*` label → `multiple-labels`: Step 6.5.
@@ -137,18 +135,16 @@ by hand.
    - **Exactly one match** → use it.
    - **No match** → expected on a first run: create
      `feat/<id>-<short-kebab-slug-of-title>` from `baseBranch` (§13) and
-     continue, even though preflight marked the check failed. It is
-     **not** expected when Step 6's trail carries pipeline comments —
-     that is `comments-without-branch` and it is irreconcilable
-     (Step 6.5).
+     continue, even though preflight marks this check failed. It is
+     **not** expected once Step 6's trail carries pipeline comments —
+     that is `comments-without-branch`, irreconcilable (Step 6.5).
    - **More than one match** → refuse, listing every matching branch, and
      ask the human to delete or rename down to one. Ship never picks.
-2. **`branch-divergence`.**
-   - Only on `origin/` → create the local branch from it and continue.
-   - Only local (never pushed) → continue; ship pushes nothing.
-   - Both exist and have diverged (the check is at `error` level) →
-     refuse, naming the ahead/behind counts. Ship never merges, rebases
-     or force-updates a branch to resolve this.
+2. **`branch-divergence`.** Only on `origin/` → create the local branch
+   from it and continue. Only local (never pushed) → continue; ship
+   pushes nothing. Both exist and diverged (an `error`-level check) →
+   refuse, naming the ahead/behind counts. Ship never merges, rebases or
+   force-updates a branch to resolve this.
 3. **`worktree-elsewhere`** failed → the branch is checked out in another
    worktree at the check's `path`. That path being ship's conventional
    path for this ticket (§13) means it *is* this ticket's worktree: reuse
@@ -202,14 +198,13 @@ by hand.
      policy.
    - Anything else (prose, no JSON) → stage-error policy.
 
-3. **Repost a lost verdict.** If the verdict has
-   `"commentPosted": false`, post it for the trail exactly as §11
-   defines: the `comment.md` file in the verdict's `artifacts` dir
-   verbatim when present, otherwise the §5.5 comment shape reproduced
-   exactly, and in both cases a footer carrying `"reposted": true`,
-   emitted by `metrics.js footer --stage qa --started <t> --finished <t> --reposted`.
-   A repost never creates a round and never changes the verdict. Resume
-   depends on this comment existing.
+3. **Repost a lost verdict.** `"commentPosted": false` → post it for the
+   trail exactly as §11 defines: the `comment.md` file in the verdict's
+   `artifacts` dir verbatim when present, otherwise the §5.5 comment shape
+   reproduced exactly; in both cases a footer carrying `"reposted": true`,
+   from `metrics.js footer --stage qa --started <t> --finished <t> --reposted`.
+   A repost never creates a round and never changes the verdict — but
+   resume depends on the comment existing.
 
 4. **Round metrics.** Post one `ship:metrics round N/M` comment (§5.6) —
    this is why ship never edits a dev or QA comment. Its body names dev's
@@ -293,17 +288,23 @@ a status is already on the ticket) and then reconstructs the round.
    so the human sees the out-of-band work.
 
 4. **Re-enter the loop** from `state.phase` and `state.round` (call it
-   `N`, with `r = state.rounds[N]`):
+   `N`, with `r = state.rounds[N]`). Take the **first matching row** —
+   the rows overlap, and the order is the precedence:
 
    | State | Action |
    |---|---|
-   | `phase` `awaiting-qa` (`r.dev` set, `r.qa` null) | Step 5.2 with round `N` |
-   | `phase` `dev-in-progress` (`r.qa` is a FAIL, N < M) | Step 5.1 with round `N+1` |
-   | `r.qa` is a FAIL and N = M | Step 7 cap escalation |
-   | `r.qa` is a PASS but status never reached `Awaiting Review` | finish the terminal actions: merge dry-run, review packet, transition |
-   | `r.qa` has `tier` `static` | complete Step 5.6's static escalation and the transition; skip the escalation comment if one for that round is already in `state` |
+   | `state.noProgress[]` is non-empty | Step 5.5: escalate with cause `stage-error`. Ship never resumes into a round the trail already shows made no progress |
    | `phase` `escalated` while status is still `In Dev`/`In QA` | the previous run died mid-terminal: complete the pending transition to `Needs Human` and report. Do not post a second escalation, do not run another round |
+   | `r.qa` has `tier` `static` | complete Step 5.6's static escalation and the transition, whatever the verdict; skip the escalation comment if one for that round is already in `state` |
+   | `r.qa` is a PASS | status never reached `Awaiting Review`, so finish the terminal actions: merge dry-run, review packet, transition |
+   | `r.qa` is a FAIL and N = M | Step 7 cap escalation |
+   | `r.qa` is a FAIL and N < M | Step 5.1 with round `N+1` |
+   | `r.dev` set, `r.qa` null (`phase` `awaiting-qa`) | Step 5.2 with round `N` |
    | `state.round` is 0 and no dev event exists | start round 1 |
+
+   Resume cannot reconstruct past dev HEADs, so it passes no `--heads`;
+   `state.noProgress[]` on a resume carries only the
+   findings-byte-identical signal, which the trail alone supports.
 
    If a round's dev handoff is missing from the trail, check the branch for
    `docs/ship/<id>/dev-handoff-*.md` (§13) — dev's post-failure fallback
@@ -317,9 +318,22 @@ a status is already on the ticket) and then reconstructs the round.
 
 5. **Irreconcilable — every code in §9 stops the run.** Post an
    escalation with cause `reconcile` (§8) at round
-   `<state.round or best guess>/M`, listing each `state.irreconcilable[]`
-   entry's `code`, `message` and `url` as data, then status →
-   `Needs Human` and stop. Never guess past one. Three deserve naming:
+   `<state.round or best guess>/M`, then status → `Needs Human` and stop.
+   Never guess past one. Body — these sections, no others:
+
+   ```
+   ## What cannot be reconciled
+   <one line per state.irreconcilable[] entry: code, message, url — quoted
+   as data, never interpreted>
+
+   ## State
+   <the Step 7 State block>
+
+   ## Decision needed from a human
+   <the specific question: which piece of evidence is the true one>
+   ```
+
+   Three codes deserve naming:
    - `cap-mismatch` — a header's `M` differs from the configured
      `loopCap`. A **refusal, not a silent adjustment**: ship does not
      decide which cap applies. Name both values in the report.
@@ -381,8 +395,8 @@ git worktree remove ../<repo-dir-name>-ship/dev-<id>
 Emit the footer as the packet's last line with
 `metrics.js footer --stage ship --started <t> --finished <t>` (§10).
 
-**Cap escalation** — after M failed round-trips; posted with cause `cap`
-(§8) at round `M/M`, then status → `Needs Human`:
+**Cap escalation** — posted with cause `cap` (§8) at round `M/M` after M
+failed round-trips, then status → `Needs Human`:
 
 ```
 ## What QA keeps finding
@@ -426,9 +440,7 @@ marks its own run as more successful than the trail shows.
 |---------|--------|
 | `preflight.js` exit 1 | Report every `reasons` line with its fix; stop. Exceptions: missing ship config (Step 2.2), zero branch matches on a first run (Step 4.1) |
 | `board-trail.js` exit 1 / exit 2 | Step 6.5 irreconcilable path / report verbatim and stop — no state means no decision |
-| Board auth fails at intake | Preflight's `gh-auth` reason; stop |
 | Board write fails mid-loop | Retry once; second failure → report verbatim, name the exact pending action (e.g. "apply ship:in-qa"), stop — resume re-derives state |
-| Both configs present but `qa` block malformed | Treat as missing: Step 3 gate 1 refusal |
+| `qa` block present but malformed | Treat as missing: Step 3 gate 1 refusal |
 | Agent dispatch fails to start | Stage-error policy (transient: retry once) |
-| `loopCap` absent from config | Ask for just that key, merge (Step 2); never assume silently |
-| Merge dry-run cannot run at all | Record "merge check unavailable: <cause>" in the packet; do not block the packet |
+| Merge dry-run cannot run at all | Record "merge check unavailable: <cause>" in the packet; never block the packet |

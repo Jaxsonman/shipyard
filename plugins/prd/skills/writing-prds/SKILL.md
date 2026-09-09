@@ -14,21 +14,34 @@ Run before asking anything:
 
     node "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.js" --stage prd
 
-Exit 0 → continue. Exit 1 → print the `reasons` array from the JSON verbatim,
-tell the user how to fix them (usually `gh auth login`, or running inside a
-git repository), and stop. Exit 2 → report the usage error and stop.
+Exit 2 → report the usage error and stop. Exit 0 → continue.
 
-## Step 2: Slug and existing-PRD check
+Exit 1 → read the JSON `checks[]` array (ids live there, not in `reasons[]`).
+A failing check with id `gh-installed`, `gh-auth` or `repo-access` is only
+**advisory** at this stage — writing a PRD is purely local and touches no
+board. Mention it once ("the board stages will need `gh auth login`") and
+continue the interview. If some other check failed, print those checks'
+`message` values verbatim and stop.
 
-Derive today's date and a short kebab-case slug from the idea; the PRD path
-is `docs/prd/<YYYY-MM-DD>-<slug>.md` (contract §13).
+## Step 2: Resume, slug and existing-PRD check
 
-- If that file already exists, **stop and ask** which the user wants:
-  **revise** it (read it in as the starting draft), **write a new slug**
-  (they supply it), or **abort**. Never overwrite without an explicit answer.
-- If `docs/prd/<YYYY-MM-DD>-<slug>.draft.md` exists, an earlier interview was
-  interrupted: show the answers captured so far and ask whether to **resume**
-  from the next unanswered area or **start over** (deleting the draft).
+**First, look for an interrupted draft.** Glob `docs/prd/*.draft.md` (every
+date, not just today's). If one or more exist, list each with its captured
+idea/topic and offer: **resume** (adopt that draft's date and slug — do not
+re-derive them — and continue from its `next=` area), **start over** (delete
+the chosen draft), or **ignore and start a new PRD**. A draft is never
+committed — this is the only way to recover one.
+
+If the user starts fresh (no draft resumed), derive today's date and a short
+kebab-case slug from the idea; the PRD path is
+`docs/prd/<YYYY-MM-DD>-<slug>.md` (contract §13).
+
+- Glob `docs/prd/*-<slug>.md` (any date). Any match is an existing PRD for
+  this slug — **stop and ask**: **revise** it (read it in as the starting
+  draft), **write a new slug** (they supply it), or **abort**. Never
+  overwrite without an explicit answer — `kanban` derives its `Source PRD:`
+  slug from the filename, so two dated files for one product would produce
+  two unrelated slugs and a duplicate ticket set.
 
 ## Interview rules
 

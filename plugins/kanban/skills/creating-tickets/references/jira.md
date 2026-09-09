@@ -15,14 +15,21 @@ Call `mcp__plugin_kanban_atlassian__searchJiraIssuesUsingJql` with:
 
 ```json
 {
-  "jql": "project = \"<TARGET>\""
+  "jql": "project = \"<TARGET>\"",
+  "maxResults": 100,
+  "startAt": 0
 }
 ```
 
-fetching `key`, `summary` and `description` for each result. Filter **locally**
-for issues whose `description` contains a line exactly `Source PRD: <slug>`.
-Do not put that string in the JQL as `text ~ "Source PRD: <slug>"` — JQL
-tokenizes on the colon and the result is wrong.
+fetching `key`, `summary` and `description` for each result. Repeat the call,
+incrementing `startAt` by 100 each time, until a page returns fewer than 100
+issues — scanning every page's `description` locally as it comes back.
+Never report "no duplicates found" until every page has been scanned.
+
+Filter **locally** for issues whose `description` contains a line exactly
+`Source PRD: <slug>`. Do not put that string in the JQL as
+`text ~ "Source PRD: <slug>"` — JQL tokenizes on the colon and the result is
+wrong.
 
 Report matches using each issue's key + a
 `https://<their-site>.atlassian.net/browse/<key>` link, or whatever URL shape
@@ -85,7 +92,7 @@ Each returned issue's key (e.g. `PROJ-12`) is the ref used in
 `Depends on:` lines, and the summaries are what Step 3 scans when deciding
 whether a new slice plausibly builds on existing work.
 
-## Verify a ticket exists (Step 5 of SKILL.md)
+## Verify a ticket exists (Step 3 of SKILL.md)
 
 Call `mcp__plugin_kanban_atlassian__searchJiraIssuesUsingJql` with:
 
@@ -98,3 +105,6 @@ Call `mcp__plugin_kanban_atlassian__searchJiraIssuesUsingJql` with:
 A non-empty result confirms the ref exists; any status counts — a
 dependency on a Done ticket is already satisfied. An empty result means
 the ref is wrong and must be fixed or removed at the gate.
+
+Also used at the Step 5 gate, to verify any existing-board ref the user adds
+there.

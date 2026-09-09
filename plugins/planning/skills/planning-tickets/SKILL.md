@@ -12,8 +12,8 @@ A per-ticket Engineer session, heavily human-driven. Output:
 Backend mechanics live in `../../references/github.md` and
 `../../references/jira.md` (relative to this skill's directory). Whenever a
 step says "via the backend reference," read the file matching
-`config.backend` and follow its named operation exactly (auth check, fetch
-ticket, edit ticket body, set status, post comment).
+`config.backend` and follow its named operation exactly (fetch ticket, edit
+ticket body, set status, post comment).
 
 ## Step 1: Preflight and ticket
 
@@ -21,15 +21,18 @@ ticket, edit ticket body, set status, post comment).
 
 Exit 0 → continue. Exit 2 → usage error, stop.
 
-Exit 1 → if the only failing check is `config`, bootstrap it (ask backend and
+Exit 1 → read the JSON `checks[]` array (ids live there, not in `reasons[]`).
+If the only failing check has id `config`, bootstrap it (ask backend and
 target, one question at a time, then
-`node "${CLAUDE_PLUGIN_ROOT}/scripts/config.js" bootstrap kanban --backend <b> --target <t>`)
-and re-run preflight; otherwise print the `reasons` verbatim and stop.
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/config.js" bootstrap kanban --backend <b> --target <t>`,
+printing any `notes` the script returned verbatim) and re-run preflight;
+otherwise print the `reasons` verbatim and stop.
 
 Read the config with `node "${CLAUDE_PLUGIN_ROOT}/scripts/config.js" show kanban`
-(schema: contract §12.1). Then resolve the user's ticket reference to the
-canonical `<id>` per the backend reference, and fetch the ticket. Fetch
-failure → report the exact error and stop.
+— `.kanban.backend` and `.kanban.target` (schema: contract §12.1). Then
+resolve the user's ticket reference to the canonical `<id>` per the backend
+reference, and fetch the ticket. Fetch failure → report the exact error and
+stop.
 
 Capture the stage start now — it goes in the comment's metrics footer:
 

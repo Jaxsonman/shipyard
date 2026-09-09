@@ -39,7 +39,12 @@ Colours and descriptions are contract §4 — copy them from
 `references/contract.md`, never retype them.
 
 1. Ensure the target label exists (idempotent — `--force` updates an
-   existing label instead of erroring):
+   existing label instead of erroring). The `--description` value below is
+   **static and repo-global** — one label serves every ticket. Substitute
+   `<owner/repo>` in `--repo`, but leave `<id>` in the description **literal**
+   text, exactly as contract §4 prints it — do not substitute the current
+   ticket's id into it. Never change the description text itself; it must
+   stay byte-identical to contract §4:
 
    ```bash
    gh label create "ship:specced" --repo <owner/repo> --color "1D76DB" --description "Spec approved — see docs/ship/<id>/spec.md" --force

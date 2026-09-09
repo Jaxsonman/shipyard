@@ -194,7 +194,10 @@ body links the ticket, spec and plan, quotes the latest trusted QA verdict
 and review packet, and carries `Closes #42`. The ticket moves to
 `PR Open`; your CI/CD takes over and the issue closes when the PR merges.
 Re-running `/pr 42` is safe — an already-open PR for the branch is
-reconciled, never duplicated. **`pr` is the only stage in the whole
+reconciled, never duplicated, and a ticket already at `PR Open` is
+reconciled rather than refused. A merge-conflict escalation is recoverable:
+the comment names the command that restores `ship:approved` once the
+rebase is done, so the ticket does not have to go back through the loop. **`pr` is the only stage in the whole
 pipeline that pushes**; every other stage works locally. Jira is
 best-effort: the ticket side goes through the Atlassian MCP server, the PR
 is still opened with `gh`, and Jira comments carry no metrics footer.

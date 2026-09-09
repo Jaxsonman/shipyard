@@ -7,6 +7,18 @@ claims/resume, per `docs/superpowers/reviews/2026-07-23-feature-pipeline-archite
 **Scope:** Architecture for Shipyard stages 3–6. This is an umbrella design:
 each deliverable listed in Build Order gets its own spec → plan → build cycle.
 
+**Status 2026-09-09** (per the hardening program, `docs/superpowers/specs/2026-09-08-hardening-program-design.md`):
+
+- **Built:** the `pr` stage (Exit: PR, below); the human review gate now
+  produces `ship:approved` via `ship:awaiting-review` (not a closed issue),
+  consumed by `pr`; contract v1 (`docs/contract.md`) replaces this
+  document's prose header/label/state definitions as the normative wire
+  protocol; the six shared scripts under `shared/scripts/`; the
+  `dashboard` plugin (board-wide Timeline, stats, guarded approve/reassign).
+- **Deferred:** wave mode and dependency-scheduled parallel runs; the
+  multi-session claim protocol (`ship:claim`); the `cicd` stage; Jira
+  parity (dashboard/metrics remain GitHub-only); hotfix intake.
+
 ## Purpose
 
 Extend Shipyard from "idea → tickets on a board" into a full SDLC factory:

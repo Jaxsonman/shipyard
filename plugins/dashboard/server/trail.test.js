@@ -67,6 +67,29 @@ test('parseTrail orders segments by STAGE_ORDER and reports lastActivity', () =>
   assert.equal(t.lastActivity, Date.parse('2026-08-11T09:00:00Z'));
 });
 
+test('parseLogEntries keeps only ship: pipeline headers, splitting header/body and stripping leading blanks', () => {
+  const out = trail.parseLogEntries([
+    mk('ship:dev round 1/3\n\nDid the thing.', '2026-08-10T15:40:00Z'),
+    mk('unrelated human comment', '2026-08-10T16:00:00Z'),
+    mk('ship:qa verdict full', '2026-08-10T17:00:00Z'),
+    mk('ship:escalation cap round 3/3\n\n## What QA keeps finding\nstuff', '2026-08-10T18:00:00Z'),
+  ]);
+  assert.equal(out.length, 3);
+  assert.equal(out[0].header, 'ship:dev round 1/3');
+  assert.equal(out[0].body, 'Did the thing.');
+  assert.equal(out[0].at, Date.parse('2026-08-10T15:40:00Z'));
+  assert.equal(out[1].header, 'ship:qa verdict full');
+  assert.equal(out[1].body, '');
+  assert.equal(out[2].header, 'ship:escalation cap round 3/3');
+  assert.equal(out[2].body, '## What QA keeps finding\nstuff');
+});
+
+test('parseLogEntries returns null at for an unparseable createdAt', () => {
+  const out = trail.parseLogEntries([mk('ship:qa verdict full', 'not-a-date')]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].at, null);
+});
+
 test('parseTrail on an empty trail returns no segments and null lastActivity', () => {
   const t = trail.parseTrail([]);
   assert.deepEqual(t.segments, []);

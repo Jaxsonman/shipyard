@@ -84,15 +84,46 @@ function buildRow(ticket, ctx) {
     };
   });
 
+  const updatedAt = Date.parse(ticket.updatedAt);
+  // Never fall back to `now`: a comment-less ticket with no parseable
+  // updatedAt has unknown activity, not activity as of this instant — falling
+  // back to `now` would sort it above every ticket with real activity.
+  const lastActivity = t.lastActivity !== null
+    ? t.lastActivity
+    : (Number.isNaN(updatedAt) ? 0 : updatedAt);
+
+  // The board can say a ticket is in stage X (via CURRENT_STAGE_FOR) before
+  // the trail has any comment evidence for X — the normal state right after
+  // ship transitions a ticket into Dev or QA. Synthesize a zero-width
+  // 'current' marker for that stage so the timeline bar and running pulse
+  // show up immediately, instead of waiting for the first pipeline comment.
+  if (
+    currentStage
+    && stage !== 'Backlog'
+    && stage !== 'Needs Human'
+    && !segments.some((s) => s.stage === currentStage)
+  ) {
+    const synthetic = {
+      stage: currentStage,
+      round: null,
+      start: lastActivity,
+      end: lastActivity,
+      estimated: true,
+      state: 'current',
+      tokensIn: null,
+      tokensOut: null,
+      durationLabel: null,
+      tokensLabel: null,
+    };
+    let insertAt = segments.findIndex((s) => trail.STAGE_ORDER.indexOf(s.stage) > currentIndex);
+    if (insertAt === -1) insertAt = segments.length;
+    segments.splice(insertAt, 0, synthetic);
+  }
+
   const running = RUNNING_STAGES.has(stage)
     && segments.length > 0
     && segments[segments.length - 1].stage === stage
     && segments[segments.length - 1].state === 'current';
-
-  const updatedAt = Date.parse(ticket.updatedAt);
-  const lastActivity = t.lastActivity !== null
-    ? t.lastActivity
-    : (Number.isNaN(updatedAt) ? ctx.now : updatedAt);
 
   return {
     id: `${projectId}#${ticket.number}`,

@@ -12,6 +12,15 @@ const { stageFromLabels, priorityFromLabels, createBoard, repoFromPath } = requi
 const fixtures = require('./fixtures.js');
 const timeline = require('./timeline.js');
 const stats = require('./stats.js');
+const trail = require('./trail.js');
+
+// gatherRows() fans out one `gh` call per open issue plus one per ticket
+// detail; /api/timeline and /api/stats each call it, so a naive
+// implementation doubles that fan-out on every poll of both views. Cache the
+// built rows per project id for a few seconds and de-dupe concurrent
+// in-flight fetches so two back-to-back requests for the same project share
+// one fan-out.
+const ROW_CACHE_TTL_MS = 3000;
 
 const DETAIL_CONCURRENCY = 5;
 
@@ -45,8 +54,6 @@ const CONTENT_TYPES = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
 };
-
-const LOG_HEADER_RE = /^ship:(dev|qa|review-packet|escalation)/;
 
 function defaultConfigPath() {
   return path.join(os.homedir(), '.claude', 'shipyard-dashboard.json');
@@ -303,7 +310,30 @@ function createApp(opts = {}) {
   // issue with bounded concurrency so a large board doesn't spawn hundreds
   // of `gh` processes at once. A single bad ticket degrades to a
   // list-derived row instead of failing the whole response.
+  const rowCache = new Map(); // projectId -> { data, expiresAt }
+  const rowCachePending = new Map(); // projectId -> Promise<data>
+
   async function gatherRows(projectId) {
+    const key = projectId || 'all';
+    const cached = rowCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.data;
+    if (rowCachePending.has(key)) return rowCachePending.get(key);
+
+    const pending = gatherRowsUncached(key)
+      .then((data) => {
+        rowCache.set(key, { data, expiresAt: Date.now() + ROW_CACHE_TTL_MS });
+        rowCachePending.delete(key);
+        return data;
+      })
+      .catch((err) => {
+        rowCachePending.delete(key);
+        throw err;
+      });
+    rowCachePending.set(key, pending);
+    return pending;
+  }
+
+  async function gatherRowsUncached(projectId) {
     const config = await loadConfig();
     const projectFilter = projectId || 'all';
     const projects =
@@ -397,18 +427,15 @@ function createApp(opts = {}) {
     }
 
     const comments = issue.comments || [];
-    const logs = comments
-      .filter((c) => LOG_HEADER_RE.test((c.body || '').split('\n')[0]))
-      .map((c) => {
-        const firstNewline = c.body.indexOf('\n');
-        const header = firstNewline === -1 ? c.body : c.body.slice(0, firstNewline);
-        const rest = firstNewline === -1 ? '' : c.body.slice(firstNewline + 1).replace(/^\n+/, '');
-        return { header, body: rest, createdAt: c.createdAt };
-      });
-    const timeline = buildTimeline(comments, entry.stage);
+    const logs = trail.parseLogEntries(comments).map((e) => ({
+      header: e.header,
+      body: e.body,
+      createdAt: e.at === null ? null : new Date(e.at).toISOString(),
+    }));
+    const ticketTimeline = buildTimeline(comments, entry.stage);
 
     sendJson(res, 200, {
-      ticket: { ...entry, body: issue.body, spec, plan, logs, timeline },
+      ticket: { ...entry, body: issue.body, spec, plan, logs, timeline: ticketTimeline },
     });
   }
 

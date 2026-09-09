@@ -75,6 +75,59 @@ test('buildRow flags a Backlog ticket and gives it no current segment', () => {
   assert.equal(row.lastActivity, Date.parse('2026-08-01T00:00:00Z'));
 });
 
+test('buildRow falls back lastActivity to 0 (not now) for a comment-less ticket with an unparseable updatedAt, sorting it last', () => {
+  const stale = timeline.buildRow(
+    { number: 1, title: 'ancient', url: 'u', updatedAt: 'not-a-date', labels: [], comments: [] },
+    { projectId: 'core', projectName: 'Core', now: NOW }
+  );
+  assert.equal(stale.lastActivity, 0);
+  assert.notEqual(stale.lastActivity, NOW);
+
+  const out = timeline.buildBoardTimeline({
+    now: NOW,
+    projects: [{ id: 'core', name: 'Core' }],
+    tickets: [
+      { project: 'core', number: 1, title: 'ancient', url: 'u', updatedAt: 'not-a-date', labels: [], comments: [] },
+      { project: 'core', ...devTicket, number: 2 },
+    ],
+  });
+  assert.deepEqual(out.rows.map((r) => r.id), ['core#2', 'core#1']);
+});
+
+test('buildRow synthesizes a current segment for ship:in-qa when only a dev footer exists', () => {
+  const row = timeline.buildRow({
+    number: 90, title: 'freshly QA', url: 'u', updatedAt: '2026-08-11T13:00:00Z',
+    labels: [{ name: 'ship:in-qa' }],
+    comments: [
+      mk('ship:dev round 1/3\n' + M({ stage: 'dev', started: '2026-08-11T12:00:00Z', finished: '2026-08-11T13:00:00Z', tokens_in: 900, tokens_out: 90 }), '2026-08-11T13:00:00Z'),
+    ],
+  }, { projectId: 'core', projectName: 'Core', now: NOW });
+  assert.equal(row.stage, 'QA');
+  assert.deepEqual(row.segments.map((s) => [s.stage, s.state]), [['Dev', 'past'], ['QA', 'current']]);
+  const qaSeg = row.segments[row.segments.length - 1];
+  assert.equal(qaSeg.estimated, true);
+  assert.equal(qaSeg.start, row.lastActivity);
+  assert.equal(qaSeg.end, row.lastActivity);
+  assert.equal(qaSeg.tokensIn, null);
+  assert.equal(row.running, true);
+});
+
+test('buildRow does not synthesize a current segment for a Backlog ticket', () => {
+  const row = timeline.buildRow(
+    { number: 91, title: 'idea', url: 'u', updatedAt: '2026-08-01T00:00:00Z', labels: [], comments: [] },
+    { projectId: 'core', projectName: 'Core', now: NOW }
+  );
+  assert.equal(row.stage, 'Backlog');
+  assert.deepEqual(row.segments, []);
+});
+
+test('buildRow does not synthesize when a segment for the current stage already exists', () => {
+  const row = timeline.buildRow(devTicket, { projectId: 'core', projectName: 'Core', now: NOW });
+  assert.equal(row.stage, 'Dev');
+  assert.deepEqual(row.segments.map((s) => s.stage), ['Spec', 'Dev']);
+  assert.equal(row.segments.filter((s) => s.stage === 'Dev').length, 1);
+});
+
 test('buildBoardTimeline groups by project and sorts by last activity descending', () => {
   const out = timeline.buildBoardTimeline({
     now: NOW,

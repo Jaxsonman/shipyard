@@ -18,6 +18,11 @@ const ESCALATION_CAUSES = ['cap', 'static', 'stage-error', 'reconcile'];
 const ESCALATION_RE = /^ship:escalation\s+(cap|static|stage-error|reconcile)\s+round\s+(\d+)\s*\/\s*(\d+)/;
 const ANY_ESCALATION_RE = /^ship:escalation\b/;
 
+// Matches a pipeline-log comment's first line (the Logs tab in the ticket
+// drawer). Kept alongside the other header patterns so this is the only
+// place in the codebase that inspects a comment body.
+const LOG_HEADER_RE = /^ship:(dev|qa|review-packet|escalation)/;
+
 // First matching pattern wins per stage; `round` is null when the header carries none.
 const HEADER_PATTERNS = [
   { stage: 'Spec', re: /^📋 Spec approved/ },
@@ -192,6 +197,28 @@ function parseTrail(comments) {
   return { segments, escalations, lastActivity };
 }
 
+/**
+ * Extracts pipeline-log entries (the ticket drawer's Logs tab) from a list of
+ * comments: only comments whose first line matches a ship: pipeline header
+ * (dev/qa/review-packet/escalation) are included.
+ * @param {Array<{body: string, createdAt: string}>} comments
+ * @returns {Array<{header: string, body: string, at: number|null}>}
+ */
+function parseLogEntries(comments) {
+  const out = [];
+  for (const comment of comments || []) {
+    const body = comment && typeof comment.body === 'string' ? comment.body : '';
+    const firstLine = body.split('\n')[0];
+    if (!LOG_HEADER_RE.test(firstLine)) continue;
+    const firstNewline = body.indexOf('\n');
+    const header = firstNewline === -1 ? body : body.slice(0, firstNewline);
+    const rest = firstNewline === -1 ? '' : body.slice(firstNewline + 1).replace(/^\n+/, '');
+    const at = Date.parse(comment && comment.createdAt);
+    out.push({ header, body: rest, at: Number.isNaN(at) ? null : at });
+  }
+  return out;
+}
+
 module.exports = {
   STAGE_ORDER,
   STAGE_KEY_TO_LABEL,
@@ -200,4 +227,5 @@ module.exports = {
   parseStageEvents,
   parseEscalations,
   parseTrail,
+  parseLogEntries,
 };

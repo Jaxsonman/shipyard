@@ -63,6 +63,21 @@ test('buildStats throughput counts only tickets reaching review inside the windo
   assert.equal(out.throughput.perWeek, 0.3);
 });
 
+test('buildStats does not count a stale Review segment just because the row got a recent comment', () => {
+  // The Review segment itself is 130 days old — well outside the 28-day
+  // throughput window — but the row's lastActivity is 1 day old (some
+  // unrelated recent comment). Throughput must key off the segment's own
+  // start, never substitute row.lastActivity for it.
+  const out = stats.buildStats({ now: NOW, rows: [
+    row({
+      stage: 'Awaiting Review',
+      lastActivity: NOW - DAY,
+      segments: [{ stage: 'Review', start: NOW - 130 * DAY, end: NOW - 130 * DAY + HOUR, estimated: false, tokensIn: 0, tokensOut: 0 }],
+    }),
+  ] });
+  assert.equal(out.throughput.reached, 0);
+});
+
 test('buildStats counts an Awaiting Review ticket with no Review segment as reached', () => {
   const out = stats.buildStats({ now: NOW, rows: [row({ stage: 'Awaiting Review', lastActivity: NOW - DAY })] });
   assert.equal(out.throughput.reached, 1);

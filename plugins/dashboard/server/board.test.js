@@ -30,6 +30,25 @@ test('approve: allowed transitions only', async () => {
   await assert.rejects(() => board.approve('o/r', 42, 'Dev'), /approve not available/);
 });
 
+test('listTickets requests a high explicit limit instead of gh\'s default 30', async () => {
+  const calls = [];
+  const fake = async (cmd, args) => { calls.push([cmd, ...args]); return '[]'; };
+  const board = createBoard(fake);
+  await board.listTickets('o/r');
+  assert.ok(calls[0].includes('--limit'));
+  assert.strictEqual(calls[0][calls[0].indexOf('--limit') + 1], '1000');
+});
+
+test('getTicket requests updatedAt in the detail field list', async () => {
+  const calls = [];
+  const fake = async (cmd, args) => { calls.push([cmd, ...args]); return '{}'; };
+  const board = createBoard(fake);
+  await board.getTicket('o/r', 42);
+  const jsonFlagIdx = calls[0].indexOf('--json');
+  const fields = calls[0][jsonFlagIdx + 1].split(',');
+  assert.ok(fields.includes('updatedAt'));
+});
+
 test('repoFromPath parses ssh and https remotes', async () => {
   assert.strictEqual(await repoFromPath('/x', async () => 'git@github.com:acme/app.git\n'), 'acme/app');
   assert.strictEqual(await repoFromPath('/x', async () => 'https://github.com/acme/app\n'), 'acme/app');

@@ -39,12 +39,25 @@ resolves a directory argument as a module specifier.
 
 ## Architecture
 
-`server/trail.js` is the single place comment bodies are parsed — metrics blocks, stage-handoff headers, and escalation headers all go through it and come out as one normalized trail. Every other module (`metrics.js`, and later `timeline.js`/`stats.js`) consumes `trail.parseTrail()` output instead of parsing comment bodies itself.
+`server/trail.js` is the single place comment bodies are parsed — metrics blocks, stage-handoff headers, escalation headers, and pipeline-log entries (`trail.parseLogEntries`, used for the ticket drawer's Logs tab) all go through it and come out as one normalized trail. Every other module (`metrics.js`, `timeline.js`, `stats.js`, and `server.js` itself) consumes `trail.js`'s exports instead of parsing comment bodies itself.
 
 - `web/timeline-scale.js` — pure time-scale math for the board-wide Timeline
   (zoom presets, domain resolution, pan clamping, gridline ticks, segment →
   pixel-rect projection). It touches no DOM, so it is unit-tested under
-  `node --test` alongside the server modules. Gridlines are placed on the
+  `node --test` alongside the server modules.
+- `web/pipeline-stats.js` — the pipeline-stats strip's math (percentile,
+  `buildStats`, stage keys, the throughput window), in the same dual-mode
+  shape as `timeline-scale.js` so the browser can recompute the strip over
+  the currently visible row set without loading server code. `server/stats.js`
+  is a one-line re-export of this file.
+- `server/board.js` lists open issues with an explicit `gh issue list --limit
+  1000` (gh's own default is 30, which silently truncated real boards), and
+  its `gh` invocations carry a 20s timeout so a wedged `gh` process rejects
+  instead of hanging the request indefinitely.
+- `server.js`'s `gatherRows(projectId)` — the shared row-building step behind
+  both `/api/timeline` and `/api/stats` — caches its result per project id
+  for 3 seconds and de-dupes concurrent in-flight calls, so two back-to-back
+  polls of both views cost one `gh` fan-out instead of two. Gridlines are placed on the
   **local** wall-clock grid with the UTC offset re-derived at every tick, so a
   window spanning a daylight-saving transition keeps day steps on local
   midnight instead of sliding an hour.

@@ -42,7 +42,11 @@ function priorityFromLabels(labels) {
 
 function defaultExecFile(cmd, args) {
   const run = promisify(execFileCb);
-  return run(cmd, args, { maxBuffer: 10 * 1024 * 1024 }).then((r) => r.stdout);
+  return run(cmd, args, {
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: 20000,
+    killSignal: 'SIGKILL',
+  }).then((r) => r.stdout);
 }
 
 function createBoard(execFile) {
@@ -57,6 +61,8 @@ function createBoard(execFile) {
         repo,
         '--state',
         'open',
+        '--limit',
+        '1000',
         '--json',
         'number,title,labels,assignees,updatedAt,url',
       ]);
@@ -71,7 +77,7 @@ function createBoard(execFile) {
         '--repo',
         repo,
         '--json',
-        'number,title,body,labels,state,url,comments,assignees',
+        'number,title,body,labels,state,url,comments,assignees,updatedAt',
       ]);
       return JSON.parse(stdout);
     },

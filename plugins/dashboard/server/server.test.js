@@ -1,5 +1,9 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { setTimeout: sleep } = require('node:timers/promises');
 const { createApp } = require('./server.js');
 
 let server, base;
@@ -64,6 +68,57 @@ test('tickets list, detail, and guarded approve', async () => {
 test('static serving and traversal guard', async () => {
   assert.strictEqual((await fetch(`${base}/`)).status, 200);
   assert.strictEqual((await fetch(`${base}/../../etc/passwd`)).status, 404);
+});
+
+test('/api/timeline and /api/stats share one gh fan-out per project via gatherRows caching', async () => {
+  const configPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'dash-cache-')), 'config.json');
+  fs.writeFileSync(configPath, JSON.stringify({
+    projects: [{ id: 'core', name: 'Core', path: '/mock/core', repo: 'o/r' }],
+  }));
+
+  let listCalls = 0;
+  let viewCalls = 0;
+  const fakeExecFile = async (cmd, args) => {
+    if (args[0] === 'issue' && args[1] === 'list') {
+      listCalls += 1;
+      return JSON.stringify([
+        { number: 1, title: 't', labels: [], assignees: [], updatedAt: '2026-08-11T13:00:00Z', url: 'u' },
+      ]);
+    }
+    if (args[0] === 'issue' && args[1] === 'view') {
+      viewCalls += 1;
+      return JSON.stringify({
+        number: 1, title: 't', body: 'b', labels: [], state: 'open', url: 'u', assignees: [], comments: [],
+      });
+    }
+    throw new Error(`unexpected gh call: ${args.join(' ')}`);
+  };
+
+  const cacheServer = createApp({ mock: false, configPath, execFile: fakeExecFile });
+  await new Promise((r) => cacheServer.listen(0, '127.0.0.1', r));
+  const cacheBase = `http://127.0.0.1:${cacheServer.address().port}`;
+
+  try {
+    const r1 = await fetch(`${cacheBase}/api/timeline?project=core`);
+    assert.equal(r1.status, 200);
+    const r2 = await fetch(`${cacheBase}/api/stats?project=core`);
+    assert.equal(r2.status, 200);
+
+    // Two back-to-back calls (timeline then stats) for the same project must
+    // share one fan-out: one issue-list call and one issue-detail call, not
+    // two of each.
+    assert.equal(listCalls, 1);
+    assert.equal(viewCalls, 1);
+
+    // Cache expires after its TTL: a call made after the TTL must fan out again.
+    await sleep(3100);
+    const r3 = await fetch(`${cacheBase}/api/timeline?project=core`);
+    assert.equal(r3.status, 200);
+    assert.equal(listCalls, 2);
+    assert.equal(viewCalls, 2);
+  } finally {
+    cacheServer.close();
+  }
 });
 
 test('cross-origin POST is rejected, same-origin/no-origin requests still work', async () => {

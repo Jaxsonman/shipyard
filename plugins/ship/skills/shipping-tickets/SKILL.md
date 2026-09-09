@@ -66,13 +66,10 @@ mechanics: `${CLAUDE_PLUGIN_ROOT}/references/github.md` and `.../jira.md`.
    `main`) and re-run this step after Step 2.2 writes the real value.
 
    It prints `{stage, ticket, base, cwd, ok, checks[], reasons[]}` on
-   stdout, reasons on stderr. Exit **0** — continue. Exit **1** — report
-   every `reasons` line with its fix and stop. Two failing checks are
-   exceptions, named in Step 2.2 (`config`, missing ship config) and Step
-   4.1 (`branch-match`, zero matches on a first run). The exception is
-   **per-check, not per-run**: continue only when every failing check is
-   one of those two. Any other error-level failure alongside them — a
-   `gh-auth` loss, no repo access — still refuses. Exit **2** — usage
+   stdout, reasons on stderr. **Trust the exit code.** Exit **0** —
+   continue. Exit **1** — report every `reasons` line with its fix and
+   stop; the one thing ship may answer with an interview instead of a
+   refusal is a missing `ship.config.json` (Step 2.2). Exit **2** — usage
    error, report it verbatim. Keep the report: Step 4 reads its `branch-match`,
    `branch-divergence`, `worktree-elsewhere` and `worktree-collision`
    checks.
@@ -143,11 +140,11 @@ by hand.
 
 1. **`branch-match`** — its `branch` field carries the single match.
    - **Exactly one match** → use it.
-   - **No match** → expected on a first run: create
-     `feat/<id>-<short-kebab-slug-of-title>` from `baseBranch` (§13) and
-     continue, even though preflight marks this check failed. It is
-     **not** expected once Step 6's trail carries pipeline comments —
-     that is `comments-without-branch`, irreconcilable (Step 6.5).
+   - **No match** → the check passes at `info` level with
+     `willCreate: true`: create `feat/<id>-<short-kebab-slug-of-title>`
+     from `baseBranch` (§13) and continue. It is **not** expected once
+     Step 6's trail carries pipeline comments — that is
+     `comments-without-branch`, irreconcilable (Step 6.5).
    - **More than one match** → refuse, listing every matching branch, and
      ask the human to delete or rename down to one. Ship never picks.
 2. **`branch-divergence`.** Only on `origin/` → create the local branch
@@ -462,7 +459,7 @@ marks its own run as more successful than the trail shows.
 
 | Failure | Action |
 |---------|--------|
-| `preflight.js` exit 1 | Report every `reasons` line with its fix; stop. Exceptions: missing ship config (Step 2.2), zero branch matches on a first run (Step 4.1) |
+| `preflight.js` exit 1 | Report every `reasons` line with its fix; stop. Only exception: a missing ship config, which Step 2.2 answers with an interview |
 | `board-trail.js` exit 1 / exit 2 | Step 6.5 irreconcilable path / report verbatim and stop — no state means no decision |
 | Board write fails mid-loop | Retry once; second failure → report verbatim, name the exact pending action (e.g. "apply ship:in-qa"), stop — resume re-derives state |
 | `qa` block present but malformed | Treat as missing: Step 3 gate 1 refusal |

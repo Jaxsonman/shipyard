@@ -127,19 +127,22 @@ Standalone only:
   ```
   node "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.js" --stage dev --ticket <id> --base <baseBranch>
   ```
-  Exit 0 → proceed, using its JSON `checks[]`. Exit 1 → refuse, quoting
-  `reasons[]` verbatim, with exactly two exceptions:
-  - the `worktree-elsewhere` case immediately below, where the failing
-    check names this ticket's own worktree;
-  - a `config` failure whose only cause is a **missing
-    `.claude/ship.config.json`**. That file carries ship's run parameters
-    (§12.2); a standalone `/dev` in a repo that has never run ship does
-    not need them. Continue, using the repo's default branch as the base.
-    An invalid (as opposed to absent) file is still a refusal, and a
-    missing or invalid `.claude/kanban.config.json` is always a refusal —
-    dev cannot reach the board without it.
+  **Trust the exit code.** Exit 0 → proceed, using its JSON `checks[]`;
+  a `branch-match` carrying `willCreate: true` means no `feat/<id>-*`
+  branch exists yet and dev creates it below. Exit 1 → refuse, quoting
+  `reasons[]` verbatim, with one exception: a `config` failure whose only
+  cause is a **missing `.claude/ship.config.json`**. That file carries
+  ship's run parameters (§12.2), which a standalone `/dev` in a repo that
+  has never run ship does not need — continue, using the repo's default
+  branch as the base. An invalid (rather than absent) file still refuses,
+  and a missing or invalid `.claude/kanban.config.json` always refuses:
+  dev cannot reach the board without it.
 
-  Exit 2 → usage error — report and stop.
+  One more failing check is a resume rather than a fault:
+  `worktree-elsewhere` naming **this ticket's own** conventional worktree
+  path (§13). Reuse it and continue. Any other path, and any other
+  failing check alongside it, still refuses. Exit 2 → usage error —
+  report and stop.
   - **Checked out elsewhere:** `worktree-elsewhere` failing means the
     branch is already checked out in another worktree (its `path`). If
     that path is the conventional

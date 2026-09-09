@@ -47,8 +47,16 @@ const STAGE_CONFIG = {
   pr: ['kanban', 'ship'],
 };
 
-/** Stages for which a missing feat/<id>-* branch is fatal rather than expected. */
-const BRANCH_REQUIRED = ['qa', 'ship', 'pr'];
+/**
+ * Stages for which a missing feat/<id>-* branch is fatal rather than expected.
+ *
+ * `ship` and `dev` are deliberately absent: both create the branch on a first
+ * run, so zero matches is the normal starting state, not an error. They get an
+ * info-level `branch-match` carrying `willCreate: true`, which lets a skill
+ * simply trust the exit code instead of special-casing a failing check.
+ * `qa` and `pr` only ever verify or ship an existing branch.
+ */
+const BRANCH_REQUIRED = ['qa', 'pr'];
 
 const MIN_NODE_MAJOR = 18;
 
@@ -221,9 +229,13 @@ function preflight(opts = {}) {
     if (all.length === 1) {
       add('branch-match', true, 'error', `one branch matches ${prefix}*: ${all[0]}`, { branch: all[0] });
     } else if (all.length === 0) {
-      const fatal = BRANCH_REQUIRED.includes(stage);
-      add('branch-match', false, fatal ? 'error' : 'warn',
-        `no branch matches ${prefix}*${fatal ? '' : ' — it will be created from ' + base}`);
+      if (BRANCH_REQUIRED.includes(stage)) {
+        add('branch-match', false, 'error', `no branch matches ${prefix}*`);
+      } else {
+        add('branch-match', true, 'info',
+          `no branch matches ${prefix}* — it will be created from ${base}`,
+          { willCreate: true });
+      }
     } else {
       add('branch-match', false, 'error',
         `${all.length} branches match ${prefix}*: ${all.join(', ')} — resolve to one before continuing`);

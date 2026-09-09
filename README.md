@@ -10,7 +10,10 @@ footer, and config schemas, defined once in [`docs/contract.md`](docs/contract.m
 generated from `shared/references/contract.md` by `scripts/sync-shared.sh` and
 must not be hand-edited. Contract v1 additionally accepts a non-round escalation header,
 `ship:escalation <cause> standalone`, for a stage that runs outside a ship
-round (the `pr` stage); the contract version is unchanged.
+round (the `pr` stage), and it scopes the `comments-without-branch`
+irreconcilable condition to round-bearing comments only, so a ticket whose
+sole pipeline comment is a `standalone` one is still shippable; the contract
+version is unchanged.
 
 ## Adding Shipyard to Claude Code
 

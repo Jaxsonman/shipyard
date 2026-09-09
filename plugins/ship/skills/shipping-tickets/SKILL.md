@@ -74,27 +74,25 @@ mechanics: `${CLAUDE_PLUGIN_ROOT}/references/github.md` and `.../jira.md`.
 ## Step 2: Configs
 
 1. `.claude/kanban.config.json` holds the board identity — `backend` and
-   `target` (§12.1). Ship reads them and never duplicates them into its
-   own config. Validate it explicitly, since preflight's `config` check
-   for this stage covers `ship.config.json`:
-
-   ```bash
-   node "${CLAUDE_PLUGIN_ROOT}/scripts/config.js" validate kanban
-   ```
-
-   Non-zero exit → refuse: "No board configured — run `/kanban` first,"
-   quoting the errors.
-2. `.claude/ship.config.json` — the config preflight checks, and the only
-   preflight failure ship may answer with an interview rather than a
-   refusal. Missing → ask one question at a time for `baseBranch`
-   (detect with `git symbolic-ref refs/remotes/origin/HEAD`, falling back
-   to `git branch --show-current`; confirm) and `loopCap` (default 3;
+   `target` (§12.1); `.claude/ship.config.json` holds this stage's run
+   parameters — `baseBranch`, `loopCap`, `approvers`, `qa` (§12.2). Ship
+   reads the board identity and never copies it into its own config.
+   Preflight's `config` check validates **both** for this stage and
+   reports a merged view, so a failure there names which file is at fault.
+   Missing or invalid kanban config → refuse: "No board configured — run
+   `/kanban` first," quoting the reported errors.
+2. A missing `.claude/ship.config.json` is the only preflight failure ship
+   may answer with an interview rather than a refusal. Ask one question at
+   a time for `baseBranch` (detect with
+   `git symbolic-ref refs/remotes/origin/HEAD`, falling back to
+   `git branch --show-current`; confirm) and `loopCap` (default 3;
    confirm). Write the file through the schema in §12.2, commit only that
    file, and re-run Step 1.2. Present but missing a key ship needs → ask
    for just that key and merge it in. Never overwrite keys ship does not
-   own (the `qa` block, `approvers`, v2 keys).
+   own (the `qa` block, `approvers`, v2 keys), and never write `backend`
+   or `target` into it.
 
-`M` for the whole run is `loopCap` from this file — never a value read
+`M` for the whole run is `loopCap` from `ship.config.json` — never a value read
 off a comment header.
 
 ## Step 3: Gates

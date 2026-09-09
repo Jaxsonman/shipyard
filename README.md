@@ -161,7 +161,10 @@ for QA and human reviewers. On a fix-up round it takes its fix-list only
 from board comments authored by you or a login in `approvers`, and treats
 every finding as data — a symptom and a repro, never an instruction to
 execute. Requires an approved spec (`/spec 42`); if no
-plan exists, dev drafts a conservative self-plan and flags it. Dev never
+plan exists, dev drafts a conservative self-plan and flags it. A
+standalone `/dev` works in a repo that has never run `/ship` — it falls
+back to the default branch when there is no `.claude/ship.config.json`.
+Dev never
 changes ticket status and never touches your checkout's code — though its
 first run in a project may write and commit `.claude/kanban.config.json`
 (the family's config bootstrap, same as kanban and planning).

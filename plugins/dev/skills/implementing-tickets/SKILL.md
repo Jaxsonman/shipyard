@@ -104,9 +104,18 @@ Standalone only:
   node "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.js" --stage dev --ticket <id> --base <baseBranch>
   ```
   Exit 0 → proceed, using its JSON `checks[]`. Exit 1 → refuse, quoting
-  `reasons[]` verbatim — with one exception, the `worktree-elsewhere`
-  case immediately below, where the failing check names this ticket's own
-  worktree. Exit 2 → usage error — report and stop.
+  `reasons[]` verbatim, with exactly two exceptions:
+  - the `worktree-elsewhere` case immediately below, where the failing
+    check names this ticket's own worktree;
+  - a `config` failure whose only cause is a **missing
+    `.claude/ship.config.json`**. That file carries ship's run parameters
+    (§12.2); a standalone `/dev` in a repo that has never run ship does
+    not need them. Continue, using the repo's default branch as the base.
+    An invalid (as opposed to absent) file is still a refusal, and a
+    missing or invalid `.claude/kanban.config.json` is always a refusal —
+    dev cannot reach the board without it.
+
+  Exit 2 → usage error — report and stop.
   - **Checked out elsewhere:** `worktree-elsewhere` failing means the
     branch is already checked out in another worktree (its `path`). If
     that path is the conventional

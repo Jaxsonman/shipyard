@@ -1151,7 +1151,7 @@ Event-type → stage-label map (replaces the hand-rolled header regexes):
 `qa-verdict → QA`, `review-packet → Review`, `pr-opened → PR`;
 `metrics` events carry round token stats but open no segment of their own.
 
-- [ ] **Step 1: Write the failing tests** — in `trail.test.js`, keep every
+- [x] **Step 1: Write the failing tests** — in `trail.test.js`, keep every
   phase-1 case and add:
 
 ```js
@@ -1214,9 +1214,9 @@ test('ship:metrics round N/M merges token stats into that round dev/QA segments'
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `node --test plugins/dashboard/server/trail.test.js`; expect failures on `untrusted`, `prUrl` and the metrics merge.
+- [x] **Step 2: Run to verify failure** — `node --test plugins/dashboard/server/trail.test.js`; expect failures on `untrusted`, `prUrl` and the metrics merge.
 
-- [ ] **Step 3: Rewrite `trail.js` as an adapter** — delete the local
+- [x] **Step 3: Rewrite `trail.js` as an adapter** — delete the local
   `HEADERS`/`ESCALATION_RE`/`METRICS_BLOCK_RE` definitions and delegate:
   `const boardTrail = require('../scripts/board-trail.js');`
   `parseTrail` shapes `{ comments }` into the `issue` object `parseEvents`
@@ -1226,13 +1226,13 @@ test('ship:metrics round N/M merges token stats into that round dev/QA segments'
   each event's `metrics`. Trail gains `untrusted: []` and `prUrl: string|null`
   alongside `segments` / `escalations` / `lastActivity`.
 
-- [ ] **Step 4: Run to verify pass** — `node --test plugins/dashboard/server/trail.test.js`.
+- [x] **Step 4: Run to verify pass** — `node --test plugins/dashboard/server/trail.test.js`.
 
-- [ ] **Step 5: Confirm no consumer changed** — `git diff --stat` must show
+- [x] **Step 5: Confirm no consumer changed** — `git diff --stat` must show
   `trail.js` and `trail.test.js` only, and the whole suite green:
   `node --test "plugins/dashboard/**/*.test.js"`.
 
-- [ ] **Step 6: Commit** — `refactor(dashboard): trail.js is now an adapter over the vendored board-trail.js`.
+- [x] **Step 6: Commit** — `refactor(dashboard): trail.js is now an adapter over the vendored board-trail.js`.
 
 ---
 

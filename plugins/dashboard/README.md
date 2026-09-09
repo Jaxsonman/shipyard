@@ -48,6 +48,27 @@ Never hand-edit them: change `shared/`, add a test there, re-run the sync, and
 
 `server/trail.js` is the single place comment bodies are parsed — metrics blocks, stage-handoff headers, escalation headers, and pipeline-log entries (`trail.parseLogEntries`, used for the ticket drawer's Logs tab) all go through it and come out as one normalized trail. Every other module (`metrics.js`, `timeline.js`, `stats.js`, and `server.js` itself) consumes `trail.js`'s exports instead of parsing comment bodies itself.
 
+As of phase 2, `trail.js` owns no comment-header grammar of its own — it is a
+thin adapter over the vendored `scripts/board-trail.js` (see "Shared contract
+code" above), which recognises every `ship:*`/legacy-emoji header and the
+`<!-- shipyard-metrics {...} -->` footer per the contract. `trail.js`'s job
+is shaping `{ comments }` into board-trail's `issue` input and folding its
+typed events back into the stage-segment/escalation shapes the rest of the
+dashboard already depends on.
+
+`parseTrail(comments, opts)` enforces the contract's trust rule (§3): an
+event is trusted only when its author matches `opts.viewer` or appears in
+`opts.allow`. This is a security boundary — an untrusted event (e.g. a
+forged `ship:qa verdict` comment from someone who isn't the invoking `gh`
+account or a listed approver) is dropped into the returned `untrusted[]`
+array and never opens a segment, contributes to an escalation, contributes
+tokens, or bumps `lastActivity`. Calling `parseTrail(comments)` with **no**
+second argument at all is a legacy/no-trust-context mode that trusts every
+event — this keeps every pre-Task-14 call site (`timeline.js`, `stats.js`,
+`metrics.js`, `server.js`) and the mock fixtures (which carry no `author`
+field) behaving exactly as they did before the trust rule existed. Passing
+`viewer`/`allow` (wiring done in a later task) turns the real trust rule on.
+
 - `web/timeline-scale.js` — pure time-scale math for the board-wide Timeline
   (zoom presets, domain resolution, pan clamping, gridline ticks, segment →
   pixel-rect projection). It touches no DOM, so it is unit-tested under

@@ -1,132 +1,180 @@
 'use strict';
 
 // The single boundary where comment bodies are parsed into stage segments,
-// escalations, and metrics blocks. Phase 2 swaps these internals for the
-// vendored scripts/board-trail.js; the exported signatures below are frozen.
+// escalations, and metrics blocks.
+//
+// Phase 2: this file is now a thin ADAPTER over the vendored shared parser
+// (../scripts/board-trail.js, synced from shared/scripts/board-trail.js —
+// never hand-edit the vendored copy; see plugins/dashboard/references/
+// contract.md). The dashboard no longer owns its own comment-header
+// grammar: every `ship:*`/legacy-emoji header and the `<!-- shipyard-metrics
+// {...} -->` footer are recognised by board-trail.js's `parseEvents`, which
+// also carries the contract's trust rule (an event's `trusted` flag). This
+// file's job is just: shape `{ comments }` into the `issue` object
+// `parseEvents` expects, drop untrusted events instead of acting on them,
+// and fold the rest into the stage-segment / escalation shapes the rest of
+// the dashboard (timeline.js, stats.js, metrics.js, server.js) already
+// depends on. Those consumers need no changes — the exports below keep
+// their phase-1 names and shapes.
+//
+// Trust and the no-opts legacy mode
+// ----------------------------------
+// `parseTrail(comments, opts)` enforces the contract's trust rule (§3): an
+// event is trusted only when its author matches `opts.viewer` or appears in
+// `opts.allow`. That is a **security boundary** — an untrusted event must
+// never open a segment, contribute to an escalation, contribute tokens, or
+// bump `lastActivity`.
+//
+// But `opts` is optional, and calling `parseTrail(comments)` with no second
+// argument at all must keep working exactly as it did in phase 1, where
+// there was no trust concept and no `author` field on fixture/test
+// comments. Enforcing the real trust rule in that case (viewer null, allow
+// empty) would make every event untrusted and silently empty every segment
+// — breaking every phase-1 caller and fixture. So: **`opts` being
+// absent/undefined is a legacy/no-trust-context mode that trusts every
+// event.** Passing an explicit `{ viewer }` and/or `{ allow }` (even `{}`)
+// opts into the real trust rule. Task 14 threads the real `viewer`/`allow`
+// through every call site; until then, every existing call in this repo
+// (timeline.js, stats.js, metrics.js, server.js) calls `parseTrail(list)`
+// with no opts and keeps behaving as before.
 
-// Matches `<!-- shipyard-metrics {...} -->` comment blocks embedded in ship
-// pipeline comment bodies.
-const METRICS_BLOCK_RE = /<!--\s*shipyard-metrics\s+(\{[\s\S]*?\})\s*-->/g;
+const boardTrail = require('../scripts/board-trail.js');
 
 const STAGE_ORDER = ['Spec', 'Plan', 'Dev', 'QA', 'Review', 'PR'];
 
-// Maps a metrics block's `stage` key to its display row label.
+// Maps a metrics footer's `stage` key to its display row label.
 const STAGE_KEY_TO_LABEL = { spec: 'Spec', plan: 'Plan', dev: 'Dev', qa: 'QA', ship: 'Review', pr: 'PR' };
 
 const ESCALATION_CAUSES = ['cap', 'static', 'stage-error', 'reconcile'];
 
-const ESCALATION_RE = /^ship:escalation\s+(cap|static|stage-error|reconcile)\s+round\s+(\d+)\s*\/\s*(\d+)/;
-const ANY_ESCALATION_RE = /^ship:escalation\b/;
+// Maps a board-trail event `type` to the stage segment it opens. `metrics`
+// events open no segment of their own — their token/timing numbers merge
+// into whichever segment matches their own footer's `stage` key (see the
+// `agg` loop in parseTrail below).
+const EVENT_TYPE_TO_STAGE = {
+  'spec-approved': 'Spec',
+  'plan-approved': 'Plan',
+  dev: 'Dev',
+  'dev-escalation': 'Dev',
+  'qa-verdict': 'QA',
+  'review-packet': 'Review',
+  'pr-opened': 'PR',
+};
 
-// Matches a pipeline-log comment's first line (the Logs tab in the ticket
-// drawer). Kept alongside the other header patterns so this is the only
-// place in the codebase that inspects a comment body.
-const LOG_HEADER_RE = /^ship:(dev|qa|review-packet|escalation)/;
+// The subset of event types that populate the ticket drawer's Logs tab —
+// matches phase 1's `LOG_HEADER_RE = /^ship:(dev|qa|review-packet|escalation)/`.
+// `dev-escalation` ("ship:dev escalation") satisfied that regex's `dev`
+// alternative, so it's included here too; `metrics`, `pr-opened`,
+// `spec-approved` and `plan-approved` were never matched by it.
+const LOG_EVENT_TYPES = new Set(['dev', 'dev-escalation', 'qa-verdict', 'review-packet', 'escalation']);
 
-// First matching pattern wins per stage; `round` is null when the header carries none.
-const HEADER_PATTERNS = [
-  { stage: 'Spec', re: /^📋 Spec approved/ },
-  { stage: 'Plan', re: /^🗺️ Plan approved/ },
-  { stage: 'Dev', re: /^ship:dev (?:round (\d+)\/(\d+)|standalone|escalation)/ },
-  { stage: 'QA', re: /^ship:qa verdict\b/ },
-  { stage: 'Review', re: /^ship:review-packet(?: round (\d+)\/(\d+))?/ },
-  { stage: 'PR', re: /^ship:pr(?:-open)?\b/ },
-];
+function toIssue(comments) {
+  return { comments: comments || [] };
+}
 
 /**
- * Extracts all valid shipyard-metrics blocks from a list of comments.
- * Invalid JSON or blocks missing required fields (stage, started, finished)
- * are skipped silently. Order matches comment order.
+ * Extracts all valid shipyard-metrics footers from a list of comments, keyed
+ * by whichever comment carries a recognised pipeline header (board-trail.js
+ * ignores comments whose first line matches no header at all — same net
+ * effect as phase 1 silently skipping non-conforming blocks). Invalid JSON
+ * or footers missing required fields (stage, started, finished) are skipped.
  * @param {Array<{body: string, createdAt: string}>} comments
  * @returns {Array<{stage: string, started: string, finished: string, tokens_in?: number, tokens_out?: number}>}
  */
 function parseMetricsBlocks(comments) {
+  const events = boardTrail.parseEvents(toIssue(comments), {});
   const out = [];
-  for (const comment of comments || []) {
-    const body = comment && typeof comment.body === 'string' ? comment.body : '';
-    let match;
-    METRICS_BLOCK_RE.lastIndex = 0;
-    while ((match = METRICS_BLOCK_RE.exec(body)) !== null) {
-      let parsed;
-      try {
-        parsed = JSON.parse(match[1]);
-      } catch (err) {
-        continue;
-      }
-      if (!parsed || !parsed.stage || !parsed.started || !parsed.finished) continue;
-      const entry = { stage: parsed.stage, started: parsed.started, finished: parsed.finished };
-      if (typeof parsed.tokens_in === 'number') entry.tokens_in = parsed.tokens_in;
-      if (typeof parsed.tokens_out === 'number') entry.tokens_out = parsed.tokens_out;
-      out.push(entry);
-    }
+  for (const ev of events) {
+    const m = ev.metrics;
+    if (!m || !m.stage || !m.started || !m.finished) continue;
+    const entry = { stage: m.stage, started: m.started, finished: m.finished };
+    if (typeof m.tokensIn === 'number') entry.tokens_in = m.tokensIn;
+    if (typeof m.tokensOut === 'number') entry.tokens_out = m.tokensOut;
+    out.push(entry);
   }
   return out;
 }
 
 /**
- * Scans the first line of each comment against HEADER_PATTERNS, returning
- * every match (not first-per-stage — callers reduce).
+ * Every event that maps to a pipeline stage, one row per matched comment
+ * (not first-per-stage — callers reduce).
  * @param {Array<{body: string, createdAt: string}>} comments
  * @returns {Array<{stage: string, round: number|null, at: number}>}
  */
 function parseStageEvents(comments) {
+  const events = boardTrail.parseEvents(toIssue(comments), {});
   const out = [];
-  for (const comment of comments || []) {
-    const body = comment && typeof comment.body === 'string' ? comment.body : '';
-    const firstLine = body.split('\n')[0];
-    const at = Date.parse(comment && comment.createdAt);
+  for (const ev of events) {
+    const stage = EVENT_TYPE_TO_STAGE[ev.type];
+    if (!stage) continue;
+    const at = Date.parse(ev.createdAt);
     if (Number.isNaN(at)) continue;
-    for (const pattern of HEADER_PATTERNS) {
-      const m = firstLine.match(pattern.re);
-      if (!m) continue;
-      const round = Number(m[1]) || null;
-      out.push({ stage: pattern.stage, round, at });
-    }
+    out.push({ stage, round: typeof ev.round === 'number' ? ev.round : null, at });
   }
   return out;
 }
 
 /**
- * Reads escalation headers from the first line of each comment.
+ * Reads `ship:escalation` events (not `ship:dev escalation` — dev-escalation
+ * feeds the Dev stage, matching phase 1's ESCALATION_RE which only matched
+ * the `ship:escalation` prefix).
  * @param {Array<{body: string, createdAt: string}>} comments
  * @returns {Array<{cause: string|null, round: number|null, cap: number|null, at: number}>}
  */
 function parseEscalations(comments) {
+  const events = boardTrail.parseEvents(toIssue(comments), {});
   const out = [];
-  for (const comment of comments || []) {
-    const body = comment && typeof comment.body === 'string' ? comment.body : '';
-    const firstLine = body.split('\n')[0];
-    const at = Date.parse(comment && comment.createdAt);
+  for (const ev of events) {
+    if (ev.type !== 'escalation') continue;
+    const at = Date.parse(ev.createdAt);
     if (Number.isNaN(at)) continue;
-    const m = firstLine.match(ESCALATION_RE);
-    if (m) {
-      out.push({ cause: m[1], round: Number(m[2]), cap: Number(m[3]), at });
-    } else if (ANY_ESCALATION_RE.test(firstLine)) {
-      out.push({ cause: null, round: null, cap: null, at });
-    }
+    out.push({ cause: ev.cause, round: ev.round, cap: ev.cap, at });
   }
   return out;
 }
 
 /**
- * Composes parseMetricsBlocks/parseStageEvents/parseEscalations into one
- * normalized trail: per-stage segments (ordered by STAGE_ORDER), escalations
- * (comment order), and the newest comment timestamp.
- * @param {Array<{body: string, createdAt: string}>} comments
- * @returns {{segments: Array, escalations: Array, lastActivity: number|null}}
+ * Composes board-trail.js's parseEvents into one normalized trail: per-stage
+ * segments (ordered by STAGE_ORDER), escalations (comment order), the
+ * newest trusted comment's timestamp, the dropped untrusted events, and the
+ * newest trusted PR url.
+ *
+ * Trust is the security boundary: an event with `trusted !== true` is
+ * dropped into `untrusted[]` and never opens a segment, feeds an
+ * escalation, contributes tokens, or bumps `lastActivity`. See the
+ * "no-opts legacy mode" note at the top of this file for what happens when
+ * `opts` is omitted entirely.
+ *
+ * @param {Array<{body: string, createdAt: string, author?: {login: string}, url?: string}>} comments
+ * @param {{viewer?: string|null, allow?: string[]}} [opts]
+ * @returns {{segments: Array, escalations: Array, lastActivity: number|null, untrusted: Array, prUrl: string|null}}
  */
-function parseTrail(comments) {
+function parseTrail(comments, opts) {
   const list = comments || [];
-  const metrics = parseMetricsBlocks(list);
-  const stageEvents = parseStageEvents(list);
-  const escalations = parseEscalations(list);
+  const legacyTrustAll = opts === undefined;
+  const viewer = (opts && opts.viewer) || null;
+  const allow = (opts && opts.allow) || [];
 
-  // Aggregate metrics blocks per label: earliest start, latest finish,
-  // summed tokens.
+  const events = boardTrail.parseEvents(toIssue(list), { viewer, allow });
+  if (legacyTrustAll) {
+    for (const ev of events) ev.trusted = true;
+  }
+
+  const untrusted = events.filter((e) => e.trusted !== true);
+  const usable = events.filter((e) => e.trusted === true);
+
+  // Metrics aggregation: any trusted event carrying a footer (a stage
+  // handoff comment with its own footer, or a standalone `ship:metrics`
+  // comment) merges into the segment for the footer's own `stage` key —
+  // earliest start, latest finish, summed tokens. Independent of whether
+  // the event's own header fully conformed (a stage segment can still be
+  // "known" from a loosely-matching header; see the fallback loop below).
   const agg = {};
-  for (const m of metrics) {
+  for (const ev of usable) {
+    const m = ev.metrics;
+    if (!m || !m.stage) continue;
     const label = STAGE_KEY_TO_LABEL[m.stage];
-    if (!label) continue; // unknown stage key
+    if (!label) continue;
     const startedTime = Date.parse(m.started);
     const finishedTime = Date.parse(m.finished);
     if (Number.isNaN(startedTime) || Number.isNaN(finishedTime)) continue;
@@ -136,36 +184,51 @@ function parseTrail(comments) {
     const a = agg[label];
     a.start = Math.min(a.start, startedTime);
     a.end = Math.max(a.end, finishedTime);
-    if (typeof m.tokens_in === 'number') {
-      a.tokensIn += m.tokens_in;
+    if (typeof m.tokensIn === 'number') {
+      a.tokensIn += m.tokensIn;
       a.hasIn = true;
     }
-    if (typeof m.tokens_out === 'number') {
-      a.tokensOut += m.tokens_out;
+    if (typeof m.tokensOut === 'number') {
+      a.tokensOut += m.tokensOut;
       a.hasOut = true;
     }
   }
 
-  // Max round seen per label from co-located stage events.
+  // Max round seen per label, and the earliest matching event (fallback for
+  // labels with no metrics), from trusted events that map to a stage.
   const maxRound = {};
-  for (const ev of stageEvents) {
-    if (ev.round == null) continue;
-    if (maxRound[ev.stage] == null || ev.round > maxRound[ev.stage]) maxRound[ev.stage] = ev.round;
+  const fallback = {};
+  for (const ev of usable) {
+    const label = EVENT_TYPE_TO_STAGE[ev.type];
+    if (!label) continue;
+    if (typeof ev.round === 'number') {
+      if (maxRound[label] == null || ev.round > maxRound[label]) maxRound[label] = ev.round;
+    }
+    const at = Date.parse(ev.createdAt);
+    if (Number.isNaN(at)) continue;
+    if (fallback[label] === undefined || at < fallback[label]) fallback[label] = at;
   }
 
-  // Fallback stage events: earliest matching event, for labels with no metrics.
-  const fallback = {};
-  for (const ev of stageEvents) {
-    if (fallback[ev.stage] === undefined || ev.at < fallback[ev.stage]) {
-      fallback[ev.stage] = ev.at;
+  // Newest trusted pr-opened event wins, consistent with board-trail's own
+  // reconcile() latest-wins rule.
+  let prUrl = null;
+  let prAt = -Infinity;
+  for (const ev of usable) {
+    if (ev.type !== 'pr-opened' || !ev.prUrl) continue;
+    const at = Date.parse(ev.createdAt);
+    if (Number.isNaN(at)) continue;
+    if (at >= prAt) {
+      prAt = at;
+      prUrl = ev.prUrl;
     }
   }
 
   const segments = [];
   for (const label of STAGE_ORDER) {
+    let seg = null;
     if (agg[label]) {
       const a = agg[label];
-      segments.push({
+      seg = {
         stage: label,
         round: maxRound[label] != null ? maxRound[label] : null,
         start: a.start,
@@ -173,9 +236,9 @@ function parseTrail(comments) {
         tokensIn: a.hasIn ? a.tokensIn : null,
         tokensOut: a.hasOut ? a.tokensOut : null,
         estimated: false,
-      });
+      };
     } else if (fallback[label] !== undefined) {
-      segments.push({
+      seg = {
         stage: label,
         round: maxRound[label] != null ? maxRound[label] : null,
         start: fallback[label],
@@ -183,38 +246,71 @@ function parseTrail(comments) {
         tokensIn: null,
         tokensOut: null,
         estimated: true,
-      });
+      };
+    }
+    if (seg) {
+      if (label === 'PR') seg.prUrl = prUrl;
+      segments.push(seg);
     }
   }
 
+  const escalations = [];
+  for (const ev of usable) {
+    if (ev.type !== 'escalation') continue;
+    const at = Date.parse(ev.createdAt);
+    if (Number.isNaN(at)) continue;
+    escalations.push({ cause: ev.cause, round: ev.round, cap: ev.cap, at });
+  }
+
   let lastActivity = null;
-  for (const comment of list) {
-    const at = Date.parse(comment && comment.createdAt);
+  for (const ev of usable) {
+    const at = Date.parse(ev.createdAt);
     if (Number.isNaN(at)) continue;
     if (lastActivity === null || at > lastActivity) lastActivity = at;
   }
 
-  return { segments, escalations, lastActivity };
+  return { segments, escalations, lastActivity, untrusted, prUrl };
 }
 
 /**
  * Extracts pipeline-log entries (the ticket drawer's Logs tab) from a list of
  * comments: only comments whose first line matches a ship: pipeline header
- * (dev/qa/review-packet/escalation) are included.
+ * (dev/dev-escalation/qa/review-packet/escalation) are included. Derived
+ * from board-trail.js's parsed events — `header` is the event's own `raw`
+ * (its trimmed first line).
+ *
+ * `parseLogEntries` takes no trust-context opts (its signature is frozen
+ * from phase 1), so — same as the no-opts legacy mode documented on
+ * `parseTrail` above — every entry is produced as if trusted; the `trusted`
+ * field is included so a future trust-aware caller (once this signature
+ * grows an opts arg) has somewhere to put a real answer.
  * @param {Array<{body: string, createdAt: string}>} comments
- * @returns {Array<{header: string, body: string, at: number|null}>}
+ * @returns {Array<{header: string, body: string, at: number|null, trusted: boolean}>}
  */
 function parseLogEntries(comments) {
+  const list = comments || [];
+  const events = boardTrail.parseEvents(toIssue(list), {});
+
+  // Events are produced in comment order, skipping comments whose first
+  // line matches no header at all — recompute that same filter over `list`
+  // to zip each event back to its source comment for the body text (an
+  // event only carries its raw first line, not the rest of the body).
+  const matched = list.filter((c) => {
+    const body = c && typeof c.body === 'string' ? c.body : '';
+    const first = body.split('\n')[0].replace(/\r$/, '').trimEnd();
+    return boardTrail.HEADERS.some((h) => h.re.test(first));
+  });
+
   const out = [];
-  for (const comment of comments || []) {
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+    if (!LOG_EVENT_TYPES.has(ev.type)) continue;
+    const comment = matched[i];
     const body = comment && typeof comment.body === 'string' ? comment.body : '';
-    const firstLine = body.split('\n')[0];
-    if (!LOG_HEADER_RE.test(firstLine)) continue;
     const firstNewline = body.indexOf('\n');
-    const header = firstNewline === -1 ? body : body.slice(0, firstNewline);
     const rest = firstNewline === -1 ? '' : body.slice(firstNewline + 1).replace(/^\n+/, '');
     const at = Date.parse(comment && comment.createdAt);
-    out.push({ header, body: rest, at: Number.isNaN(at) ? null : at });
+    out.push({ header: ev.raw, body: rest, at: Number.isNaN(at) ? null : at, trusted: true });
   }
   return out;
 }

@@ -152,6 +152,25 @@ body { margin: 0; }
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   Stats strip
+   ══════════════════════════════════════════════════════════════════════ */
+.stats-strip {
+  padding: var(--space-4) var(--space-6);
+  border-bottom: 2px solid var(--color-divider);
+}
+.stats-tiles { display: flex; flex-wrap: wrap; gap: var(--space-6); }
+.stat-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.stat-label {
+  font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--color-neutral-600);
+}
+.stat-value {
+  font-size: 20px; font-family: var(--font-heading); font-weight: var(--font-heading-weight);
+  display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap;
+}
+.cause-row { display: flex; gap: var(--space-1); margin-top: var(--space-3); flex-wrap: wrap; }
+
+/* ══════════════════════════════════════════════════════════════════════
    Sidebar / project rows
    ══════════════════════════════════════════════════════════════════════ */
 .sidebar-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-2); }

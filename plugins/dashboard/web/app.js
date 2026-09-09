@@ -29,6 +29,9 @@ const state = {
   panMs: 0,
   stageFilter: new Set(),
   hideBacklog: false,
+  // Stats strip (Task 9).
+  stats: null,
+  causeFilter: null,
 };
 
 // Last-fetched raw payloads, kept for stringify-compare polling.
@@ -36,6 +39,7 @@ let lastTicketsJson = null;
 let lastAllTicketsJson = null;
 let lastHealthJson = null;
 let lastTimelineJson = null;
+let lastStatsJson = null;
 
 // Latest /api/timeline payload ({ now, domain, groups, rows, warnings }).
 let timelineData = null;
@@ -86,17 +90,32 @@ async function fetchJson(url) {
 
 // ---- data loading -----------------------------------------------------
 
+// Looks up a ticket's escalation cause from the loaded timeline data (the
+// ticket table's own rows don't carry `escalation` — only /api/timeline
+// does). Returns null when the timeline hasn't loaded yet or the ticket has
+// no escalation, so callers degrade to "no cause tag" rather than throwing.
+function causeForTicket(project, number) {
+  if (!timelineData || !Array.isArray(timelineData.rows)) return null;
+  const row = timelineData.rows.find((r) => r.project === project && r.number === number);
+  return row && row.escalation ? row.escalation.cause : null;
+}
+
 function ticketsForProject(projectId) {
-  const list = projectId === 'all'
+  let list = projectId === 'all'
     ? state.tickets
     : state.tickets.filter((t) => t.project === projectId);
   const q = state.search.trim().toLowerCase();
-  if (!q) return list;
-  return list.filter((t) => {
-    const num = String(t.number).toLowerCase();
-    const title = (t.title || '').toLowerCase();
-    return num.includes(q) || title.includes(q);
-  });
+  if (q) {
+    list = list.filter((t) => {
+      const num = String(t.number).toLowerCase();
+      const title = (t.title || '').toLowerCase();
+      return num.includes(q) || title.includes(q);
+    });
+  }
+  if (state.causeFilter) {
+    list = list.filter((t) => t.stage === 'Needs Human' && causeForTicket(t.project, t.number) === state.causeFilter);
+  }
+  return list;
 }
 
 async function loadProjects() {
@@ -138,6 +157,16 @@ async function loadTimeline() {
   renderMain();
 }
 
+async function loadStats() {
+  const url = '/api/stats?project=' + encodeURIComponent(state.activeProjectId);
+  const data = await fetchJson(url);
+  const json = JSON.stringify(data);
+  if (json === lastStatsJson) return;
+  lastStatsJson = json;
+  state.stats = data;
+  renderStats();
+}
+
 async function loadHealth() {
   const data = await fetchJson('/api/health');
   const json = JSON.stringify(data);
@@ -169,6 +198,79 @@ function renderBanner() {
     `;
   }
   el.innerHTML = html;
+}
+
+// ---- render: stats strip -----------------------------------------------------
+
+const CAUSE_ORDER = ['cap', 'static', 'stage-error', 'reconcile'];
+
+function statTile(label, valueHtml) {
+  return `
+    <div class="stat-tile">
+      <div class="stat-label">${esc(label)}</div>
+      <div class="stat-value">${valueHtml}</div>
+    </div>
+  `;
+}
+
+function renderStats() {
+  const el = document.getElementById('stats');
+  if (!el) return;
+
+  const s = state.stats;
+  if (!s) {
+    el.innerHTML = '';
+    return;
+  }
+
+  const stageTags = Object.entries(s.counts || {})
+    .filter(([, n]) => n > 0)
+    .map(([stage, n]) => `<span class="tag tag-neutral">${esc(stage)} ${esc(n)}</span>`)
+    .join(' ');
+  const stagesHtml = stageTags || '<span class="text-muted">—</span>';
+
+  const medianHtml = esc(s.stageDuration && s.stageDuration.medianLabel ? s.stageDuration.medianLabel : '—');
+  const p90Html = esc(s.stageDuration && s.stageDuration.p90Label ? s.stageDuration.p90Label : '—');
+
+  const tokens = s.tokens || {};
+  const tokensHtml = tokens.inLabel != null && tokens.outLabel != null
+    ? `${esc(tokens.inLabel)} in / ${esc(tokens.outLabel)} out`
+    : '—';
+
+  const throughput = s.throughput || {};
+  const throughputHtml = typeof throughput.perWeek === 'number'
+    ? `${esc(throughput.perWeek.toFixed(1))} / wk`
+    : '—';
+
+  const tilesHtml = [
+    statTile('Stages', stagesHtml),
+    statTile('Median stage', medianHtml),
+    statTile('p90 stage', p90Html),
+    statTile('Tokens', tokensHtml),
+    statTile('Throughput', throughputHtml),
+  ].join('');
+
+  const escalations = s.escalations || {};
+  const causeChips = CAUSE_ORDER
+    .filter((cause) => (escalations[cause] || 0) > 0)
+    .map((cause) => {
+      const pressed = state.causeFilter === cause;
+      return `<button class="chip" data-cause="${esc(cause)}" aria-pressed="${pressed ? 'true' : 'false'}">${esc(cause)} ${esc(escalations[cause])}</button>`;
+    })
+    .join('');
+  const causeRowHtml = causeChips ? `<div class="cause-row">${causeChips}</div>` : '';
+
+  el.innerHTML = `<div class="stats-tiles">${tilesHtml}</div>${causeRowHtml}`;
+
+  el.querySelectorAll('[data-cause]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const cause = btn.getAttribute('data-cause');
+      state.causeFilter = state.causeFilter === cause ? null : cause;
+      state.page = 0;
+      renderStats();
+      renderMain();
+    });
+  });
 }
 
 // ---- render: sidebar -----------------------------------------------------
@@ -221,6 +323,7 @@ function renderSidebar() {
       renderSidebar();
       loadTickets({ preserve: true });
       loadTimeline().catch((err) => console.error('load timeline failed', err));
+      loadStats().catch((err) => console.error('load stats failed', err));
     });
   });
 
@@ -277,11 +380,13 @@ function renderTable() {
       const priorityCell = pCls
         ? `<span class="tag ${pCls}">${esc(t.priority)}</span>`
         : '<span class="text-muted">—</span>';
+      const cause = t.stage === 'Needs Human' ? causeForTicket(t.project, t.number) : null;
+      const causeTag = cause ? ` <span class="tag tag-outline">${esc(cause)}</span>` : '';
       return `
         <tr class="ticket-row row-click focusable" data-project="${esc(t.project)}" data-number="${esc(t.number)}">
           <td>#${esc(t.number)}</td>
           <td>${esc(t.title)}</td>
-          <td><span class="tag tag-neutral"${stageTitle}>${esc(t.stage)}</span>${dot}</td>
+          <td><span class="tag tag-neutral"${stageTitle}>${esc(t.stage)}</span>${causeTag}${dot}</td>
           <td>${priorityCell}</td>
           <td>${esc(t.assignee || '—')}</td>
           <td>${esc(relativeTime(t.updatedAt))}</td>
@@ -445,6 +550,13 @@ function rowMatchesStageFilter(row) {
   return (row.segments || []).some((s) => state.stageFilter.has(s.stage));
 }
 
+// Cause-chip filter (Task 9): narrows both views to Needs Human rows whose
+// newest escalation matches the active chip. No-op when no chip is pressed.
+function rowMatchesCauseFilter(row) {
+  if (!state.causeFilter) return true;
+  return row.stage === 'Needs Human' && !!row.escalation && row.escalation.cause === state.causeFilter;
+}
+
 function renderTimeline() {
   const el = document.getElementById('main');
   if (!el) return;
@@ -472,7 +584,7 @@ function renderTimeline() {
   const renderedRows = [];
   const groupsHtml = groups
     .map((g) => {
-      const rows = (rowsByProject.get(g.projectId) || []).filter(rowMatchesStageFilter);
+      const rows = (rowsByProject.get(g.projectId) || []).filter(rowMatchesStageFilter).filter(rowMatchesCauseFilter);
       if (!rows.length) return '';
       const rowsHtml = rows
         .map((row) => {
@@ -1087,6 +1199,7 @@ function startPolling() {
     loadTickets({ preserve: true }).catch((err) => console.error('poll tickets failed', err));
     loadAllTicketsForCounts().catch((err) => console.error('poll ticket counts failed', err));
     loadTimeline().catch((err) => console.error('poll timeline failed', err));
+    loadStats().catch((err) => console.error('poll stats failed', err));
     loadHealth().catch((err) => console.error('poll health failed', err));
   }, POLL_MS);
 }
@@ -1099,7 +1212,7 @@ async function boot() {
   renderSidebar();
   renderTable();
   try {
-    await Promise.all([loadProjects(), loadTickets(), loadAllTicketsForCounts(), loadTimeline(), loadHealth()]);
+    await Promise.all([loadProjects(), loadTickets(), loadAllTicketsForCounts(), loadTimeline(), loadStats(), loadHealth()]);
   } catch (err) {
     console.error('Failed to load dashboard data', err);
   }

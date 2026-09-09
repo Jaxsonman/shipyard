@@ -82,6 +82,18 @@ segment is ever "future". A segment after the ticket's current stage means the
 ticket was rewound (QA sent it back, or a human re-planned it) and is rendered
 as past.
 
+## Stats strip
+
+A row of five tiles sits above both views (Tickets and Timeline) and stays in
+sync as the active project changes: **Stages** (a tag per non-zero pipeline
+stage), **Median stage** and **p90 stage** duration, **Tokens** (in/out
+totals), and **Throughput** (tickets reaching Awaiting Review per week over a
+28-day window). Below the tiles, one chip per escalation cause with a
+non-zero count (`cap`, `static`, `stage-error`, `reconcile`); clicking a chip
+narrows both views to Needs Human tickets with that cause, and clicking it
+again restores the unfiltered view. In the ticket table, a Needs Human
+ticket's Stage cell also shows its cause as an outline tag.
+
 ## Views
 
 **Tickets** — the paginated table, one row per ticket, grouped by the project

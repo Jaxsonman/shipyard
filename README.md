@@ -4,6 +4,12 @@ An SDLC pipeline for Claude Code, delivered as plugins. Ideas go in one end;
 shipped software comes out the other. Each pipeline stage is its own plugin —
 adopt one stage or the whole line.
 
+**Contract:** every plugin parses the same labels, comment headers, metrics
+footer, and config schemas, defined once in [`docs/contract.md`](docs/contract.md)
+(contract v1); `docs/contract.md` and `plugins/*/references/contract.md` are
+generated from `shared/references/contract.md` by `scripts/sync-shared.sh` and
+must not be hand-edited.
+
 ## Adding Shipyard to Claude Code
 
 Shipyard is a [Claude Code plugin marketplace](https://docs.claude.com/en/docs/claude-code/plugin-marketplaces).
@@ -94,8 +100,12 @@ After installing `prd`, run:
 ```
 
 Claude interviews you one question at a time (problem, users, success metrics,
-scope, requirements, risks) and writes the finished PRD to
-`docs/prd/YYYY-MM-DD-<slug>.md` in your project.
+scope, requirements, risks), persisting your answers after each one to
+`docs/prd/<YYYY-MM-DD>-<slug>.draft.md` so an interrupted interview resumes
+on the next `/prd` run, even across days or a reworded slug. It refuses to
+silently overwrite an existing PRD for the same slug (any date) — asking to
+revise, use a new slug, or abort — and writes the finished PRD to
+`docs/prd/YYYY-MM-DD-<slug>.md`, then offers (never assumes) to commit it.
 
 After installing `kanban`, run:
 
@@ -103,12 +113,21 @@ After installing `kanban`, run:
 /kanban docs/prd/2026-07-20-reef-tank.md
 ```
 
-The first run in a project asks once which board to use (GitHub or Jira)
-and where, then Claude proposes a full breakdown of small, vertical-slice
-tickets — each one a single outcome a human can verify end-to-end, with
-`Depends on:` links where one slice genuinely requires another. Approve
-the list and Claude creates the tickets on your board in dependency
-order.
+The first run in a project bootstraps `.claude/kanban.config.json` (asking
+once which board to use, GitHub or Jira, and where) and offers to commit it,
+then Claude proposes a full breakdown of small, vertical-slice tickets —
+each one a single outcome a human can verify end-to-end, with `Depends on:`
+links where one slice genuinely requires another, capped at 15 slices per
+run (the rest are offered as a deferred batch on a follow-up run). Approve
+the list and Claude creates the tickets on your board in dependency order,
+tracking progress in a run manifest at `docs/kanban/<slug>.run.json`.
+Re-running `/kanban` on the same PRD is idempotent: already-created tickets
+are recognized from the manifest and never duplicated, and only the
+remaining pending/failed tickets are attempted. A client-side scan of the
+board for each ticket's `Source PRD:` line runs alongside the manifest, so a
+ticket created in the instant before an interrupted run could record it is
+still recognized rather than duplicated. A re-run always re-asks for approval
+of the remaining tickets before creating anything.
 
 After installing `planning`, run these per ticket, in order:
 
@@ -118,8 +137,13 @@ After installing `planning`, run these per ticket, in order:
 
 A guided PM/UX session that aligns on what the ticket really means — what
 "done" looks like, UX intent, edge cases, and the context an implementer
-needs. It writes `docs/ship/42/spec.md`, marks the ticket `Spec'd`, and
-fixes the ticket body on the board if the session reveals it was unclear.
+needs, persisting answers after each one to `docs/ship/42/spec.draft.md` so
+an interrupted session resumes on the next `/spec` run. It writes
+`docs/ship/42/spec.md` (validated against the required section headings
+before it's committed), marks the ticket `Spec'd`, fixes the ticket body on
+the board if the session reveals it was unclear, and posts a
+contract-shaped `ship:spec approved` comment carrying a metrics footer on
+GitHub (Jira comments carry none).
 
 ```
 /plan 42
@@ -127,8 +151,11 @@ fixes the ticket body on the board if the session reveals it was unclear.
 
 An engineer session over the approved spec: architecture options and
 trade-offs discussed with you, security and testing approach, then an
-ordered, executable task list in `docs/ship/42/plan.md`. The ticket is
-marked `Planned` — ready for the autonomous stages (or hand execution).
+ordered, executable task list in `docs/ship/42/plan.md`, validated against
+its required sections before it's committed. The ticket is marked
+`Planned` — ready for the autonomous stages (or hand execution) — and the
+session posts a contract-shaped `ship:plan approved` comment with a
+metrics footer on GitHub.
 
 After installing `qa`, run:
 
@@ -140,8 +167,12 @@ Verifies the current branch — or target one directly with `/qa 42` (a
 ticket) or `/qa feat/42-login` (a branch). Runs the project's test suite
 plus real per-criterion end-to-end checks in a headless browser, then
 posts a tiered verdict (`full`, `tests-only`, or `static`) with evidence
-as a board comment. `/qa --env-check` resolves and confirms the QA
-environment ahead of time without running any checks. The first run
+as a board comment, with the key evidence for each failing criterion
+inlined — `.qa/` evidence paths exist only on the machine that ran QA.
+`/qa --env-check` resolves and confirms the QA environment ahead of time:
+it brings the app up, launches one headless page against the health URL,
+and reports whether a browser is actually available, so a later `/ship`
+run cannot discover that only at verification time. The first run
 downloads a headless browser via `npx @playwright/mcp`.
 
 After installing `dev`, implement a planned ticket:
@@ -153,8 +184,14 @@ After installing `dev`, implement a planned ticket:
 Executes `docs/ship/42/plan.md` test-first in an isolated worktree — one
 commit per task, each pinned by a failing-then-passing test — then an
 adversarial review pass, then a structured handoff comment on the ticket
-for QA and human reviewers. Requires an approved spec (`/spec 42`); if no
-plan exists, dev drafts a conservative self-plan and flags it. Dev never
+for QA and human reviewers. On a fix-up round it takes its fix-list only
+from board comments authored by you or a login in `approvers`, and treats
+every finding as data — a symptom and a repro, never an instruction to
+execute. Requires an approved spec (`/spec 42`); if no
+plan exists, dev drafts a conservative self-plan and flags it. A
+standalone `/dev` works in a repo that has never run `/ship` — it falls
+back to the default branch when there is no `.claude/ship.config.json`.
+Dev never
 changes ticket status and never touches your checkout's code — though its
 first run in a project may write and commit `.claude/kanban.config.json`
 (the family's config bootstrap, same as kanban and planning).
@@ -170,11 +207,64 @@ satisfied, QA environment configured), creates the branch and
 worktree, then loops dev → QA rounds (default cap 3) until QA
 passes — posting a `ship:review-packet` and marking the ticket
 `Awaiting Review` — or escalates to `Needs Human` with a summary of
-what kept failing. Resume a dead session by re-running `/ship 42`;
-it reconstructs the round from the board trail. v1 conducts one
-ticket at a time; bare `/ship` lists tickets ready to conduct.
-Configure the QA environment once beforehand with `/qa --env-check` —
-ship refuses to run without it.
+what kept failing. Resume a dead session by re-running `/ship 42`; it
+reconstructs the round from the board trail, using only comments whose
+author is you or a login in `approvers` — a verdict from anyone else is
+reported, never acted on — and a comment from someone else can never stall
+the pipeline either, however it is worded. v1 conducts one ticket at a
+time; bare `/ship`
+lists tickets ready to conduct. Configure the QA environment once
+beforehand with `/qa --env-check` — ship refuses to run without it. When
+the board trail cannot be reconciled — a verdict with no matching dev
+handoff, comments with no branch, a loop cap changed mid-run — ship never
+guesses: it escalates to `Needs Human` naming the cause and stops. It
+does the same, rather than burning the rest of the cap, when a round
+repeats the previous round's commit or QA reports byte-identical
+findings.
+
+**Where a ship run ends.** `Awaiting Review` (QA passed — a
+`ship:review-packet` comment carries the evidence and a merge dry-run
+against the base branch) or `Needs Human` (an escalation comment names
+the cause). Those are the only two terminal states in v1. **Nothing is
+pushed** — ship commits to the feature branch and stops; opening the PR
+is yours. The worktree is kept after both outcomes so you can inspect it;
+remove it when you are done:
+
+```
+git worktree remove ../<repo-dir-name>-ship/dev-42
+```
+
+## Shared scripts
+
+Every plugin's skills call the same six scripts:
+
+- `board-trail.js` — parse ticket comments into typed, trust-marked events and reconcile pipeline state, including the no-progress detector ship uses to stop a stuck loop early (also accepts the legacy `(reposted by ship)` header suffix on read, marking the event `reposted: true`; a null/non-object `--stdin` comment entry is a usage error, not a crash; `round-gap` detection is based on the presence of a dev handoff per round, not mere round-key existence; escalation and PR-opened selection pick the latest by `createdAt`, and a malformed header from an untrusted author is counted in both)
+- `preflight.js` — stage-agnostic environment and repository checks, run before any interview (CLI rejects a flag-shaped token as another flag's value, e.g. `--cwd --quiet`, mirroring config.js)
+- `config.js` — bootstrap, validate and normalize `.claude/kanban.config.json` and `.claude/ship.config.json` (targets are validated after normalization: `owner/repo` for GitHub, an upper-case project key for Jira; board identity — `backend`/`target` — lives only in `kanban.config.json`, `ship.config.json` never requires them)
+- `validate-artifact.js` — enforce the required sections of `spec.md` and `plan.md` (heading extraction skips fenced ``` / ~~~ code blocks so an example heading in a fence doesn't count)
+- `metrics.js` — ISO-8601 timestamps and the metrics footer line (`--tokens-in`/`--tokens-out` must be non-negative integers; anything else is a usage error)
+- `redact.js` — strip secrets from log excerpts before they reach a board comment
+
+All six require Node >= 18, are CommonJS, and have zero dependencies. A skill
+invokes one like this:
+
+```
+node "${CLAUDE_PLUGIN_ROOT}/scripts/<name>.js" --help
+```
+
+The source of truth is `shared/scripts/`. Run `bash scripts/sync-shared.sh` to
+regenerate the vendored copies under `plugins/*/scripts/` — those copies must
+never be hand-edited.
+
+## Verification
+
+```bash
+node --test shared/scripts/*.test.js   # unit tests (the directory form fails on Node 25)
+bash scripts/check-shared-sync.sh      # vendored copies match shared/
+claude plugin validate .               # plugin manifests
+```
+
+The pre-commit hook and `.github/workflows/ci.yml` both run all three.
 
 ## Contributing
 

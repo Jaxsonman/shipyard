@@ -13,14 +13,23 @@ gh auth status
 If this fails, tell the user to run `gh auth login` and stop — do not
 attempt to create or search issues without valid auth.
 
-## Search for duplicates (Step 4 of SKILL.md)
+## List tickets for duplicate detection (Step 4 of SKILL.md)
 
 ```bash
-gh issue list --repo <owner/repo> --search "Source PRD: <slug> in:body" --state all --json number,title,url
+gh issue list --repo <owner/repo> --state all --limit 1000 --json number,title,url,body
 ```
 
-Parse the JSON array. If it's non-empty, those are the matches to report to
-the user.
+If exactly 1000 issues come back, the list was truncated — say so to the
+user, then page: repeat with `--state all --limit 1000` plus a
+`created:<YYYY-MM-DD..YYYY-MM-DD>` date-window qualifier, narrowing the
+window until a page comes back short of 1000. Never combine the window with
+`in:body` or any other body/text search qualifier — those tokenize on the
+colon and return wrong results. Never report "no duplicates found" from a
+page that was truncated.
+
+Filter the returned JSON **locally** for issues whose body contains a line
+exactly `Source PRD: <slug>`. Do not put that string in `--search` with
+`in:body` — GitHub's search tokenizes on the colon and the result is wrong.
 
 ## Create a ticket (Step 6 of SKILL.md)
 
@@ -53,7 +62,7 @@ Parse the JSON array; each entry's `number` is the ref (`#<number>`) used
 in `Depends on:` lines, and the titles are what Step 3 scans when deciding
 whether a new slice plausibly builds on existing work.
 
-## Verify a ticket exists (Step 5 of SKILL.md)
+## Verify a ticket exists (Step 3 of SKILL.md)
 
 ```bash
 gh issue view <number> --repo <owner/repo> --json number,title,state
@@ -62,3 +71,6 @@ gh issue view <number> --repo <owner/repo> --json number,title,state
 A zero exit confirms the ref exists; any state counts — a dependency on a
 closed ticket is already satisfied. A non-zero exit means the ref is wrong
 and must be fixed or removed at the gate.
+
+Also used at the Step 5 gate, to verify any existing-board ref the user adds
+there.

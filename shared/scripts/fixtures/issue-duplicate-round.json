@@ -1,0 +1,38 @@
+{
+  "number": 42,
+  "title": "Add login form",
+  "state": "OPEN",
+  "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42",
+  "author": {
+    "login": "Jaxsonman"
+  },
+  "labels": [
+    {
+      "name": "ship:in-dev",
+      "description": "",
+      "color": "1d76db"
+    }
+  ],
+  "comments": [
+    {
+      "author": {
+        "login": "Jaxsonman"
+      },
+      "authorAssociation": "OWNER",
+      "body": "ship:dev round 1/3\n\n## What changed and why\n- Task 1: add the login form — aaaaaaa\n\n## How to run it\nnpm ci && npm run dev\n\n## Criteria coverage\n| Criterion (spec \"Done means\") | Where implemented | How tested |\n|---|---|---|\n| 1 | src/login.js | tests/login.test.js |\n\n## Deviations\nnone\n\n## Known limitations\nnone\n\n<!-- shipyard-metrics {\"stage\":\"dev\",\"started\":\"2026-09-08T12:00:00Z\",\"finished\":\"2026-09-08T13:00:00Z\"} -->",
+      "createdAt": "2026-09-08T13:00:00Z",
+      "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42#issuecomment-12",
+      "id": "IC_12"
+    },
+    {
+      "author": {
+        "login": "Jaxsonman"
+      },
+      "authorAssociation": "OWNER",
+      "body": "ship:dev round 1/3\n\n## What changed and why\n- Task 1: add the login form — bbbbbbb\n\n## How to run it\nnpm ci && npm run dev\n\n## Criteria coverage\n| Criterion (spec \"Done means\") | Where implemented | How tested |\n|---|---|---|\n| 1 | src/login.js | tests/login.test.js |\n\n## Deviations\nnone\n\n## Known limitations\nnone\n\n<!-- shipyard-metrics {\"stage\":\"dev\",\"started\":\"2026-09-08T13:10:00Z\",\"finished\":\"2026-09-08T14:00:00Z\"} -->",
+      "createdAt": "2026-09-08T14:00:00Z",
+      "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42#issuecomment-13",
+      "id": "IC_13"
+    }
+  ]
+}

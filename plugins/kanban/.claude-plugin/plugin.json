@@ -1,6 +1,7 @@
 {
   "name": "kanban",
   "description": "Turn a PRD into vertical-slice tickets and create them on a real board (GitHub or Jira).",
+  "version": "1.1.0",
   "author": {
     "name": "Jaxson Mansouri",
     "email": "mansouricobusiness@gmail.com"

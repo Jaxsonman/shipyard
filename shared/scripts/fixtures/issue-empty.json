@@ -1,0 +1,17 @@
+{
+  "number": 42,
+  "title": "Add login form",
+  "state": "OPEN",
+  "url": "https://github.com/Jaxsonman/shipyard-e2e/issues/42",
+  "author": {
+    "login": "Jaxsonman"
+  },
+  "labels": [
+    {
+      "name": "ship:planned",
+      "description": "",
+      "color": "1d76db"
+    }
+  ],
+  "comments": []
+}

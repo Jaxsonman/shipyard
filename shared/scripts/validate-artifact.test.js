@@ -28,6 +28,16 @@ test('heading matching ignores case and trailing whitespace', () => {
   assert.equal(r.ok, true, JSON.stringify(r.missing));
 });
 
+test('extractHeadings skips headings inside fenced code blocks (``` and ~~~)', () => {
+  const spec = '```markdown\n' + REQUIRED.spec.map(h => `## ${h}`).join('\n') + '\n```\n'
+    + '~~~\n## Problem\n~~~\n'
+    + '## Problem\n\nreal body\n';
+  const r = validate('spec', spec);
+  assert.equal(r.ok, false, JSON.stringify(r));
+  assert.ok(r.missing.length === REQUIRED.spec.length - 1, JSON.stringify(r.missing));
+  assert.ok(r.found.includes('Problem'));
+});
+
 test('a missing file is reported, not thrown', () => {
   const r = validate('spec', '');
   assert.equal(r.ok, false);

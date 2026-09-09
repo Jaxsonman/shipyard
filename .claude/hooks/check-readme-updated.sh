@@ -3,7 +3,7 @@
 # changed but README.md wasn't updated in the same commit.
 set -euo pipefail
 
-changed=$(git diff --cached --name-only)
+changed=$(git -c core.quotePath=false diff --cached --name-only)
 
 if echo "$changed" | grep -qE '^(plugins/|\.claude-plugin/)' \
    && ! echo "$changed" | grep -qx 'README.md'; then

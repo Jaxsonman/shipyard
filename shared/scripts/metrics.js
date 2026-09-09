@@ -26,6 +26,12 @@ function footer(opts) {
   if (finished !== undefined && (typeof finished !== 'string' || !ISO_RE.test(finished))) {
     throw new Error(`invalid finished timestamp: ${finished}`);
   }
+  if (tokensIn !== undefined && (!Number.isInteger(tokensIn) || tokensIn < 0)) {
+    throw new Error(`invalid tokensIn: must be a non-negative integer, got ${tokensIn}`);
+  }
+  if (tokensOut !== undefined && (!Number.isInteger(tokensOut) || tokensOut < 0)) {
+    throw new Error(`invalid tokensOut: must be a non-negative integer, got ${tokensOut}`);
+  }
 
   const payload = {};
   payload.stage = stage;

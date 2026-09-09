@@ -44,6 +44,7 @@ gives you its slash commands and skills.
    /plugin install dev@shipyard
    /plugin install qa@shipyard
    /plugin install ship@shipyard
+   /plugin install pr@shipyard
    ```
 
    Repeat for any other stages you want (see the table below). Installing adds
@@ -51,8 +52,9 @@ gives you its slash commands and skills.
 
 4. **Verify they're installed** — `/plugin` should list `prd@shipyard`,
    `kanban@shipyard`, `planning@shipyard`, `dev@shipyard`, `qa@shipyard`,
-   and `ship@shipyard` as installed, and `/prd`, `/kanban`, `/spec`, `/plan`,
-   `/dev`, `/qa`, and `/ship` should autocomplete as slash commands.
+   `ship@shipyard`, and `pr@shipyard` as installed, and `/prd`, `/kanban`,
+   `/spec`, `/plan`, `/dev`, `/qa`, `/ship`, and `/pr` should autocomplete
+   as slash commands.
 
 ### Keeping it up to date
 
@@ -84,7 +86,7 @@ Uninstall plugins before removing the marketplace they came from.
 | 3 | `planning` | ✅ Available | Per-ticket `/spec` + `/plan` collaborative sessions |
 | 4 | `dev` | ✅ Available | Autonomous implementation of planned tickets |
 | 5 | `qa` | ✅ Available | Autonomous verification — tests plus real end-to-end checks |
-| 6 | `pr` | Planned | Open PRs into your existing CI/CD |
+| 6 | `pr` | ✅ Available | Open the PR for an approved ticket and hand off to your CI/CD |
 | — | `ship` | ✅ Available | Conductor — drives one planned ticket through the dev ⇄ QA loop (v1) |
 
 ## Usage

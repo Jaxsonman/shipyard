@@ -330,7 +330,7 @@ Both files live in `.claude/` in the target repository, hold **no secrets**, and
 | `backend` | `"github"` \| `"jira"` | — (required) | Which board backend to use. |
 | `target` | string | — (required) | `owner/repo` for GitHub; the project key (e.g. `PROJ`) for Jira. |
 
-`target` is normalized on write: a GitHub URL becomes `owner/repo` (any `.git` suffix stripped); a Jira key is upper-cased.
+`target` is normalized on write: a GitHub URL becomes `owner/repo` (any `.git` suffix stripped); a Jira key is upper-cased. After normalization `target` is validated: for `github` it must match `^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`, and for `jira` it must match `^[A-Z][A-Z0-9_]*$`, otherwise `config.js` rejects it.
 
 ```json
 {

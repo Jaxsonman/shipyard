@@ -11,6 +11,19 @@ const DEFAULTS = {
 
 const VALID_BACKENDS = ['github', 'jira'];
 
+const GITHUB_TARGET_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const JIRA_TARGET_RE = /^[A-Z][A-Z0-9_]*$/;
+
+function targetError(backend, normalizedTarget) {
+  if (backend === 'github' && !GITHUB_TARGET_RE.test(normalizedTarget)) {
+    return `invalid "target" for backend "github": must be "owner/repo" or a GitHub URL normalizing to it (got ${JSON.stringify(normalizedTarget)})`;
+  }
+  if (backend === 'jira' && !JIRA_TARGET_RE.test(normalizedTarget)) {
+    return `invalid "target" for backend "jira": must be a project key like "PROJ" (got ${JSON.stringify(normalizedTarget)})`;
+  }
+  return null;
+}
+
 function normalizeTarget(backend, raw) {
   if (typeof raw !== 'string') {
     throw new TypeError('normalizeTarget: raw must be a string');
@@ -49,6 +62,9 @@ function validateConfig(kind, obj) {
   const target = value.target;
   if (!target || (typeof target === 'string' && target.trim() === '')) {
     errors.push('missing or empty "target"');
+  } else if (typeof target === 'string' && backend && VALID_BACKENDS.includes(backend)) {
+    const err = targetError(backend, target);
+    if (err) errors.push(err);
   }
 
   if (kind === 'ship') {
@@ -113,7 +129,10 @@ function bootstrap({ kind, backend, target, cwd }) {
   }
 
   const normalizedTarget = normalizeTarget(backend, target);
-  const { value } = validateConfig(kind, { backend, target: normalizedTarget });
+  const { ok, errors, value } = validateConfig(kind, { backend, target: normalizedTarget });
+  if (!ok) {
+    throw new Error(errors.join('; '));
+  }
 
   fs.mkdirSync(path.join(cwd, '.claude'), { recursive: true });
   fs.writeFileSync(p, JSON.stringify(value, null, 2) + '\n');
@@ -167,17 +186,30 @@ Exit codes: 0 ok, 1 invalid/missing config, 2 usage error.
 `);
 }
 
+class UsageError extends Error {}
+
+const VALUED_FLAGS = new Set(['--backend', '--target', '--cwd']);
+
+function takeValue(args, i, flagName) {
+  const v = args[i + 1];
+  if (v === undefined) {
+    throw new UsageError(`${flagName} requires a value`);
+  }
+  if (v.startsWith('--')) {
+    throw new UsageError(`${flagName} requires a value (got flag-like token "${v}")`);
+  }
+  return v;
+}
+
 function parseFlags(args) {
   const flags = {};
   const positional = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (a === '--backend') {
-      flags.backend = args[++i];
-    } else if (a === '--target') {
-      flags.target = args[++i];
-    } else if (a === '--cwd') {
-      flags.cwd = args[++i];
+    if (VALUED_FLAGS.has(a)) {
+      const value = takeValue(args, i, a);
+      flags[a.slice(2)] = value;
+      i++;
     } else if (a === '--help' || a === '-h') {
       flags.help = true;
     } else {
@@ -202,7 +234,17 @@ function main() {
     process.exit(2);
   }
 
-  const { flags, positional } = parseFlags(rest);
+  let flags, positional;
+  try {
+    ({ flags, positional } = parseFlags(rest));
+  } catch (e) {
+    if (e instanceof UsageError) {
+      process.stderr.write(`${e.message}\n`);
+      printUsage(process.stderr);
+      process.exit(2);
+    }
+    throw e;
+  }
   const cwd = flags.cwd ? path.resolve(flags.cwd) : process.cwd();
 
   if (command === 'bootstrap') {
@@ -224,7 +266,7 @@ function main() {
       process.exit(0);
     } catch (e) {
       process.stderr.write(`error: ${e.message}\n`);
-      process.exit(2);
+      process.exit(1);
     }
   } else if (command === 'validate') {
     const kinds = positional[0] ? [positional[0]] : ['kanban', 'ship'];

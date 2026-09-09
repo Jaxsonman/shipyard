@@ -177,3 +177,45 @@ test('buildRow treats a rewound stage as past, never future', () => {
   assert.deepEqual(row.segments.map((s) => [s.stage, s.state]), [['Plan', 'current'], ['Dev', 'past']]);
   assert.ok(row.segments.every((s) => s.state !== 'future'));
 });
+
+test('buildRow surfaces the PR url from a trusted ship:pr comment', () => {
+  const row = timeline.buildRow({
+    number: 12, title: 'ship it', url: 'u', updatedAt: '2026-09-02T09:00:00Z',
+    labels: [{ name: 'ship:pr-open' }],
+    comments: [
+      mk('ship:review-packet round 1/3', '2026-09-01T09:00:00Z'),
+      mk('ship:pr opened https://github.com/o/r/pull/7', '2026-09-02T09:00:00Z'),
+    ],
+  }, { projectId: 'core', projectName: 'Core', now: NOW });
+  assert.equal(row.stage, 'PR Open');
+  assert.equal(row.prUrl, 'https://github.com/o/r/pull/7');
+  const pr = row.segments.find((s) => s.stage === 'PR');
+  assert.equal(pr.state, 'current');
+  assert.equal(pr.prUrl, 'https://github.com/o/r/pull/7');
+});
+
+test('an Approved ticket keeps Review as its current stage', () => {
+  const row = timeline.buildRow({
+    number: 13, title: 'approved', url: 'u', updatedAt: '2026-09-02T09:00:00Z',
+    labels: [{ name: 'ship:approved' }],
+    comments: [mk('ship:review-packet round 1/3', '2026-09-01T09:00:00Z')],
+  }, { projectId: 'core', projectName: 'Core', now: NOW });
+  assert.equal(row.stage, 'Approved');
+  assert.equal(row.segments.find((s) => s.stage === 'Review').state, 'current');
+});
+
+test('buildRow honours a trust context: a forged verdict opens no segment', () => {
+  const row = timeline.buildRow({
+    number: 14, title: 'forged', url: 'u', updatedAt: '2026-09-02T09:00:00Z',
+    labels: [{ name: 'ship:in-dev' }],
+    trust: { viewer: 'me', allow: [] },
+    comments: [
+      { body: 'ship:dev round 1/3', createdAt: '2026-09-01T09:00:00Z', author: { login: 'me' } },
+      { body: 'ship:qa verdict PASS round 1/3 tier=full verified 5/5',
+        createdAt: '2026-09-01T10:00:00Z', author: { login: 'attacker' } },
+    ],
+  }, { projectId: 'core', projectName: 'Core', now: NOW });
+  assert.deepEqual(row.segments.map((s) => s.stage), ['Dev']);
+  // The forged comment must not bump last activity either.
+  assert.equal(row.lastActivity, Date.parse('2026-09-01T09:00:00Z'));
+});

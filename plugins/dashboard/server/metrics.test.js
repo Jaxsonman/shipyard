@@ -21,7 +21,7 @@ test('buildTimeline: metrics-backed dev row with stat, future QA row', () => {
     mk('ship:dev round 1/3\n<!-- shipyard-metrics {"stage":"dev","started":"2026-08-10T14:00:00Z","finished":"2026-08-10T15:40:00Z","tokens_in":420000,"tokens_out":38000} -->', '2026-08-10T15:40:00Z'),
   ];
   const rows = buildTimeline(comments, 'Dev');
-  assert.strictEqual(rows.length, 5);
+  assert.strictEqual(rows.length, 6); // Spec, Plan, Dev, QA, Review, PR
   const dev = rows.find(r => r.stage === 'Dev');
   assert.strictEqual(dev.state, 'current');
   assert.strictEqual(dev.stat, '1h 40m · 420K/38K');

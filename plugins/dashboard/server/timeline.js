@@ -15,6 +15,7 @@ const CURRENT_STAGE_FOR = {
   Dev: 'Dev',
   QA: 'QA',
   'Awaiting Review': 'Review',
+  Approved: 'Review',
   'PR Open': 'PR',
 };
 
@@ -45,7 +46,10 @@ function buildRow(ticket, ctx) {
   const projectName = ctx.projectName;
   const stageInfo = board.stageFromLabels(labelsOf(ticket));
   const stage = stageInfo.stage;
-  const t = trail.parseTrail(ticket.comments);
+  // `ticket.trust` is { viewer, allow } in real mode and undefined in mock
+  // mode; undefined keeps the adapter's legacy trust-everything path for
+  // author-less fixtures (contract v1 §3).
+  const t = trail.parseTrail(ticket.comments, ticket.trust);
 
   // Which segment is "current"?
   let currentStage = CURRENT_STAGE_FOR[stage] || null;
@@ -77,6 +81,7 @@ function buildRow(ticket, ctx) {
       state,
       tokensIn: s.tokensIn,
       tokensOut: s.tokensOut,
+      prUrl: s.prUrl || null,
       durationLabel: s.estimated ? null : metrics.formatDuration(s.end - s.start),
       tokensLabel: hasTokens
         ? `${metrics.formatTokens(s.tokensIn || 0)}/${metrics.formatTokens(s.tokensOut || 0)}`
@@ -139,6 +144,9 @@ function buildRow(ticket, ctx) {
     // Only surfaced for Needs Human: a recovered ticket's old escalation is
     // history, and counting it would inflate the stats strip's cause tallies.
     escalation: stage === 'Needs Human' ? newestEscalation(t.escalations) : null,
+    // Contract v1 §5.9: the PR URL only ever comes from a trusted
+    // `ship:pr opened <url>` comment, never from a label or the issue body.
+    prUrl: t.prUrl || null,
     running,
     lastActivity,
     tokensIn,

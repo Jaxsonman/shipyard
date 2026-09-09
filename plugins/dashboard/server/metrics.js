@@ -2,18 +2,21 @@
 
 const trail = require('./trail');
 
-// Drawer's five-row Gantt keeps its own stage order (unchanged UI); this is
-// intentionally a subset of trail.STAGE_ORDER (no 'PR' row here).
-const STAGE_ORDER = ['Spec', 'Plan', 'Dev', 'QA', 'Review'];
+// The drawer's per-ticket Gantt now mirrors trail.STAGE_ORDER exactly, so the
+// PR stage the `pr` plugin opens is visible per ticket, not just board-wide.
+const STAGE_ORDER = ['Spec', 'Plan', 'Dev', 'QA', 'Review', 'PR'];
 
-// Display-stage -> row index of the row that is "current" for that stage.
+// Display-stage -> row index of the row that is "current" for that stage
+// (contract v1 §4 label ladder).
 const CURRENT_STAGE_INDEX = {
   "Spec'd": 0,
   Planned: 1,
   Dev: 2,
   QA: 3,
   'Awaiting Review': 4,
-  closed: 4,
+  Approved: 4,
+  'PR Open': 5,
+  closed: 5,
 };
 
 // Thin re-export for back-compat: all comment parsing lives in trail.js now.

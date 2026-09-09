@@ -37,6 +37,17 @@ The glob must be quoted so Node — not the shell — expands it. The bare-direc
 form (`node --test plugins/dashboard/server/`) fails on Node 23 and newer, which
 resolves a directory argument as a module specifier.
 
+## Trust rule
+
+Contract v1 §3: a board comment is acted on only when its author is the
+invoking `gh` account (resolved once per server start with `gh api user`) or
+appears in `approvers` in the linked project's `.claude/ship.config.json`.
+Untrusted comments are reported, never acted on — they open no stage segment,
+contribute no escalation or tokens, and cannot bump a ticket's last activity.
+When the invoking account cannot be determined the server fails closed: every
+author outside `approvers` is untrusted. `--mock` mode has no real authorship
+and stays in the parser's legacy trust-everything path.
+
 ## Shared contract code
 
 `scripts/` and `references/contract.md` are **vendored copies** of `shared/scripts/`

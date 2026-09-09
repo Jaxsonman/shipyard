@@ -15,7 +15,7 @@ var ESCALATION_CAUSES = ['cap', 'static', 'stage-error', 'reconcile'];
 
 // Every display stage board.js can produce, in pipeline order. Kept here as
 // one list so a rename cannot silently drop a column from the strip.
-var STAGE_KEYS = ['Backlog', "Spec'd", 'Planned', 'Dev', 'QA', 'Awaiting Review', 'Needs Human'];
+var STAGE_KEYS = ['Backlog', "Spec'd", 'Planned', 'Dev', 'QA', 'Awaiting Review', 'Approved', 'PR Open', 'Needs Human'];
 
 var THROUGHPUT_WINDOW_DAYS = 28;
 var DAY_MS = 24 * 3600 * 1000;

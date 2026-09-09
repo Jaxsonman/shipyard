@@ -56,10 +56,15 @@ test('tickets list, detail, and guarded approve', async () => {
   assert.ok(tickets.length >= 5);
   const t = tickets.find(x => x.stage === 'Awaiting Review');
   const detail = await (await fetch(`${base}/api/tickets/${t.project}/${t.number}`)).json();
-  assert.strictEqual(detail.ticket.timeline.length, 5);
+  // Six rows since the PR stage landed: Spec, Plan, Dev, QA, Review, PR.
+  assert.strictEqual(detail.ticket.timeline.length, 6);
   assert.ok(typeof detail.ticket.spec === 'string' && detail.ticket.spec.length > 0);
   const ok = await fetch(`${base}/api/tickets/${t.project}/${t.number}/approve`, { method: 'POST' });
   assert.strictEqual(ok.status, 200);
+  // Decision 6: approving a review packet sets ship:approved, it does not close.
+  const after = await (await fetch(`${base}/api/tickets?project=all`)).json();
+  const moved = after.tickets.find((x) => x.number === t.number);
+  assert.strictEqual(moved.stage, 'Approved');
   const dev = tickets.find(x => x.stage === 'Dev');
   const blocked = await fetch(`${base}/api/tickets/${dev.project}/${dev.number}/approve`, { method: 'POST' });
   assert.strictEqual(blocked.status, 409);

@@ -312,8 +312,11 @@ function createMockBoard() {
     async approve(repo, number, stage) {
       const t = findTicket(repo, number);
       if (!t) throw new Error(`ticket ${number} not found in ${repo}`);
+      // Contract v1 §4 / Decision 6: the review gate swaps the label and
+      // leaves the issue open — the PR merge closes it.
       if (stage === 'Awaiting Review') {
-        t.state = 'closed';
+        t.labels = t.labels.filter((l) => l.name !== 'ship:awaiting-review');
+        t.labels.push({ name: 'ship:approved' });
         return;
       }
       if (stage === 'Needs Human') {

@@ -8,7 +8,7 @@ const os = require('node:os');
 const { execFile: execFileCb } = require('node:child_process');
 
 const { parseMetrics, buildTimeline } = require('./metrics.js');
-const { stageFromLabels, priorityFromLabels, createBoard, repoFromPath } = require('./board.js');
+const { stageFromLabels, priorityFromLabels, createBoard, repoFromPath, viewer: ghViewer, readApprovers } = require('./board.js');
 const fixtures = require('./fixtures.js');
 const timeline = require('./timeline.js');
 const stats = require('./stats.js');
@@ -185,6 +185,27 @@ function createApp(opts = {}) {
   const board = mock ? fixtures.createMockBoard() : createBoard(execFile);
   const repoExecFile = mock ? fixtures.mockExecFile : execFile;
 
+  // Contract v1 §3: the invoking gh account anchors the trust rule. Resolve it
+  // once per process — `gh api user` is a network round-trip and the answer
+  // cannot change while the server runs. A failure caches null, which makes
+  // every author outside a project's `approvers` untrusted (fail closed).
+  // Mock mode has no gh and no real authorship, so it stays in the adapter's
+  // legacy trust-everything mode by leaving the context undefined.
+  let viewerPromise = null;
+  function resolveViewer() {
+    if (mock) return Promise.resolve(null);
+    if (!viewerPromise) viewerPromise = ghViewer(execFile);
+    return viewerPromise;
+  }
+
+  // Trust context for one project: { viewer, allow }. Undefined in mock mode so
+  // author-less fixtures still parse.
+  async function trustFor(project) {
+    if (mock) return undefined;
+    const login = await resolveViewer();
+    return { viewer: login, allow: readApprovers(project && project.path) };
+  }
+
   async function loadConfig() {
     if (mock) return { projects: fixtures.getProjects() };
     try {
@@ -357,15 +378,16 @@ function createApp(opts = {}) {
         continue;
       }
 
+      const trust = await trustFor(project);
       const details = await mapWithConcurrency(issues, DETAIL_CONCURRENCY, async (issue) => {
         try {
           const detail = await board.getTicket(project.repo, issue.number);
-          return { ...detail, project: project.id };
+          return { ...detail, project: project.id, trust };
         } catch (err) {
           warnings.push(
             `Failed to load detail for ${project.id}#${issue.number}: ${err.message}`
           );
-          return { ...issue, comments: [], project: project.id };
+          return { ...issue, comments: [], project: project.id, trust };
         }
       });
 

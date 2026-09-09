@@ -181,7 +181,7 @@ ship refuses to run without it.
 Every plugin's skills call the same six scripts:
 
 - `board-trail.js` — parse ticket comments into typed, trust-marked events and reconcile pipeline state (also accepts the legacy `(reposted by ship)` header suffix on read, marking the event `reposted: true`; a null/non-object `--stdin` comment entry is a usage error, not a crash; `round-gap` detection is based on the presence of a dev handoff per round, not mere round-key existence)
-- `preflight.js` — stage-agnostic environment and repository checks, run before any interview
+- `preflight.js` — stage-agnostic environment and repository checks, run before any interview (CLI rejects a flag-shaped token as another flag's value, e.g. `--cwd --quiet`, mirroring config.js)
 - `config.js` — bootstrap, validate and normalize `.claude/kanban.config.json` and `.claude/ship.config.json` (targets are validated after normalization: `owner/repo` for GitHub, an upper-case project key for Jira; board identity — `backend`/`target` — lives only in `kanban.config.json`, `ship.config.json` never requires them)
 - `validate-artifact.js` — enforce the required sections of `spec.md` and `plan.md` (heading extraction skips fenced ``` / ~~~ code blocks so an example heading in a fence doesn't count)
 - `metrics.js` — ISO-8601 timestamps and the metrics footer line

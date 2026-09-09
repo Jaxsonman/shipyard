@@ -82,6 +82,24 @@ test('stage=ship reads backend/target from kanban.config.json and baseBranch/loo
   assert.match(configCheck.message, /target=owner\/repo/);
 });
 
+test('CLI: a flag-shaped token is not swallowed as the value of a preceding flag (--cwd --quiet)', () => {
+  let threw = false;
+  let stderr = '';
+  try {
+    execFileSync(
+      process.execPath,
+      [path.join(__dirname, 'preflight.js'), '--stage', 'prd', '--cwd', '--quiet'],
+      { stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+  } catch (e) {
+    threw = true;
+    stderr = String(e.stderr);
+    assert.equal(e.status, 2);
+  }
+  assert.ok(threw, 'expected the CLI to exit non-zero');
+  assert.ok(/usage/i.test(stderr), stderr);
+});
+
 test('the report is JSON-serialisable and lists reasons for every failed error check', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-nogit2-'));
   const r = preflight({ stage: 'qa', ticket: 7, cwd: dir, exec: fakeExec({}) });

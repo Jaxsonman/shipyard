@@ -296,20 +296,44 @@ function preflight(opts = {}) {
 
 // ---------------------------------------------------------------- CLI ----
 
+class UsageError extends Error {}
+
+function takeValue(argv, i, flagName) {
+  const v = argv[i + 1];
+  if (v === undefined) {
+    throw new UsageError(`${flagName} requires a value`);
+  }
+  if (v.startsWith('--')) {
+    throw new UsageError(`${flagName} requires a value (got flag-like token "${v}")`);
+  }
+  return v;
+}
+
 function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--json' || a === '--quiet') out[a.slice(2)] = true;
     else if (a === '--help' || a === '-h') out.help = true;
-    else if (a.startsWith('--')) out[a.slice(2)] = argv[++i];
-    else out._.push(a);
+    else if (a.startsWith('--')) {
+      out[a.slice(2)] = takeValue(argv, i, a);
+      i++;
+    } else out._.push(a);
   }
   return out;
 }
 
 function main(argv) {
-  const args = parseArgs(argv);
+  let args;
+  try {
+    args = parseArgs(argv);
+  } catch (err) {
+    if (err instanceof UsageError) {
+      process.stderr.write(err.message + '\n\n' + USAGE + '\n');
+      process.exit(2);
+    }
+    throw err;
+  }
   if (args.help || argv.length === 0) {
     process.stdout.write(USAGE + '\n');
     process.exit(0);

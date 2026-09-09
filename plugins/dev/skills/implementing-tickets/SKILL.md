@@ -138,17 +138,13 @@ Standalone only:
   and a missing or invalid `.claude/kanban.config.json` always refuses:
   dev cannot reach the board without it.
 
-  One more failing check is a resume rather than a fault:
-  `worktree-elsewhere` naming **this ticket's own** conventional worktree
-  path (§13). Reuse it and continue. Any other path, and any other
-  failing check alongside it, still refuses. Exit 2 → usage error —
-  report and stop.
-  - **Checked out elsewhere:** `worktree-elsewhere` failing means the
-    branch is already checked out in another worktree (its `path`). If
-    that path is the conventional
-    `../<repo-dir-name>-ship/dev-<id>`, it's this ticket's — use it,
-    skip worktree creation. Otherwise refuse, naming the path; never
-    create a second worktree for the same branch.
+  Exit 2 → usage error — report and stop.
+  - **Checked out elsewhere:** `worktree-elsewhere` passing at `info`
+    level with a `resumeWorktree` path means the branch is already
+    checked out in **this ticket's own** worktree (§13): use that path
+    and skip worktree creation — this is a resume. The check *failing*
+    means some other worktree holds the branch; refuse, naming its
+    `path`, and never create a second worktree for one branch.
   - **Path collision:** `worktree-collision` failing means the
     conventional path exists but is held by a different branch (its
     `path`) — refuse, naming the path; never clobber it.

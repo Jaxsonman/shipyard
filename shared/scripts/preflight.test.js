@@ -146,3 +146,53 @@ test('exactly one feat/<id>-* match is reused, many is an error', () => {
   assert.equal(many.ok, false);
   assert.equal(many.level, 'error');
 });
+
+test("worktree-elsewhere treats the ticket's own conventional worktree as a resume", () => {
+  const here = process.cwd();
+  const conventional = path.resolve(here, '..', `${path.basename(here)}-ship`, 'dev-42');
+  const exec = (cmd, args) => {
+    if (cmd === 'git' && args[0] === 'branch' && !args.includes('-r')) {
+      return { code: 0, stdout: 'main\nfeat/42-login\n', stderr: '' };
+    }
+    if (cmd === 'git' && args[0] === 'worktree') {
+      return {
+        code: 0,
+        stdout: `worktree ${here}\nbranch refs/heads/main\n\nworktree ${conventional}\nbranch refs/heads/feat/42-login\n`,
+        stderr: '',
+      };
+    }
+    return { code: 0, stdout: '', stderr: '' };
+  };
+  for (const stage of ['ship', 'dev']) {
+    const r = preflight({ stage, ticket: '42', cwd: here, exec });
+    const c = r.checks.find((x) => x.id === 'worktree-elsewhere');
+    assert.equal(c.ok, true, `${stage}: a resume must not fail preflight`);
+    assert.equal(c.level, 'info');
+    assert.equal(c.resumeWorktree, conventional);
+    assert.ok(!r.reasons.some((m) => /checked out in another worktree/.test(m)));
+  }
+});
+
+test('worktree-elsewhere still fails when the branch is checked out somewhere else', () => {
+  const here = process.cwd();
+  const foreign = path.resolve(here, '..', 'somebody-elses-worktree');
+  const exec = (cmd, args) => {
+    if (cmd === 'git' && args[0] === 'branch' && !args.includes('-r')) {
+      return { code: 0, stdout: 'main\nfeat/42-login\n', stderr: '' };
+    }
+    if (cmd === 'git' && args[0] === 'worktree') {
+      return {
+        code: 0,
+        stdout: `worktree ${here}\nbranch refs/heads/main\n\nworktree ${foreign}\nbranch refs/heads/feat/42-login\n`,
+        stderr: '',
+      };
+    }
+    return { code: 0, stdout: '', stderr: '' };
+  };
+  const r = preflight({ stage: 'ship', ticket: '42', cwd: here, exec });
+  const c = r.checks.find((x) => x.id === 'worktree-elsewhere');
+  assert.equal(c.ok, false);
+  assert.equal(c.level, 'error');
+  assert.equal(c.path, foreign);
+  assert.equal(r.ok, false);
+});

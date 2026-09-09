@@ -270,19 +270,29 @@ function preflight(opts = {}) {
       }
     }
     const here = path.resolve(cwd);
+    const repoDir = path.basename(here);
+    // The ticket's own worktree path (contract §13). Computed before the
+    // checked-out-elsewhere test because a branch sitting *here* is the normal
+    // state of a resume, not a fault: dev and ship run from the main checkout
+    // while their worktree lives beside it, so a plain "is it checked out
+    // somewhere other than cwd" test fails every resume.
+    const conventional = path.resolve(here, '..', `${repoDir}-ship`, `dev-${ticket}`);
+
     if (!branch) {
       skip('worktree-elsewhere', 'error', 'no single matching branch');
-    } else if (holders[branch] && path.resolve(holders[branch]) !== here) {
+    } else if (!holders[branch]) {
+      add('worktree-elsewhere', true, 'error', `branch ${branch} is not checked out elsewhere`);
+    } else if (path.resolve(holders[branch]) === here) {
+      add('worktree-elsewhere', true, 'error', `branch ${branch} is checked out here`);
+    } else if (path.resolve(holders[branch]) === conventional) {
+      add('worktree-elsewhere', true, 'info',
+        `branch ${branch} is checked out in this ticket's own worktree: ${holders[branch]} — resume it`,
+        { resumeWorktree: holders[branch] });
+    } else {
       add('worktree-elsewhere', false, 'error',
         `branch ${branch} is checked out in another worktree: ${holders[branch]}`,
         { path: holders[branch] });
-    } else {
-      add('worktree-elsewhere', true, 'error',
-        holders[branch] ? `branch ${branch} is checked out here` : `branch ${branch} is not checked out elsewhere`);
     }
-
-    const repoDir = path.basename(here);
-    const conventional = path.resolve(here, '..', `${repoDir}-ship`, `dev-${ticket}`);
     const takenBy = Object.entries(holders).find(([, p]) => path.resolve(p) === conventional);
     if (takenBy && branch && takenBy[0] !== branch) {
       add('worktree-collision', false, 'error',

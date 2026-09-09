@@ -152,10 +152,11 @@ by hand.
    pushes nothing. Both exist and diverged (an `error`-level check) →
    refuse, naming the ahead/behind counts. Ship never merges, rebases or
    force-updates a branch to resolve this.
-3. **`worktree-elsewhere`** failed → the branch is checked out elsewhere,
-   at the check's `path`. If that is ship's conventional path for this
-   ticket (§13) it *is* this ticket's worktree: reuse it as-is. Any other
-   path → refuse, naming it; never make a second worktree for one branch.
+3. **`worktree-elsewhere`** passing at `info` level with a
+   `resumeWorktree` path → the branch is already checked out in this
+   ticket's own worktree (§13): reuse that path as-is, this is a resume.
+   The check *failing* → some other worktree holds the branch; refuse,
+   naming its `path`. Never make a second worktree for one branch.
 4. **`worktree-collision`** failed → the conventional path is held by a
    different branch. Refuse, naming path and holder; never clobber it.
 5. Otherwise create it:

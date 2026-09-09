@@ -161,3 +161,77 @@ test('parseEvents tolerates a missing comments key and a missing author', () => 
   const ev = bt.parseEvents({ comments: [{ createdAt: 'x', body: 'ship:dev round 1/3' }], labels: [] }, { viewer: 'x' });
   assert.equal(ev[0].trusted, false);
 });
+
+// ---- H-09 additions: no-progress detector and branch-absent input (§9) ----
+
+const roundComments = (findings1, findings2) => ({
+  labels: [],
+  comments: [
+    { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T10:00:00Z', url: 'd1', body: 'ship:dev round 1/3' },
+    { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T11:00:00Z', url: 'q1',
+      body: `ship:qa verdict FAIL round 1/3 tier=full verified 2/2\n\n## Findings\n${findings1}\n` },
+    { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T12:00:00Z', url: 'd2', body: 'ship:dev round 2/3' },
+    { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T13:00:00Z', url: 'q2',
+      body: `ship:qa verdict FAIL round 2/3 tier=full verified 2/2\n\n## Findings\n${findings2}\n` },
+  ],
+});
+
+const reconcileRounds = (issue, opts) =>
+  bt.reconcile(bt.parseEvents(issue, { viewer: 'Jaxsonman' }), { cap: 3, ...opts });
+
+test('findingsHash extracts only the ## Findings section and is whitespace-stable', () => {
+  const a = bt.findingsHash('ship:qa verdict FAIL round 1/3\n\n## Findings\n1. broken.  \n\n## Unverifiable\n- x\n');
+  const b = bt.findingsHash('ship:qa verdict FAIL round 2/3\r\n\r\n## Findings\r\n1. broken.\r\n');
+  assert.equal(a, b);
+  assert.notEqual(a, bt.findingsHash('## Findings\n2. different.\n'));
+  assert.equal(bt.findingsHash('ship:dev round 1/3\n\nno findings section'), null);
+  assert.equal(bt.findingsHash('## Findings\n\n## Unverifiable\n'), null);
+});
+
+test('byte-identical QA findings across consecutive rounds are no progress (Decision 9)', () => {
+  const state = reconcileRounds(roundComments('1. login 500s. Repro: POST /login', '1. login 500s. Repro: POST /login'));
+  assert.equal(state.noProgress.length, 1);
+  assert.equal(state.noProgress[0].round, 2);
+  assert.match(state.noProgress[0].reason, /byte-identical to round 1/);
+  assert.deepEqual(state.irreconcilable, []); // reported, not irreconcilable
+});
+
+test('changed QA findings are progress', () => {
+  const state = reconcileRounds(roundComments('1. login 500s.', '2. logout 500s.'));
+  assert.deepEqual(state.noProgress, []);
+});
+
+test('an unchanged dev HEAD across consecutive rounds is no progress (L-5)', () => {
+  const state = reconcileRounds(roundComments('1. a', '2. b'), { heads: { 1: 'abc123', 2: 'abc123' } });
+  assert.equal(state.noProgress.length, 1);
+  assert.match(state.noProgress[0].reason, /HEAD abc123 is unchanged from round 1/);
+});
+
+test('a moved dev HEAD is progress, and missing heads are not guessed', () => {
+  assert.deepEqual(reconcileRounds(roundComments('1. a', '2. b'), { heads: { 1: 'abc', 2: 'def' } }).noProgress, []);
+  assert.deepEqual(reconcileRounds(roundComments('1. a', '2. b'), { heads: { 2: 'def' } }).noProgress, []);
+  assert.deepEqual(reconcileRounds(roundComments('1. a', '2. b')).noProgress, []);
+});
+
+test('pipeline comments with no feature branch are irreconcilable (L-8)', () => {
+  const issue = roundComments('1. a', '2. b');
+  assert.ok(reconcileRounds(issue, { branchExists: false }).irreconcilable
+    .some(i => i.code === 'comments-without-branch'));
+  assert.ok(!reconcileRounds(issue, { branchExists: true }).irreconcilable
+    .some(i => i.code === 'comments-without-branch'));
+  assert.ok(!reconcileRounds(issue).irreconcilable.some(i => i.code === 'comments-without-branch'));
+  assert.equal(reconcileRounds(issue, { branchExists: false }).branchExists, false);
+});
+
+test('branchExists false with no pipeline comments is not irreconcilable', () => {
+  const st = bt.reconcile(bt.parseEvents({ labels: [], comments: [] }, { viewer: 'x' }), { branchExists: false });
+  assert.deepEqual(st.irreconcilable, []);
+});
+
+test('an untrusted round-2 verdict cannot trigger a no-progress escalation', () => {
+  const issue = roundComments('1. same', '1. same');
+  issue.comments[3].author = { login: 'driveby-user' };
+  const state = reconcileRounds(issue);
+  assert.deepEqual(state.noProgress, []);
+  assert.ok(state.untrusted.some(u => u.author === 'driveby-user'));
+});

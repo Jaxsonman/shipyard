@@ -11,6 +11,7 @@
  */
 
 const { spawnSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const { parseFooter } = require('./metrics.js');
 
 const USAGE = `Usage: node board-trail.js parse [options]
@@ -21,6 +22,10 @@ const USAGE = `Usage: node board-trail.js parse [options]
   --allow <a,b>          Extra trusted logins (merged with ship.config.json approvers).
   --config <path>        ship.config.json to read \`cap\` and \`approvers\` from.
   --viewer <login>       The invoking gh account; defaults to \`gh api user -q .login\`.
+  --branch-exists <b>    \`true\`/\`false\`: does a \`feat/<id>-*\` branch exist? \`false\`
+                         with pipeline comments present yields \`comments-without-branch\`.
+  --heads <json>         {"<round>": "<dev HEAD sha>"} taken from git by the caller.
+                         Feeds the no-progress detector (contract v1 §9).
   --pretty               Pretty-print the JSON output.
 
 Prints {"events": [...], "state": {...}} to stdout.
@@ -174,8 +179,36 @@ function blankEvent() {
     prUrl: null,
     reposted: false,
     metrics: null,
+    findingsHash: null,
     raw: '',
   };
+}
+
+/**
+ * Extract a QA verdict comment's `## Findings` section (contract v1 §5.5) and
+ * hash it, so two consecutive rounds reporting byte-identical findings can be
+ * detected as no progress (§9). Returns null when the section is absent.
+ *
+ * Normalisation is whitespace-only — CRLF folded, trailing spaces stripped,
+ * leading/trailing blank lines dropped — so the hash is stable across
+ * backends but still byte-sensitive to any change in the findings themselves.
+ *
+ * @param {string} body
+ * @returns {string|null} sha256 hex digest
+ */
+function findingsHash(body) {
+  const lines = String(body).replace(/\r\n/g, '\n').split('\n');
+  const start = lines.findIndex((l) => /^##\s+Findings\s*$/.test(l));
+  if (start === -1) return null;
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => /^##\s+\S/.test(l));
+  const section = (end === -1 ? rest : rest.slice(0, end))
+    .map((l) => l.replace(/[ \t]+$/, ''))
+    .join('\n')
+    .replace(/^\n+/, '')
+    .replace(/\n+$/, '');
+  if (section === '') return null;
+  return createHash('sha256').update(section, 'utf8').digest('hex');
 }
 
 function isTrusted(login, viewer, allow) {
@@ -232,6 +265,8 @@ function parseEvents(issue, opts = {}) {
       ev.reposted = footer.reposted === true;
     }
 
+    if (ev.type === 'qa-verdict') ev.findingsHash = findingsHash(body);
+
     events.push(ev);
   }
   return events;
@@ -257,12 +292,20 @@ function latestWins(list) {
 /**
  * Reconcile typed events into one pipeline state.
  *
+ * `branchExists` and `heads` carry facts the caller took from git, never from
+ * comment text: whether a `feat/<id>-*` branch exists (contract v1 §9
+ * `comments-without-branch`) and each round's dev HEAD sha (the no-progress
+ * detector, §9 / Decision 9).
+ *
  * @param {object[]} events
- * @param {{cap?: number, labels?: string[]}} [opts]
+ * @param {{cap?: number, labels?: string[], branchExists?: boolean|null,
+ *          heads?: Record<string, string>}} [opts]
  */
 function reconcile(events, opts = {}) {
   const labels = (opts.labels || []).filter((l) => /^ship:/.test(l));
   const configCap = typeof opts.cap === 'number' ? opts.cap : null;
+  const branchExists = typeof opts.branchExists === 'boolean' ? opts.branchExists : null;
+  const heads = (opts.heads && typeof opts.heads === 'object') ? opts.heads : {};
 
   const state = {
     phase: 'unstarted',
@@ -273,8 +316,10 @@ function reconcile(events, opts = {}) {
     untrusted: [],
     rounds: {},
     standalone: [],
+    noProgress: [],
     escalation: null,
     prUrl: null,
+    branchExists,
     labels,
   };
 
@@ -303,6 +348,11 @@ function reconcile(events, opts = {}) {
 
   if (labels.length > 1) {
     bad('multiple-labels', `ticket carries multiple ship:* labels: ${labels.join(', ')}`);
+  }
+
+  // Pipeline comments exist but the feature branch does not (§9, L-8).
+  if (branchExists === false && usable.some((e) => e.type === 'dev' || e.type === 'qa-verdict')) {
+    bad('comments-without-branch', 'pipeline comments exist but no feat/<id>-* branch does');
   }
 
   // Standalone events are excluded from round arithmetic entirely (§9).
@@ -368,6 +418,31 @@ function reconcile(events, opts = {}) {
   }
 
   state.round = devRounds.length ? Math.max(...devRounds) : 0;
+
+  // No-progress / oscillation (§9, Decision 9). A round that repeats the
+  // previous round's dev HEAD, or whose QA findings are byte-identical to the
+  // previous round's, made no progress: ship escalates with cause
+  // `stage-error` instead of spending the remaining cap. Reported here, never
+  // acted on here — this is not an irreconcilable condition.
+  const note = (round, reason) => {
+    if (!state.noProgress.some((p) => p.round === round && p.reason === reason)) {
+      state.noProgress.push({ round, reason });
+    }
+  };
+  for (const n of roundNumbers) {
+    if (n < 2) continue;
+    const prev = state.rounds[String(n - 1)];
+    if (!prev) continue;
+    const head = heads[String(n)];
+    const prevHead = heads[String(n - 1)];
+    if (head && prevHead && head === prevHead) {
+      note(n, `dev HEAD ${head} is unchanged from round ${n - 1}`);
+    }
+    const qa = state.rounds[String(n)].qa;
+    if (qa && prev.qa && qa.findingsHash && qa.findingsHash === prev.qa.findingsHash) {
+      note(n, `QA findings are byte-identical to round ${n - 1}`);
+    }
+  }
 
   const escalations = usable.filter((e) => e.type === 'escalation' || e.type === 'dev-escalation');
   state.escalation = escalations.length ? escalations[escalations.length - 1] : null;
@@ -474,9 +549,28 @@ function main(argv) {
     if (r.code === 0) viewer = r.stdout.trim() || null;
   }
 
+  let branchExists = null;
+  if (args['branch-exists'] !== undefined) {
+    const v = String(args['branch-exists']).toLowerCase();
+    if (v !== 'true' && v !== 'false') die('--branch-exists takes `true` or `false`.', 2);
+    branchExists = v === 'true';
+  }
+
+  let heads = {};
+  if (args.heads !== undefined) {
+    try {
+      heads = JSON.parse(String(args.heads));
+    } catch (err) {
+      die(`--heads is not valid JSON: ${err.message}`, 2);
+    }
+    if (!heads || typeof heads !== 'object' || Array.isArray(heads)) {
+      die('--heads must be a JSON object of {"<round>": "<sha>"}.', 2);
+    }
+  }
+
   const events = parseEvents(issue, { allow, viewer });
   const labels = Array.isArray(issue.labels) ? issue.labels.map((l) => l.name) : [];
-  const state = reconcile(events, { cap, labels });
+  const state = reconcile(events, { cap, labels, branchExists, heads });
 
   const payload = { events, state };
   process.stdout.write(JSON.stringify(payload, null, args.pretty ? 2 : 0) + '\n');
@@ -485,4 +579,4 @@ function main(argv) {
 
 if (require.main === module) main(process.argv.slice(2));
 
-module.exports = { parseEvents, reconcile, HEADERS, VERDICTS, TIERS, CAUSES, USAGE };
+module.exports = { parseEvents, reconcile, findingsHash, HEADERS, VERDICTS, TIERS, CAUSES, USAGE };

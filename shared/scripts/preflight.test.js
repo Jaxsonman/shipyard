@@ -65,3 +65,85 @@ test('the report is JSON-serialisable and lists reasons for every failed error c
   const failed = r.checks.filter(c => c.ok === false && c.level === 'error');
   assert.equal(r.reasons.length, failed.length);
 });
+
+test('stage pr fails when the ticket is not ship:approved (H-10)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pr-'));
+  execFileSync('git', ['init', '-q', dir]);
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'ship.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r', baseBranch: 'main', loopCap: 3, approvers: [] }));
+  fs.writeFileSync(path.join(dir, '.claude', 'kanban.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r' }));
+  const r = preflight({ stage: 'pr', ticket: 42, cwd: dir, exec: fakeExec({
+    'git branch': { code: 0, stdout: 'feat/42-login\n', stderr: '' },
+    'gh issue view': { code: 0, stdout: JSON.stringify({ labels: [{ name: 'ship:awaiting-review' }] }), stderr: '' },
+    'gh pr list': { code: 0, stdout: '[]', stderr: '' },
+  }) });
+  const c = r.checks.find((x) => x.id === 'pr-gate');
+  assert.equal(c.ok, false);
+  assert.match(c.message, /ship:approved/);
+  assert.match(c.message, /ship:awaiting-review/);
+  assert.equal(r.ok, false);
+});
+
+test('stage pr passes the gate when the ticket carries ship:approved (H-10)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pr-'));
+  execFileSync('git', ['init', '-q', dir]);
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'ship.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r', baseBranch: 'main', loopCap: 3, approvers: [] }));
+  fs.writeFileSync(path.join(dir, '.claude', 'kanban.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r' }));
+  const r = preflight({ stage: 'pr', ticket: 42, cwd: dir, exec: fakeExec({
+    'git branch': { code: 0, stdout: 'feat/42-login\n', stderr: '' },
+    'gh issue view': { code: 0, stdout: JSON.stringify({ labels: [{ name: 'ship:approved' }] }), stderr: '' },
+    'gh pr list': { code: 0, stdout: '[]', stderr: '' },
+  }) });
+  assert.equal(r.checks.find((x) => x.id === 'pr-gate').ok, true);
+});
+
+test('stage pr reports an existing open PR without failing (H-10 idempotency)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pr-'));
+  execFileSync('git', ['init', '-q', dir]);
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'ship.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r', baseBranch: 'main', loopCap: 3, approvers: [] }));
+  fs.writeFileSync(path.join(dir, '.claude', 'kanban.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r' }));
+  const r = preflight({ stage: 'pr', ticket: 42, cwd: dir, exec: fakeExec({
+    'git branch': { code: 0, stdout: 'feat/42-login\n', stderr: '' },
+    'gh issue view': { code: 0, stdout: JSON.stringify({ labels: [{ name: 'ship:approved' }] }), stderr: '' },
+    'gh pr list': { code: 0, stdout: JSON.stringify([{ url: 'https://github.com/o/r/pull/7', number: 7 }]), stderr: '' },
+  }) });
+  const c = r.checks.find((x) => x.id === 'pr-existing');
+  assert.equal(c.ok, true);
+  assert.equal(c.level, 'warn');
+  assert.equal(c.prUrl, 'https://github.com/o/r/pull/7');
+  assert.equal(c.prNumber, 7);
+});
+
+test('stage pr refuses a ticket carrying more than one ship:* label', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pr-'));
+  execFileSync('git', ['init', '-q', dir]);
+  fs.mkdirSync(path.join(dir, '.claude'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.claude', 'ship.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r', baseBranch: 'main', loopCap: 3, approvers: [] }));
+  fs.writeFileSync(path.join(dir, '.claude', 'kanban.config.json'),
+    JSON.stringify({ version: 1, backend: 'github', target: 'o/r' }));
+  const r = preflight({ stage: 'pr', ticket: 42, cwd: dir, exec: fakeExec({
+    'git branch': { code: 0, stdout: 'feat/42-login\n', stderr: '' },
+    'gh issue view': { code: 0, stdout: JSON.stringify({ labels: [{ name: 'ship:approved' }, { name: 'ship:pr-open' }] }), stderr: '' },
+    'gh pr list': { code: 0, stdout: '[]', stderr: '' },
+  }) });
+  const c = r.checks.find((x) => x.id === 'pr-gate');
+  assert.equal(c.ok, false);
+  assert.match(c.message, /multiple ship:\* labels/);
+});
+
+test('non-pr stages skip the pr checks', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pf-pr-'));
+  execFileSync('git', ['init', '-q', dir]);
+  const r = preflight({ stage: 'ship', ticket: 42, cwd: dir, exec: fakeExec({}) });
+  assert.equal(r.checks.find((x) => x.id === 'pr-gate').skipped, true);
+  assert.equal(r.checks.find((x) => x.id === 'pr-existing').skipped, true);
+});

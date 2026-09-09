@@ -181,7 +181,7 @@ ship refuses to run without it.
 Every plugin's skills call the same six scripts:
 
 - `board-trail.js` — parse ticket comments into typed, trust-marked events and reconcile pipeline state
-- `preflight.js` — stage-agnostic environment and repository checks, run before any interview
+- `preflight.js` — stage-agnostic environment and repository checks, run before any interview; `--stage pr` also enforces the `ship:approved` gate and reports an existing open PR for the branch
 - `config.js` — bootstrap, validate and normalize `.claude/kanban.config.json` and `.claude/ship.config.json`
 - `validate-artifact.js` — enforce the required sections of `spec.md` and `plan.md`
 - `metrics.js` — ISO-8601 timestamps and the metrics footer line

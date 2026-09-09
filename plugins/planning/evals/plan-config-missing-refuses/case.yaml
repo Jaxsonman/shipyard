@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "Missing kanban config bootstraps before touching the ticket"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

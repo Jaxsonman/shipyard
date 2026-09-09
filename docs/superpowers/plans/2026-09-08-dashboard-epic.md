@@ -1,6 +1,6 @@
 # Shipyard Dashboard — Hardening Epic E Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Land dashboard v1 against a real board and extend it with a board-wide Timeline (Gantt) view, a pipeline stats strip, dark theme, and keyboard accessibility.
 
@@ -59,27 +59,27 @@
 - Consumes: nothing.
 - Produces: the canonical test command string `node --test "plugins/dashboard/**/*.test.js"` used by every later task.
 
-- [ ] **Step 1: Reproduce the failure**
+- [x] **Step 1: Reproduce the failure**
 
 Run: `node --test plugins/dashboard/server/`
 Expected: FAIL — `Error: Cannot find module '.../plugins/dashboard/server'`, `✖ plugins/dashboard/server`, `fail 1`. (Node ≥ 23 treats a bare directory argument as a module specifier.)
 
-- [ ] **Step 2: Confirm the replacement passes**
+- [x] **Step 2: Confirm the replacement passes**
 
 Run: `node --test "plugins/dashboard/**/*.test.js"`
 Expected: PASS — `tests 12 / pass 12 / fail 0`.
 
-- [ ] **Step 3: Replace every occurrence**
+- [x] **Step 3: Replace every occurrence**
 
 Run: `grep -rn 'node --test' plugins/dashboard docs/superpowers/plans/2026-08-10-dashboard-plugin.md`
 Replace each `node --test plugins/dashboard/server/` (and any `node --test plugins/dashboard/server` / `.../server/*.test.js` variant) with `node --test "plugins/dashboard/**/*.test.js"`. The quoted glob is required so Node — not the shell — expands it, which keeps it correct as new test files land under `web/`.
 
-- [ ] **Step 4: Verify no stale form remains**
+- [x] **Step 4: Verify no stale form remains**
 
 Run: `grep -rn 'node --test' plugins/dashboard docs/superpowers/plans/2026-08-10-dashboard-plugin.md`
 Expected: every hit is the quoted-glob form.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add plugins/dashboard/README.md plugins/dashboard/commands/dashboard.md docs/superpowers/plans/2026-08-10-dashboard-plugin.md
@@ -120,7 +120,7 @@ module.exports = {
 
 Rules: a segment is `estimated: true` when it was derived from a handoff-comment timestamp rather than a metrics block (then `start === end` and `tokensIn/tokensOut` are `null`). Metrics blocks for the same stage aggregate: earliest `started`, latest `finished`, summed tokens, `round` = highest round seen for that stage. Unknown `stage` keys, unparseable JSON, and blocks missing `stage`/`started`/`finished` are skipped silently.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```js
 // plugins/dashboard/server/trail.test.js
@@ -201,12 +201,12 @@ test('parseTrail on an empty trail returns no segments and null lastActivity', (
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `node --test plugins/dashboard/server/trail.test.js`
 Expected: FAIL — `Cannot find module './trail'`.
 
-- [ ] **Step 3: Implement `trail.js`**
+- [x] **Step 3: Implement `trail.js`**
 
 Move the regexes and stage tables out of `metrics.js` into `trail.js`:
 
@@ -234,21 +234,21 @@ const HEADER_PATTERNS = [
 
 `parseMetricsBlocks` is the current `metrics.parseMetrics` body verbatim. `parseStageEvents` scans the first line of each comment against `HEADER_PATTERNS`, returning `{ stage, round: Number(m[1]) || null, at: Date.parse(comment.createdAt) }` for every match (all matches, not first-per-stage — callers reduce). `parseEscalations` tests the first line: on `ESCALATION_RE` return `{cause: m[1], round: Number(m[2]), cap: Number(m[3]), at}`; else on `ANY_ESCALATION_RE` return `{cause: null, round: null, cap: null, at}`. `parseTrail` composes them: aggregate metrics blocks per label (min start, max end, summed tokens, max round from the co-located stage event), then for labels with no metrics take the earliest matching stage event as a zero-width estimated segment; emit in `STAGE_ORDER` order, skipping labels with neither. Skip `NaN` timestamps everywhere.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `node --test plugins/dashboard/server/trail.test.js`
 Expected: PASS — 7 tests.
 
-- [ ] **Step 5: Point `metrics.js` at the boundary**
+- [x] **Step 5: Point `metrics.js` at the boundary**
 
 In `metrics.js`, delete `METRICS_BLOCK_RE`, `STAGE_KEY_TO_LABEL` and `FALLBACK_PATTERNS`; `const trail = require('./trail');`, keep `const STAGE_ORDER = ['Spec','Plan','Dev','QA','Review'];` for the drawer's five-row Gantt (unchanged UI), and rebuild `buildTimeline` on `trail.parseTrail(comments)` instead of its own parsing. Re-export `parseMetrics = trail.parseMetricsBlocks` so `metrics.test.js` and any caller keep working. `formatTokens`/`formatDuration` stay in `metrics.js`.
 
-- [ ] **Step 6: Run the whole suite**
+- [x] **Step 6: Run the whole suite**
 
 Run: `node --test "plugins/dashboard/**/*.test.js"`
 Expected: PASS — all pre-existing 12 tests plus the 7 new ones, `fail 0`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add plugins/dashboard/server/trail.js plugins/dashboard/server/trail.test.js plugins/dashboard/server/metrics.js plugins/dashboard/README.md
@@ -274,30 +274,30 @@ git commit -m "refactor(dashboard): move all comment-trail parsing behind server
   5. one **Backlog** ticket (no `ship:*` label) for the "hide backlog" filter,
   6. tickets spread across **at least two projects** with `updatedAt` spanning ≥ 3 weeks so the day/week/month zoom presets differ visibly.
 
-- [ ] **Step 1: Read the current fixture shape**
+- [x] **Step 1: Read the current fixture shape**
 
 Run: `sed -n '1,60p' plugins/dashboard/server/fixtures.js`
 Note the existing `iso(daysAgo)` helper and ticket object keys; reuse them exactly — do not invent new keys.
 
-- [ ] **Step 2: Fix the malformed escalation fixture**
+- [x] **Step 2: Fix the malformed escalation fixture**
 
 `fixtures.js:160` currently reads `'ship:escalation — dev/QA loop exhausted at round 3'`, which is not the documented header. Change it to `'ship:escalation cap round 3/3\n\n## What QA keeps finding\n…'` and add three more Needs Human tickets whose headers are `ship:escalation static round 2/3`, `ship:escalation stage-error round 1/3`, `ship:escalation reconcile round 2/3`.
 
-- [ ] **Step 3: Add the estimated-only and PR tickets**
+- [x] **Step 3: Add the estimated-only and PR tickets**
 
 Add one ticket whose comments are handoff headers only (`📋 Spec approved`, `🗺️ Plan approved`, `ship:dev round 1/3`) with **no** `shipyard-metrics` footer, and one ticket carrying a `<!-- shipyard-metrics {"stage":"pr",…} -->` footer plus a `ship:pr-open` header comment.
 
-- [ ] **Step 4: Verify mock mode still serves**
+- [x] **Step 4: Verify mock mode still serves**
 
 Run: `node plugins/dashboard/server/server.js --mock --port 8899 & sleep 1; curl -s localhost:8899/api/tickets | head -c 400; kill %1`
 Expected: JSON ticket list including the new tickets.
 
-- [ ] **Step 5: Run the suite**
+- [x] **Step 5: Run the suite**
 
 Run: `node --test "plugins/dashboard/**/*.test.js"`
 Expected: PASS, `fail 0`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add plugins/dashboard/server/fixtures.js plugins/dashboard/README.md
@@ -351,7 +351,7 @@ module.exports = { buildRow, buildBoardTimeline, CURRENT_STAGE_FOR };
 
 An **active** segment (the current stage of a ticket whose stage is Dev or QA, with no `finished` newer than its `started`) is rendered with `end = now` by the client; the server reports the raw `end` and sets `running: true` so the client can extend it. Do not bake `now` into `end` server-side — it makes the response uncacheable and the tests time-dependent.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```js
 // plugins/dashboard/server/timeline.test.js
@@ -431,21 +431,21 @@ test('buildBoardTimeline with no segmented tickets still returns a non-zero doma
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `node --test plugins/dashboard/server/timeline.test.js`
 Expected: FAIL — `Cannot find module './timeline'`.
 
-- [ ] **Step 3: Implement `timeline.js`**
+- [x] **Step 3: Implement `timeline.js`**
 
 Pure functions only, no I/O. `buildRow` calls `board.stageFromLabels(ticket.labels)` and `trail.parseTrail(ticket.comments)`, projects segments into `STAGE_ORDER` positions to assign `state`, sums tokens, picks the newest escalation, and computes `lastActivity = trail.lastActivity ?? Date.parse(ticket.updatedAt)`. `buildBoardTimeline` maps every ticket through `buildRow`, groups in `projects` order (tickets whose project is unknown go last under their own id), sorts each group by `lastActivity` descending, and derives the domain; when no segment exists, fall back to `{ start: now - 7*86400e3, end: now }`.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `node --test plugins/dashboard/server/timeline.test.js`
 Expected: PASS — 6 tests.
 
-- [ ] **Step 5: Add the route**
+- [x] **Step 5: Add the route**
 
 In `server.js`, add `GET /api/timeline` → `handleGetTimeline` next to `handleGetTickets` (same `project=<id|all>` query handling and the same board-warning/partial-failure semantics `handleGetTickets` already uses). The handler must fetch **ticket detail** (comments) per ticket — `board.listTickets` does not return comments — so call `board.getTicket(repo, number)` for each listed issue, with a bounded concurrency of 5 (`Promise.all` over chunks) so a large board does not spawn hundreds of `gh` processes. Failures on individual tickets degrade to a row with no segments plus a `warnings[]` entry; they must not fail the whole response. Response body:
 
@@ -463,7 +463,7 @@ In `server.js`, add `GET /api/timeline` → `handleGetTimeline` next to `handleG
   "warnings": [] }
 ```
 
-- [ ] **Step 6: Test the route**
+- [x] **Step 6: Test the route**
 
 Add to `server.test.js`, following its existing pattern of starting `createApp({ mock: true })` on an ephemeral port:
 
@@ -482,12 +482,12 @@ test('GET /api/timeline returns grouped rows with segments', async () => {
 });
 ```
 
-- [ ] **Step 7: Run the whole suite**
+- [x] **Step 7: Run the whole suite**
 
 Run: `node --test "plugins/dashboard/**/*.test.js"`
 Expected: PASS, `fail 0`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add plugins/dashboard/server/timeline.js plugins/dashboard/server/timeline.test.js plugins/dashboard/server/server.js plugins/dashboard/server/server.test.js plugins/dashboard/README.md
@@ -533,7 +533,7 @@ Definitions, fixed here so the UI copy matches the maths:
 - **throughput** = tickets that *reached* Review — a row with a `Review` or `PR` segment, or whose `stage` is `Awaiting Review` — whose earliest Review segment `start` (or `lastActivity` if the segment is estimated) falls within the last `THROUGHPUT_WINDOW_DAYS` days. `perWeek = round(reached / (windowDays / 7) * 10) / 10`.
 - **escalations** counts rows whose `escalation.cause` is set; `null` causes count as `unknown`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```js
 // plugins/dashboard/server/stats.test.js
@@ -609,12 +609,12 @@ test('buildStats on an empty board returns nulls, not NaN', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `node --test plugins/dashboard/server/stats.test.js`
 Expected: FAIL — `Cannot find module './stats'`.
 
-- [ ] **Step 3: Implement `stats.js`**
+- [x] **Step 3: Implement `stats.js`**
 
 ```js
 function percentile(sorted, p) {
@@ -630,12 +630,12 @@ function percentile(sorted, p) {
 
 The rest is a single pass over `rows` accumulating the five sections defined above. Keep the stage key list in one exported constant shared with `board.js`'s stage names so a rename cannot silently drop a column.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `node --test plugins/dashboard/server/stats.test.js`
 Expected: PASS — 6 tests.
 
-- [ ] **Step 5: Add the route + its test**
+- [x] **Step 5: Add the route + its test**
 
 `GET /api/stats?project=<id|all>` → `handleGetStats`, which reuses exactly the same row-gathering helper as `handleGetTimeline` (extract it into one internal `gatherRows(projectId)` function so the two endpoints cannot diverge) and returns `buildStats({ rows, now: Date.now() })` plus the same `warnings[]`. Add:
 
@@ -652,12 +652,12 @@ test('GET /api/stats returns counts, durations, tokens and escalation causes', a
 });
 ```
 
-- [ ] **Step 6: Run the whole suite**
+- [x] **Step 6: Run the whole suite**
 
 Run: `node --test "plugins/dashboard/**/*.test.js"`
 Expected: PASS, `fail 0`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add plugins/dashboard/server/stats.js plugins/dashboard/server/stats.test.js plugins/dashboard/server/server.js plugins/dashboard/server/server.test.js plugins/dashboard/README.md
@@ -718,7 +718,7 @@ if (typeof window !== 'undefined') window.TimelineScale = TimelineScale;
 // STAGE_ROWS = ['Spec','Plan','Dev','QA','Review','PR']
 ```
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```js
 // plugins/dashboard/web/timeline-scale.test.js
@@ -794,21 +794,21 @@ test('segmentRects drops segments entirely outside the window and floors estimat
 });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `node --test plugins/dashboard/web/timeline-scale.test.js`
 Expected: FAIL — `Cannot find module './timeline-scale'`.
 
-- [ ] **Step 3: Implement `timeline-scale.js`**
+- [x] **Step 3: Implement `timeline-scale.js`**
 
 Plain functions, no DOM access anywhere in this file — that is what makes it testable under Node. Use UTC-safe `Date` formatting via `Intl.DateTimeFormat` with an explicit `timeZone: undefined` (local) and short month names; never hand-roll month names.
 
-- [ ] **Step 4: Run to verify pass**
+- [x] **Step 4: Run to verify pass**
 
 Run: `node --test plugins/dashboard/web/timeline-scale.test.js`
 Expected: PASS — 9 tests.
 
-- [ ] **Step 5: Run the whole suite and commit**
+- [x] **Step 5: Run the whole suite and commit**
 
 ```bash
 node --test "plugins/dashboard/**/*.test.js"
@@ -831,7 +831,7 @@ Done before the timeline UI so the timeline can be authored in classes from the 
 **Interfaces:**
 - Produces the class vocabulary later tasks use: `.app-shell`, `.nav-right`, `.nav-search`, `.sidebar`, `.sidebar-head`, `.proj-row`, `.proj-row.is-active`, `.proj-name`, `.proj-repo`, `.main-col`, `.page-head`, `.page-title`, `.page-sub`, `.page-body`, `.pager`, `.pager-actions`, `.row-click`, `.banner`, `.banner-warn`, `.drawer-err`, `.gantt-grid`, `.gantt-label`, `.gantt-stat`, `.tabs`, `.logs`, `.dialog-field`, `.focusable`.
 
-- [ ] **Step 1: Establish the theme contract**
+- [x] **Step 1: Establish the theme contract**
 
 `app.css` starts with the token swap. `styles.css` (verbatim system) defines the light palette on `:root`; `app.css` **only overrides** the same token names — it must not introduce new color literals outside these blocks:
 
@@ -851,16 +851,16 @@ neutral ramp inverted (`--color-neutral-100: #2d2b2b` … `--color-neutral-900: 
 `--shadow-sm: 0 0 0 1px color-mix(in srgb, #f3f2f2 10%, transparent); --shadow-md: 0 0 0 1px color-mix(in srgb, #f3f2f2 12%, transparent), 0 3px 10px rgb(0 0 0 / 0.5); --shadow-lg: 0 0 0 1px color-mix(in srgb, #f3f2f2 14%, transparent), 0 12px 32px rgb(0 0 0 / 0.6);`
 Also set `:root { color-scheme: light dark; }` so form controls and scrollbars follow.
 
-- [ ] **Step 2: Move the `<head>` style block and body inline styles**
+- [x] **Step 2: Move the `<head>` style block and body inline styles**
 
 Cut the whole `<style>…</style>` block out of `index.html` into `app.css` verbatim (`@keyframes pulse`, `.dot-running`, `.gantt-track`, `.gantt-bar`, `.drawer-backdrop`, `.drawer-panel`, `body{margin:0}`), add `<link rel="stylesheet" href="/app.css">` **after** the `/styles.css` link, and replace each `style="…"` in the body with a class: the outer wrapper → `.app-shell`, the nav right group → `.nav-right`, the search input → `.nav-search`, the split → `.app-split`, the sidebar → `.sidebar`, the main column → `.main-col`.
 
-- [ ] **Step 3: Move all 46 inline styles out of `app.js`**
+- [x] **Step 3: Move all 46 inline styles out of `app.js`**
 
 Lines to convert (from the survey): 134, 141, 168, 169, 170, 180, 181, 182, 183, 185, 246, 259, 260, 261, 263, 279, 280, 281, 369, 370, 373, 404, 405, 407, 409, 417, 419, 421, 426, 436, 442, 445, 450, 458, 459, 460, 465, 467, 473, 474, 475, 584, 592, 595, 597, 600.
 Static declarations become classes. The genuinely dynamic ones — the drawer Gantt bar geometry at line 407 (`left:${row.startPct}%; width:${row.widthPct}%`) and its `background`/`color` by state — become a class plus CSS custom properties: `class="gantt-bar gantt-bar-${row.state}" style="--bar-left:${row.startPct}%; --bar-width:${row.widthPct}%"`, with `.gantt-bar { left: var(--bar-left); width: var(--bar-width); }` and per-state colors in `app.css`. Colors chosen by JS (`textColor`, `labelColor`) must move into `.is-active` / `.state-past|current|future` modifier classes — no color literals may remain in `app.js`.
 
-- [ ] **Step 4: Add visible focus rings**
+- [x] **Step 4: Add visible focus rings**
 
 ```css
 :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
@@ -874,18 +874,18 @@ Never remove an outline without an equivalent replacement. Also honour reduced m
 }
 ```
 
-- [ ] **Step 5: Verify no inline styles and no design-system drift**
+- [x] **Step 5: Verify no inline styles and no design-system drift**
 
 Run: `grep -c 'style="' plugins/dashboard/web/app.js plugins/dashboard/web/index.html`
 Expected: only the CSS-custom-property carriers remain (≤ 4 in `app.js`, 0 in `index.html`).
 Run: `diff docs/design/dashboard/styles.css plugins/dashboard/web/styles.css`
 Expected: no output.
 
-- [ ] **Step 6: Visual check in both themes**
+- [x] **Step 6: Visual check in both themes**
 
 Start `node plugins/dashboard/server/server.js --mock --port 8899`, open `http://127.0.0.1:8899/`, screenshot light and dark (emulate `prefers-color-scheme`), confirm the table, sidebar and drawer are legible in both and nothing lost its border/rule.
 
-- [ ] **Step 7: Run the suite and commit**
+- [x] **Step 7: Run the suite and commit**
 
 ```bash
 node --test "plugins/dashboard/**/*.test.js"
@@ -906,11 +906,11 @@ git commit -m "feat(dashboard): dark theme token swap and inline styles moved to
 - Consumes: `GET /api/timeline` (Task 4), `window.TimelineScale` (Task 6), the class vocabulary from Task 7.
 - Produces: `state.view` (`'tickets' | 'timeline'`), `state.zoom` (preset id, default `'week'`), `state.panMs`, `state.stageFilter` (Set of stage names, empty = all), `state.hideBacklog` (bool), and `renderTimeline()`.
 
-- [ ] **Step 1: Add the view switcher**
+- [x] **Step 1: Add the view switcher**
 
 In `index.html`, replace the single `<a href="#" aria-current="page">Tickets</a>` with two buttons in a `role="tablist"`: `#view-tickets` and `#view-timeline`, each `role="tab"` with `aria-selected` reflecting `state.view`. Clicking either sets `state.view` and re-renders `#main`; `renderMain()` dispatches to `renderTable()` or `renderTimeline()`.
 
-- [ ] **Step 2: Render the timeline**
+- [x] **Step 2: Render the timeline**
 
 Structure per row, using CSS grid so the label column and the track column line up across all rows and groups:
 
@@ -936,31 +936,31 @@ Bar classes (mono-accent scheme, all colors from the ramps in `app.css`, never i
 - `.tl-bar-est` overlays the hatch and must compose with any of the above:
   `background-image: repeating-linear-gradient(45deg, transparent 0 4px, color-mix(in srgb, var(--color-bg) 55%, transparent) 4px 8px);`
 
-- [ ] **Step 3: Axis, gridlines and the now line**
+- [x] **Step 3: Axis, gridlines and the now line**
 
 Gridlines are absolutely positioned 1px `--color-divider` rules inside `.tl-track-layer`, one per `TimelineScale.ticks(...)` entry, `opacity: .35` for minor and `.7` for major. The now line is a single `.tl-now` rule in `--color-accent` at `TimelineScale.createScale(...).toX(now)`, drawn only when `now` is inside the domain. Recompute on `resize` (debounced 100 ms) using the track element's `clientWidth`.
 
-- [ ] **Step 4: Zoom presets and pan**
+- [x] **Step 4: Zoom presets and pan**
 
 Render `TimelineScale.ZOOM_PRESETS` as a `.zoom-group` of `.btn.btn-secondary` (active preset) / `.btn.btn-ghost` buttons. Horizontal pan: `wheel` with `deltaX` (or shift+`deltaY`) and pointer drag on `.tl-track-layer` adjust `state.panMs` by `-delta / scale.pxPerMs`, passed through `TimelineScale.clampPan`. `ArrowLeft`/`ArrowRight` on a focused timeline pan by 10% of the span, `Home` resets pan to 0.
 
-- [ ] **Step 5: Tooltip**
+- [x] **Step 5: Tooltip**
 
 One shared `#tl-tip` element (not one per bar). On `mouseenter`/`focus` of a `.tl-bar`, position it above the bar and fill it with: stage name, `round N` when present, `segment.durationLabel`, `segment.tokensLabel` (both preformatted by the server in Task 4 with `metrics.formatDuration`/`formatTokens`, so the codebase has exactly one formatter), and the literal word `estimated` when `segment.estimated`. Hide on `mouseleave`/`blur`. Also set the bar's `title` attribute to the same text so the information survives without JS hover.
 
-- [ ] **Step 6: Filters**
+- [x] **Step 6: Filters**
 
 Stage chips: one `.chip` per `TimelineScale.STAGE_ROWS` entry, `aria-pressed` reflecting membership in `state.stageFilter`; filtering hides non-matching **bars**, not rows, and a row with no visible bars is hidden. `#hide-backlog` is a labelled checkbox that drops rows with `backlog: true`. The sidebar project selection filters rows exactly as it filters the table (reuse `state.activeProjectId`).
 
-- [ ] **Step 7: Click opens the drawer**
+- [x] **Step 7: Click opens the drawer**
 
 `.tl-row` click and `Enter`/`Space` call the existing `openDrawer(project, number)`.
 
-- [ ] **Step 8: Verify**
+- [x] **Step 8: Verify**
 
 Run the mock server; screenshot the timeline in light and dark; confirm: bars for a metrics ticket, hatched bars for the estimated-only ticket, a pulsing current bar, the now line, gridlines changing with each zoom preset, tooltip content, chips and hide-backlog filtering, and Tab reaching every row.
 
-- [ ] **Step 9: Run the suite and commit**
+- [x] **Step 9: Run the suite and commit**
 
 ```bash
 node --test "plugins/dashboard/**/*.test.js"
@@ -979,27 +979,27 @@ git commit -m "feat(dashboard): board-wide timeline view with zoom, pan, filters
 - Consumes: `GET /api/stats?project=` (Task 5).
 - Produces: `renderStats()` mounted at `#stats` **above** the view switcher's content so it shows on both views; `state.stats`, `state.causeFilter` (`null` or one of the four causes).
 
-- [ ] **Step 1: Add the mount point**
+- [x] **Step 1: Add the mount point**
 
 `<div id="stats" class="stats-strip"></div>` between `#banner` and the split in `index.html`.
 
-- [ ] **Step 2: Render the tiles**
+- [x] **Step 2: Render the tiles**
 
 Five tiles in a `.stats-strip` flex row, each `.stat-tile` with a `.stat-label` (10px uppercase kicker, `--color-neutral-600`) over a `.stat-value` (20px `--font-heading`): **Stages** (one `.tag.tag-neutral` per non-zero stage, `Stage n`), **Median stage**, **p90 stage**, **Tokens** (`in / out` via the server-formatted strings), **Throughput** (`N.N / wk`). Empty/null values render as `—`, never `NaN` or `null`.
 
-- [ ] **Step 3: Escalation cause tags**
+- [x] **Step 3: Escalation cause tags**
 
 Under the tiles, a `.cause-row` of `.chip` buttons — one per cause with a non-zero count, labelled `cap 2`, `static 1`, … Clicking sets `state.causeFilter` (toggles off when re-clicked) and filters **both** views to Needs Human rows with that cause; the active chip gets `aria-pressed="true"`. In the ticket table, the Stage cell of a Needs Human ticket additionally renders its cause as a `.tag.tag-outline` next to the stage tag.
 
-- [ ] **Step 4: Keep it in sync**
+- [x] **Step 4: Keep it in sync**
 
 `loadStats()` joins the existing `Promise.all` in `boot()` and the `startPolling()` interval; it re-fetches on project change. Reuse the `lastStatsJson` stringify-compare pattern so unchanged data does not re-render.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Mock server: the strip shows real numbers, cause chips match the fixture escalations, clicking `cap` narrows both views, clicking again restores. Screenshot.
 
-- [ ] **Step 6: Run the suite and commit**
+- [x] **Step 6: Run the suite and commit**
 
 ```bash
 node --test "plugins/dashboard/**/*.test.js"
@@ -1014,23 +1014,23 @@ git commit -m "feat(dashboard): stats strip with stage counts, durations, tokens
 **Files:**
 - Modify: `plugins/dashboard/web/app.js`, `plugins/dashboard/web/app.css`
 
-- [ ] **Step 1: Make rows real controls**
+- [x] **Step 1: Make rows real controls**
 
 Sidebar project rows, ticket table rows and timeline rows get `tabindex="0"`, `role="button"` (table rows keep `<tr>` semantics — give them `tabindex="0"` and a keydown handler rather than a bogus role), and an `aria-label` naming the ticket and stage. `Enter` and `Space` (with `preventDefault` on Space) activate; `ArrowUp`/`ArrowDown` move focus between sibling rows and wrap at the ends.
 
-- [ ] **Step 2: Drawer focus handling**
+- [x] **Step 2: Drawer focus handling**
 
 On open: remember `document.activeElement` in `lastFocus`, move focus to the drawer's close button, set `aria-modal="true"` and `role="dialog"` on `.drawer-panel`. On close: restore focus to `lastFocus`. `Escape` anywhere closes the drawer. `Tab`/`Shift+Tab` cycle within the panel (focus trap over `panel.querySelectorAll('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])')`).
 
-- [ ] **Step 3: Dialog focus trap**
+- [x] **Step 3: Dialog focus trap**
 
 Same treatment for the add-project dialog: `role="dialog" aria-modal="true"`, focus the first field on open, trap Tab, `Escape` cancels, focus restored to the `+ Add` button.
 
-- [ ] **Step 4: Verify by keyboard only**
+- [x] **Step 4: Verify by keyboard only**
 
 With the mock server open, drive the whole app from the keyboard: Tab from the search field through the view tabs, into the sidebar, through table rows, open a drawer with Enter, Tab around inside it, Escape out, confirm focus returned to the row. Confirm every focused element shows a visible ring in light and dark.
 
-- [ ] **Step 5: Run the suite and commit**
+- [x] **Step 5: Run the suite and commit**
 
 ```bash
 node --test "plugins/dashboard/**/*.test.js"
@@ -1046,7 +1046,7 @@ git commit -m "feat(dashboard): keyboard navigation, focus trap and visible focu
 
 Deviation from the 2026-08-10 plan's Task 8 Step 3 recorded up front: that step approves an `ship:awaiting-review` issue, which **closes** it. The scratch repo must not have issues closed, so the guarded-approve e2e uses the **Needs Human → `ship:planned`** branch on issue **#1** instead. Both branches of `board.approve` are covered — the close branch by `board.test.js`'s injected `execFile`, the label branch for real.
 
-- [ ] **Step 1: Start the real server and link the repo**
+- [x] **Step 1: Start the real server and link the repo**
 
 ```bash
 node plugins/dashboard/server/server.js --port 7442 --config /tmp/shipyard-dashboard-e2e.json &
@@ -1055,7 +1055,7 @@ curl -s -X POST localhost:7442/api/projects -H 'Content-Type: application/json' 
 ```
 Expected: 200 with `repo: "Jaxsonman/shipyard-e2e"` derived from the git remote. (Use `--config` so the real `~/.claude/shipyard-dashboard.json` is not mutated; add the flag to `parseArgv` if it is not already supported.)
 
-- [ ] **Step 2: Verify reads**
+- [x] **Step 2: Verify reads**
 
 ```bash
 curl -s 'localhost:7442/api/tickets?project=all' | head -c 800
@@ -1064,7 +1064,7 @@ curl -s 'localhost:7442/api/stats?project=all'
 ```
 Expected: 7 open issues; #7/#6/#5/#4/#2 → `Planned`, #3 → `Spec'd`, #1 → `Backlog`; timeline rows with real bars for #2 and #4 (they have `ship:dev`/`ship:qa` trails, expected `estimated: true` since those trails predate the metrics convention); stats returns non-null counts.
 
-- [ ] **Step 3: Guarded approve on #1**
+- [x] **Step 3: Guarded approve on #1**
 
 ```bash
 gh label create ship:needs-human -R Jaxsonman/shipyard-e2e --color B60205 --force
@@ -1077,22 +1077,22 @@ gh issue view 1 -R Jaxsonman/shipyard-e2e --json labels,state  # expect [] and O
 ```
 Also POST approve on issue #3 (`Spec'd`) and expect **409** with `approve not available for stage Spec'd`. Never touch #2–#7.
 
-- [ ] **Step 4: Render check in the browser**
+- [x] **Step 4: Render check in the browser**
 
 Point the browser at `http://127.0.0.1:7442/`, confirm the 7 real tickets render in the table and the timeline, and that the drawer opens on a real ticket. Screenshot.
 
-- [ ] **Step 5: Tick the checkboxes**
+- [x] **Step 5: Tick the checkboxes**
 
-In `docs/superpowers/plans/2026-08-10-dashboard-plugin.md`, change `- [ ]` to `- [x]` for every step verified in this branch's history (tasks 1–7 by commit, task 8 by this run), and annotate task 8 step 3 with the #1/Needs Human deviation and its reason. Do not tick anything not actually verified.
+In `docs/superpowers/plans/2026-08-10-dashboard-plugin.md`, change `- [x]` to `- [x]` for every step verified in this branch's history (tasks 1–7 by commit, task 8 by this run), and annotate task 8 step 3 with the #1/Needs Human deviation and its reason. Do not tick anything not actually verified.
 
-- [ ] **Step 6: Full suite + JSON validation**
+- [x] **Step 6: Full suite + JSON validation**
 
 ```bash
 node --test "plugins/dashboard/**/*.test.js"
 node -e "JSON.parse(require('fs').readFileSync('.claude-plugin/marketplace.json','utf8')); JSON.parse(require('fs').readFileSync('plugins/dashboard/.claude-plugin/plugin.json','utf8')); console.log('ok')"
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs/superpowers/plans/2026-08-10-dashboard-plugin.md plugins/dashboard/README.md
@@ -1103,11 +1103,11 @@ git commit -m "docs(dashboard): record e2e verification against shipyard-e2e and
 
 ### Task 12: Adversarial review
 
-- [ ] **Step 1: Dispatch the refuter**
+- [x] **Step 1: Dispatch the refuter**
 
 Dispatch the `refuter` agent (model `opus`) with `git diff main...HEAD`, the H-11..H-14 acceptance criteria from the program spec, and an explicit instruction to hunt for: timezone/DST bugs in `ticks`, `NaN`/divide-by-zero in the scale and percentile maths, XSS via unescaped ticket titles in the new timeline/stats markup, unbounded `gh` fan-out in `/api/timeline`, focus traps that trap for real (no escape), design-system drift (`diff` the two `styles.css`), and dark-theme tokens defined only inside a media query.
 
-- [ ] **Step 2: Fix confirmed findings, re-run the suite, commit**
+- [x] **Step 2: Fix confirmed findings, re-run the suite, commit**
 
 ```bash
 node --test "plugins/dashboard/**/*.test.js"
@@ -1240,10 +1240,10 @@ test('ship:metrics round N/M merges token stats into that round dev/QA segments'
 
 **Files:** modify `plugins/dashboard/server/board.js`, `server.js`, and their tests.
 
-- [ ] **Step 1** — `board.js` gains `async viewer()` running `gh api user --jq .login`, and `readApprovers(projectPath)` reading `approvers` from `<projectPath>/.claude/ship.config.json` (missing file or key → `[]`; never throw).
-- [ ] **Step 2** — `server.js` resolves the viewer **once per process** and caches it (a module-level promise); a failure caches `null`, which per contract §3 makes every non-`approvers` author untrusted. Every `parseTrail` call site passes `{ viewer, allow }`.
-- [ ] **Step 3** — tests: viewer is fetched once across two requests (count injected `execFile` calls); a malformed `ship.config.json` yields `[]` rather than a 500.
-- [ ] **Step 4: Commit** — `feat(dashboard): resolve the gh viewer and per-project approvers for the trust rule`.
+- [x] **Step 1** — `board.js` gains `async viewer()` running `gh api user --jq .login`, and `readApprovers(projectPath)` reading `approvers` from `<projectPath>/.claude/ship.config.json` (missing file or key → `[]`; never throw).
+- [x] **Step 2** — `server.js` resolves the viewer **once per process** and caches it (a module-level promise); a failure caches `null`, which per contract §3 makes every non-`approvers` author untrusted. Every `parseTrail` call site passes `{ viewer, allow }`.
+- [x] **Step 3** — tests: viewer is fetched once across two requests (count injected `execFile` calls); a malformed `ship.config.json` yields `[]` rather than a 500.
+- [x] **Step 4: Commit** — `feat(dashboard): resolve the gh viewer and per-project approvers for the trust rule`.
 
 ---
 
@@ -1251,13 +1251,13 @@ test('ship:metrics round N/M merges token stats into that round dev/QA segments'
 
 **Files:** `plugins/dashboard/server/board.js`, `timeline.js`, `stats.js` (via `web/pipeline-stats.js`), `metrics.js`, `server.js`, `web/app.js`, `web/app.css`, and tests.
 
-- [ ] **Step 1: Approve on Awaiting Review swaps labels instead of closing** (program spec Decision 6, contract §4). `board.approve` for `Awaiting Review` becomes `gh issue edit <n> --repo <r> --add-label ship:approved --remove-label ship:awaiting-review`. It must NOT close the issue. Update `board.test.js`'s close-branch assertion to assert the label swap, and add a test asserting `issue close` is never invoked.
-- [ ] **Step 2: New stages.** Add to `STAGE_PRECEDENCE` above `ship:awaiting-review`: `ship:pr-open → 'PR Open'`, `ship:approved → 'Approved'`. Add both to `CURRENT_STAGE_FOR` in `timeline.js` (`Approved → 'Review'`, `PR Open → 'PR'`) and to `STAGE_KEYS` in `web/pipeline-stats.js` so the stats strip counts them.
+- [x] **Step 1: Approve on Awaiting Review swaps labels instead of closing** (program spec Decision 6, contract §4). `board.approve` for `Awaiting Review` becomes `gh issue edit <n> --repo <r> --add-label ship:approved --remove-label ship:awaiting-review`. It must NOT close the issue. Update `board.test.js`'s close-branch assertion to assert the label swap, and add a test asserting `issue close` is never invoked.
+- [x] **Step 2: New stages.** Add to `STAGE_PRECEDENCE` above `ship:awaiting-review`: `ship:pr-open → 'PR Open'`, `ship:approved → 'Approved'`. Add both to `CURRENT_STAGE_FOR` in `timeline.js` (`Approved → 'Review'`, `PR Open → 'PR'`) and to `STAGE_KEYS` in `web/pipeline-stats.js` so the stats strip counts them.
 - [x] **Step 3: PR URL.** `parseTrail` already surfaces `trail.prUrl` (Task 13). Thread it onto the timeline row (`row.prUrl`) and the ticket detail payload; render it in the drawer header as a link next to the ticket id, in the Logs tab, and as the PR segment's tooltip link. Escape it with `esc()` and only render `https://` URLs.
-- [ ] **Step 4: Drawer Gantt gains the PR row** — `metrics.buildTimeline`'s `STAGE_ORDER` goes from five rows to six (`Spec, Plan, Dev, QA, Review, PR`). Update `metrics.test.js`'s row-count assertions.
+- [x] **Step 4: Drawer Gantt gains the PR row** — `metrics.buildTimeline`'s `STAGE_ORDER` goes from five rows to six (`Spec, Plan, Dev, QA, Review, PR`). Update `metrics.test.js`'s row-count assertions.
 - [x] **Step 5: `ship:metrics` merge** — verified by Task 13's test; assert here that the timeline tooltip's `tokensLabel` and the stats strip's token totals include a round whose tokens arrived only via a `ship:metrics` comment. Add a fixture ticket carrying one.
 - [x] **Step 6: Approve button copy** — the drawer's primary button reads `Approve → Approved` on Awaiting Review (not "close ticket"), stays `Approve → Planned` on Needs Human, and is disabled elsewhere. `approveEligibility` gains the two new stages as non-approvable.
-- [ ] **Step 7: Commit** — `feat(dashboard): review gate sets ship:approved, plus Approved and PR Open stages`.
+- [x] **Step 7: Commit** — `feat(dashboard): review gate sets ship:approved, plus Approved and PR Open stages`.
 
 ---
 
@@ -1266,25 +1266,25 @@ test('ship:metrics round N/M merges token stats into that round dev/QA segments'
 **Files:** `plugins/dashboard/web/timeline-scale.js`, `timeline-scale.test.js`, `web/app.js`, `web/app.css`.
 
 - [x] **Step 1: "Fit" zoom preset** — a fifth preset `{ id: 'fit', label: 'Fit', spanMs: null }`, whose domain is the **visible rows'** data extent padded 5% each side (distinct from `all`, which fits the whole board's domain). `resolveDomain('fit', { dataStart, dataEnd, now })` behaves like `all` over the extent it is handed; the client passes the visible rows' min/max instead of the payload domain. `fit` is the default `state.zoom` when the board has any segment, falling back to `week` on an empty board. Tests: padding is 5%; a single-instant extent still yields a non-zero span.
-- [ ] **Step 2: Minimum bar width** — `MIN_BAR_PX` is already 3; add an explicit test that a one-second segment on a month-wide domain still yields `w >= 3` and that its `x + w` stays inside the track.
+- [x] **Step 2: Minimum bar width** — `MIN_BAR_PX` is already 3; add an explicit test that a one-second segment on a month-wide domain still yields `w >= 3` and that its `x + w` stays inside the track.
 - [x] **Step 3: Per-row right label** — a right-aligned column (matching the drawer's `.gantt-stat` monospace style) showing the row's current stage tag and time-in-stage (`now - currentSegment.start`, via the server's `formatDuration`). Rows with no current segment show `—`. The grid becomes `label | track | stat`; the axis row gets a matching spacer so gridlines stay aligned.
 - [x] **Step 4: Confirm tooltips on minimum-width bars** — in the browser, hover and focus a 3px bar and confirm `#tl-tip` shows.
-- [ ] **Step 5: Commit** — `feat(dashboard): fit zoom preset, per-row stage/duration label, min bar width`.
+- [x] **Step 5: Commit** — `feat(dashboard): fit zoom preset, per-row stage/duration label, min bar width`.
 
 ---
 
 ### Task 17: Docs and version
 
-- [ ] **Step 1** — `docs/superpowers/specs/2026-08-10-dashboard-design.md` Decision 3 gains a dated note: approve on Awaiting Review no longer closes the issue; it sets `ship:approved` per the hardening program spec's Decision 6 and contract §4, and the issue closes when the PR merges.
-- [ ] **Step 2** — root `README.md` dashboard section: install line, `/dashboard` usage, what Approve does on each stage, and that the dashboard performs board writes only and never launches pipeline runs.
-- [ ] **Step 3** — `plugins/dashboard/README.md`: same, plus the Approved/PR Open stages and the trust rule.
-- [ ] **Step 4** — `plugins/dashboard/.claude-plugin/plugin.json` version → `1.0.0`.
-- [ ] **Step 5: Commit** — `docs(dashboard): review-gate decision note, usage docs, v1.0.0`.
+- [x] **Step 1** — `docs/superpowers/specs/2026-08-10-dashboard-design.md` Decision 3 gains a dated note: approve on Awaiting Review no longer closes the issue; it sets `ship:approved` per the hardening program spec's Decision 6 and contract §4, and the issue closes when the PR merges.
+- [x] **Step 2** — root `README.md` dashboard section: install line, `/dashboard` usage, what Approve does on each stage, and that the dashboard performs board writes only and never launches pipeline runs.
+- [x] **Step 3** — `plugins/dashboard/README.md`: same, plus the Approved/PR Open stages and the trust rule.
+- [x] **Step 4** — `plugins/dashboard/.claude-plugin/plugin.json` version → `1.0.0`.
+- [x] **Step 5: Commit** — `docs(dashboard): review-gate decision note, usage docs, v1.0.0`.
 
 ---
 
 ### Task 18: Phase 2 adversarial review
 
-- [ ] **Step 1** — dispatch the `refuter` agent (model opus) on the phase 2 diff with the H-11-remainder and H-15 criteria, the contract's trust rule, and an explicit brief to try forging board comments.
-- [ ] **Step 2** — fix confirmed findings, re-run `node --test "plugins/dashboard/**/*.test.js"` and `bash scripts/check-shared-sync.sh`, commit.
-- [ ] **Step 3** — fresh screenshots (timeline light + dark, drawer showing the PR row) into the scratchpad dashboard folder.
+- [x] **Step 1** — dispatch the `refuter` agent (model opus) on the phase 2 diff with the H-11-remainder and H-15 criteria, the contract's trust rule, and an explicit brief to try forging board comments.
+- [x] **Step 2** — fix confirmed findings, re-run `node --test "plugins/dashboard/**/*.test.js"` and `bash scripts/check-shared-sync.sh`, commit.
+- [x] **Step 3** — fresh screenshots (timeline light + dark, drawer showing the PR row) into the scratchpad dashboard folder.

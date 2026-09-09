@@ -88,7 +88,7 @@ function createBoard(execFile) {
       return JSON.parse(stdout);
     },
 
-    async approve(repo, number, stage) {
+    async approve(repo, number, stage, escalationCause) {
       // Contract v1 §4 / program spec Decision 6: the review gate swaps
       // ship:awaiting-review -> ship:approved. It does NOT close the issue —
       // the issue closes when the PR merges, and `pr` consumes ship:approved.
@@ -106,7 +106,12 @@ function createBoard(execFile) {
         ]);
         return;
       }
+      // Contract v1 §4: a `reconcile` escalation raised by `pr` is the ONE
+      // Needs Human state cleared by restoring ship:approved rather than
+      // resetting to ship:planned — the review packet was already approved
+      // and only the merge failed, so re-running the pipeline would be wrong.
       if (stage === 'Needs Human') {
+        const restore = escalationCause === 'reconcile' ? 'ship:approved' : 'ship:planned';
         await run('gh', [
           'issue',
           'edit',
@@ -114,7 +119,7 @@ function createBoard(execFile) {
           '--repo',
           repo,
           '--add-label',
-          'ship:planned',
+          restore,
           '--remove-label',
           'ship:needs-human',
         ]);

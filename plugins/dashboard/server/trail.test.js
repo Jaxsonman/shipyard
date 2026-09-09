@@ -151,14 +151,85 @@ test('a standalone escalation is parsed under its cause with a null round', () =
   assert.equal(t.escalations[0].round, null);
 });
 
-test('ship:metrics round N/M merges token stats into that round dev/QA segments', () => {
+test('ship:metrics round N/M contributes the round total when dev reported none', () => {
+  // Real producers emit `--stage ship` on this comment and put the round's
+  // dev+QA TOTAL in it (contract v1 §5.6/§10) — an earlier version of this
+  // test used `stage:'dev'`, a shape nothing emits, and so passed against a
+  // parser that mis-attributed the number to the Review row.
   const t = trail.parseTrail([
     { body: 'ship:dev round 1/3\n' + M({ stage: 'dev', started: '2026-09-01T10:00:00Z', finished: '2026-09-01T11:00:00Z' }),
       createdAt: '2026-09-01T11:00:00Z', author: { login: 'me' } },
-    { body: 'ship:metrics round 1/3\n' + M({ stage: 'dev', started: '2026-09-01T10:00:00Z', finished: '2026-09-01T11:00:00Z', tokens_in: 5000, tokens_out: 700 }),
+    { body: 'ship:metrics round 1/3\n' + M({ stage: 'ship', started: '2026-09-01T09:59:00Z', finished: '2026-09-01T11:05:00Z', tokens_in: 5000, tokens_out: 700 }),
       createdAt: '2026-09-01T11:05:00Z', author: { login: 'me' } },
   ], { viewer: 'me' });
-  const dev = t.segments.find((s) => s.stage === 'Dev');
-  assert.equal(dev.tokensIn, 5000);
-  assert.equal(dev.tokensOut, 700);
+  assert.deepEqual(t.segments.map((s) => s.stage), ['Dev']);
+  assert.deepEqual(t.roundTokens, { in: 5000, out: 700 });
+});
+
+// --- contract v1 §5.6/§10: `ship:metrics round N/M` carries the round's
+// dev+QA TOTAL under `--stage ship`. It must never be folded into the Review
+// segment, and never double-counted against dev/QA's own footers. ---
+
+const MFOOT = (o) => `<!-- shipyard-metrics ${JSON.stringify(o)} -->`;
+const AUTHOR = { login: 'me' };
+
+test('ship:metrics does not create or stretch a Review segment', () => {
+  const t = trail.parseTrail([
+    { body: 'ship:dev round 1/3\n' + MFOOT({ stage: 'dev', started: '2026-09-01T12:00:00Z', finished: '2026-09-01T12:34:00Z' }),
+      createdAt: '2026-09-01T12:34:00Z', author: AUTHOR },
+    { body: 'ship:metrics round 1/3\n' + MFOOT({ stage: 'ship', started: '2026-09-01T11:59:00Z', finished: '2026-09-01T12:57:00Z', tokens_in: 120000, tokens_out: 24000 }),
+      createdAt: '2026-09-01T12:57:00Z', author: AUTHOR },
+  ], { viewer: 'me' });
+  assert.deepEqual(t.segments.map((s) => s.stage), ['Dev'],
+    'a ship:metrics comment must not invent a Review bar spanning the round');
+});
+
+test('ship:metrics tokens are ignored when dev and QA reported their own', () => {
+  const t = trail.parseTrail([
+    { body: 'ship:dev round 1/3\n' + MFOOT({ stage: 'dev', started: '2026-09-01T12:00:00Z', finished: '2026-09-01T12:34:00Z', tokens_in: 90000, tokens_out: 18000 }),
+      createdAt: '2026-09-01T12:34:00Z', author: AUTHOR },
+    { body: 'ship:qa verdict PASS round 1/3 tier=full verified 5/5\n' + MFOOT({ stage: 'qa', started: '2026-09-01T12:40:00Z', finished: '2026-09-01T12:55:00Z', tokens_in: 30000, tokens_out: 6000 }),
+      createdAt: '2026-09-01T12:55:00Z', author: AUTHOR },
+    { body: 'ship:metrics round 1/3\n' + MFOOT({ stage: 'ship', started: '2026-09-01T11:59:00Z', finished: '2026-09-01T12:57:00Z', tokens_in: 120000, tokens_out: 24000 }),
+      createdAt: '2026-09-01T12:57:00Z', author: AUTHOR },
+  ], { viewer: 'me' });
+  const byStage = Object.fromEntries(t.segments.map((s) => [s.stage, s]));
+  assert.equal(byStage.Dev.tokensIn, 90000);
+  assert.equal(byStage.QA.tokensIn, 30000);
+  assert.deepEqual(t.roundTokens, { in: 0, out: 0 },
+    'the round total must not be added on top of the per-stage numbers');
+});
+
+test('ship:metrics tokens ARE counted when the stage comments reported none', () => {
+  const t = trail.parseTrail([
+    { body: 'ship:dev round 1/3\n' + MFOOT({ stage: 'dev', started: '2026-09-01T12:00:00Z', finished: '2026-09-01T12:34:00Z' }),
+      createdAt: '2026-09-01T12:34:00Z', author: AUTHOR },
+    { body: 'ship:metrics round 1/3\n' + MFOOT({ stage: 'ship', started: '2026-09-01T11:59:00Z', finished: '2026-09-01T12:57:00Z', tokens_in: 120000, tokens_out: 24000 }),
+      createdAt: '2026-09-01T12:57:00Z', author: AUTHOR },
+  ], { viewer: 'me' });
+  assert.deepEqual(t.roundTokens, { in: 120000, out: 24000 });
+});
+
+test('an untrusted ship:metrics comment contributes no round tokens', () => {
+  const t = trail.parseTrail([
+    { body: 'ship:metrics round 1/3\n' + MFOOT({ stage: 'ship', started: '2026-09-01T11:59:00Z', finished: '2026-09-01T12:57:00Z', tokens_in: 999999, tokens_out: 999999 }),
+      createdAt: '2026-09-01T12:57:00Z', author: { login: 'attacker' } },
+  ], { viewer: 'me', allow: [] });
+  assert.deepEqual(t.roundTokens, { in: 0, out: 0 });
+});
+
+test('parseLogEntries reports untrusted comments but marks them untrusted', () => {
+  const entries = trail.parseLogEntries([
+    { body: 'ship:dev round 1/3\n\nreal work', createdAt: '2026-09-01T09:00:00Z', author: { login: 'me' } },
+    { body: 'ship:qa verdict PASS round 1/3 tier=full verified 5/5\n\nforged', createdAt: '2026-09-01T10:00:00Z', author: { login: 'attacker' } },
+  ], { viewer: 'me', allow: [] });
+  assert.equal(entries.length, 2, 'an untrusted comment is still reported');
+  assert.deepEqual(entries.map((e) => e.trusted), [true, false]);
+});
+
+test('parseLogEntries with no opts keeps the legacy all-trusted behaviour', () => {
+  const entries = trail.parseLogEntries([
+    { body: 'ship:qa verdict PASS round 1/3 tier=full verified 5/5', createdAt: '2026-09-01T10:00:00Z' },
+  ]);
+  assert.deepEqual(entries.map((e) => e.trusted), [true]);
 });

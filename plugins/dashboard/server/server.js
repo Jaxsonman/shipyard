@@ -201,7 +201,9 @@ function createApp(opts = {}) {
   // Trust context for one project: { viewer, allow }. Undefined in mock mode so
   // author-less fixtures still parse.
   async function trustFor(project) {
-    if (mock) return undefined;
+    // Mock mode runs the REAL trust rule against fixture authorship, so the
+    // untrusted-comment handling is exercisable without a live board.
+    if (mock) return { viewer: fixtures.MOCK_VIEWER, allow: [] };
     const login = await resolveViewer();
     return { viewer: login, allow: readApprovers(project && project.path) };
   }
@@ -449,15 +451,37 @@ function createApp(opts = {}) {
     }
 
     const comments = issue.comments || [];
-    const logs = trail.parseLogEntries(comments).map((e) => ({
+    const detailTrust = await trustFor(project);
+    const detailTrail = trail.parseTrail(comments, detailTrust);
+    // Logs carry their real trust flag: an untrusted comment is SHOWN (the
+    // contract says report it, never act on it) but must be marked, or the
+    // Logs tab would present a forged verdict exactly like a real one.
+    const logs = trail.parseLogEntries(comments, detailTrust).map((e) => ({
       header: e.header,
       body: e.body,
+      trusted: e.trusted !== false,
       createdAt: e.at === null ? null : new Date(e.at).toISOString(),
     }));
-    const ticketTimeline = buildTimeline(comments, entry.stage, await trustFor(project));
+    const ticketTimeline = buildTimeline(comments, entry.stage, detailTrust);
+    const newestEscalation = (detailTrail.escalations || []).reduce(
+      (best, e) => (best === null || e.at >= best.at ? e : best), null);
 
     sendJson(res, 200, {
-      ticket: { ...entry, body: issue.body, spec, plan, logs, timeline: ticketTimeline },
+      ticket: {
+        ...entry,
+        body: issue.body,
+        spec,
+        plan,
+        logs,
+        timeline: ticketTimeline,
+        prUrl: detailTrail.prUrl || null,
+        escalation: entry.stage === 'Needs Human' && newestEscalation
+          ? { cause: newestEscalation.cause, round: newestEscalation.round, cap: newestEscalation.cap }
+          : null,
+        // Contract §3 requires untrusted comments to be REPORTED. This is how
+        // the UI knows to warn that the board carries comments it ignored.
+        untrustedCount: (detailTrail.untrusted || []).length,
+      },
     });
   }
 
@@ -477,8 +501,19 @@ function createApp(opts = {}) {
       return;
     }
     const { stage } = stageFromLabels(issue.labels);
+    // Contract v1 §4: the recovery for a Needs Human ticket depends on WHY it
+    // escalated — a `reconcile` (pr's merge dry-run failed on an already
+    // approved packet) restores ship:approved; everything else resets to
+    // ship:planned. The cause comes from the newest TRUSTED escalation only.
+    let escalationCause = null;
+    if (stage === 'Needs Human') {
+      const t = trail.parseTrail(issue.comments, await trustFor(project));
+      const newest = (t.escalations || []).reduce(
+        (best, e) => (best === null || e.at >= best.at ? e : best), null);
+      escalationCause = newest ? newest.cause : null;
+    }
     try {
-      await board.approve(project.repo, number, stage);
+      await board.approve(project.repo, number, stage, escalationCause);
     } catch (err) {
       if (/approve not available/.test(err.message)) {
         sendJson(res, 409, { error: err.message });

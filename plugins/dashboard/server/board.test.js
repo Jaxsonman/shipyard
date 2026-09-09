@@ -100,3 +100,22 @@ test('readApprovers tolerates every broken-config shape without throwing', async
   assert.deepStrictEqual(board.readApprovers(null), []);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test('approve on Needs Human restores ship:approved for a reconcile escalation only', async () => {
+  const calls = [];
+  const b = createBoard(async (...a) => { calls.push(a.flat()); return ''; });
+  // Contract v1 §4: pr's merge dry-run failed on an already-approved packet —
+  // the recovery restores ship:approved, NOT ship:planned, or the human loses
+  // the review approval and the ticket re-runs the whole pipeline.
+  await b.approve('o/r', 42, 'Needs Human', 'reconcile');
+  assert.deepStrictEqual(calls[0], ['gh', 'issue', 'edit', '42', '--repo', 'o/r',
+    '--add-label', 'ship:approved', '--remove-label', 'ship:needs-human']);
+  // Every other cause resets to Planned.
+  for (const cause of ['cap', 'static', 'stage-error', null, undefined]) {
+    calls.length = 0;
+    await b.approve('o/r', 42, 'Needs Human', cause);
+    assert.deepStrictEqual(calls[0], ['gh', 'issue', 'edit', '42', '--repo', 'o/r',
+      '--add-label', 'ship:planned', '--remove-label', 'ship:needs-human'],
+      `cause ${cause} must reset to Planned`);
+  }
+});

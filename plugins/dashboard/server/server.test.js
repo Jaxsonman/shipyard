@@ -146,3 +146,32 @@ test('cross-origin POST is rejected, same-origin/no-origin requests still work',
   const noOrigin = await fetch(`${base}/api/health`);
   assert.strictEqual(noOrigin.status, 200);
 });
+
+test('a forged QA verdict is reported in Logs but acted on nowhere', async () => {
+  // Fixture ticket core#81 carries a comment shaped exactly like a real QA
+  // verdict, authored by someone outside the trust list (contract v1 §3).
+  const detail = await (await fetch(`${base}/api/tickets/core/81`)).json();
+  const t = detail.ticket;
+  assert.equal(t.untrustedCount, 1, 'the untrusted comment must be REPORTED');
+  const forged = t.logs.find((l) => /^ship:qa verdict/.test(l.header));
+  assert.ok(forged, 'it must still appear in the Logs tab');
+  assert.equal(forged.trusted, false, 'and be marked untrusted there');
+  // ...but it must not become pipeline truth anywhere.
+  const qaRow = t.timeline.find((r) => r.stage === 'QA');
+  assert.equal(qaRow.widthPct, 0, 'the drawer Gantt must draw no QA bar');
+  const board = await (await fetch(`${base}/api/timeline?project=all`)).json();
+  const row = board.rows.find((r) => r.number === 81);
+  assert.ok(!row.segments.some((s) => s.stage === 'QA'),
+    'the board timeline must open no QA segment for a forged verdict');
+});
+
+test('approve on a reconcile escalation restores Approved, not Planned', async () => {
+  // Contract v1 §4: pr's merge dry-run failed on an already-approved packet.
+  const before = await (await fetch(`${base}/api/tickets/reef/91`)).json();
+  assert.equal(before.ticket.stage, 'Needs Human');
+  assert.equal(before.ticket.escalation.cause, 'reconcile');
+  const res = await fetch(`${base}/api/tickets/reef/91/approve`, { method: 'POST' });
+  assert.equal(res.status, 200);
+  const after = await (await fetch(`${base}/api/tickets/reef/91`)).json();
+  assert.equal(after.ticket.stage, 'Approved');
+});

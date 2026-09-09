@@ -33,10 +33,13 @@
 // — breaking every phase-1 caller and fixture. So: **`opts` being
 // absent/undefined is a legacy/no-trust-context mode that trusts every
 // event.** Passing an explicit `{ viewer }` and/or `{ allow }` (even `{}`)
-// opts into the real trust rule. Task 14 threads the real `viewer`/`allow`
-// through every call site; until then, every existing call in this repo
-// (timeline.js, stats.js, metrics.js, server.js) calls `parseTrail(list)`
-// with no opts and keeps behaving as before.
+// opts into the real trust rule.
+//
+// Every real (non-`--mock`) call site now passes a context: server.js builds
+// one per project from `board.viewer()` + `board.readApprovers()` and hands it
+// to `timeline.buildRow`, `metrics.buildTimeline` and `parseLogEntries`. The
+// no-opts mode is reachable only from tests. `--mock` passes a real context
+// too (viewer `ship-bot`), so the fixture board exercises the actual rule.
 
 const boardTrail = require('../scripts/board-trail.js');
 
@@ -48,9 +51,8 @@ const STAGE_KEY_TO_LABEL = { spec: 'Spec', plan: 'Plan', dev: 'Dev', qa: 'QA', s
 const ESCALATION_CAUSES = ['cap', 'static', 'stage-error', 'reconcile'];
 
 // Maps a board-trail event `type` to the stage segment it opens. `metrics`
-// events open no segment of their own — their token/timing numbers merge
-// into whichever segment matches their own footer's `stage` key (see the
-// `agg` loop in parseTrail below).
+// events open no segment of their own AND are excluded from the footer
+// aggregation below — see the roundTokens pass in parseTrail for why.
 const EVENT_TYPE_TO_STAGE = {
   'spec-approved': 'Spec',
   'plan-approved': 'Plan',
@@ -171,6 +173,13 @@ function parseTrail(comments, opts) {
   // "known" from a loosely-matching header; see the fallback loop below).
   const agg = {};
   for (const ev of usable) {
+    // A `ship:metrics round N/M` comment carries `--stage ship` and, per
+    // contract v1 §10, token counts that are the SUM of that round's dev and
+    // QA usage. Folding its footer in here would (a) attribute the round's
+    // dev+QA tokens to the Review row and (b) double-count them whenever dev
+    // and QA also reported their own, and (c) stretch the Review bar across
+    // the whole round. It is accounted for separately, below.
+    if (ev.type === 'metrics') continue;
     const m = ev.metrics;
     if (!m || !m.stage) continue;
     const label = STAGE_KEY_TO_LABEL[m.stage];
@@ -269,7 +278,35 @@ function parseTrail(comments, opts) {
     if (lastActivity === null || at > lastActivity) lastActivity = at;
   }
 
-  return { segments, escalations, lastActivity, untrusted, prUrl };
+  // Round-level tokens from `ship:metrics round N/M` (contract v1 §5.6/§10).
+  // Its footer carries the round's dev+QA total as one number, so it cannot be
+  // split across the Dev and QA rows honestly. It is therefore kept at row
+  // level, and only counted for rounds where neither the dev handoff nor the
+  // QA verdict reported tokens itself — otherwise the same usage is counted
+  // twice. This is the fallback ship exists to provide: usage for a round
+  // whose stage comments could not report their own.
+  const selfReportedRounds = new Set();
+  const metricsByRound = new Map();
+  for (const ev of usable) {
+    const m = ev.metrics;
+    const hasTokens = m && (typeof m.tokensIn === 'number' || typeof m.tokensOut === 'number');
+    if (!hasTokens || typeof ev.round !== 'number') continue;
+    if (ev.type === 'dev' || ev.type === 'qa-verdict') {
+      selfReportedRounds.add(ev.round);
+    } else if (ev.type === 'metrics') {
+      // Latest metrics comment for a round wins, matching board-trail's
+      // latest-wins rule for repeated events.
+      metricsByRound.set(ev.round, { in: m.tokensIn || 0, out: m.tokensOut || 0 });
+    }
+  }
+  const roundTokens = { in: 0, out: 0 };
+  for (const [round, tokens] of metricsByRound) {
+    if (selfReportedRounds.has(round)) continue;
+    roundTokens.in += tokens.in;
+    roundTokens.out += tokens.out;
+  }
+
+  return { segments, escalations, lastActivity, untrusted, prUrl, roundTokens };
 }
 
 /**
@@ -279,17 +316,22 @@ function parseTrail(comments, opts) {
  * from board-trail.js's parsed events — `header` is the event's own `raw`
  * (its trimmed first line).
  *
- * `parseLogEntries` takes no trust-context opts (its signature is frozen
- * from phase 1), so — same as the no-opts legacy mode documented on
- * `parseTrail` above — every entry is produced as if trusted; the `trusted`
- * field is included so a future trust-aware caller (once this signature
- * grows an opts arg) has somewhere to put a real answer.
+ * Unlike `parseTrail`, this DOES return untrusted entries — the contract
+ * requires untrusted comments to be reported, never acted on. Each entry
+ * carries its real `trusted` flag so the UI can mark a forged comment
+ * instead of presenting it as a genuine pipeline event. Passing no `opts`
+ * keeps the phase-1 legacy behaviour (everything trusted), used by --mock.
  * @param {Array<{body: string, createdAt: string}>} comments
+ * @param {{viewer?: string|null, allow?: string[]}} [opts]
  * @returns {Array<{header: string, body: string, at: number|null, trusted: boolean}>}
  */
-function parseLogEntries(comments) {
+function parseLogEntries(comments, opts) {
   const list = comments || [];
-  const events = boardTrail.parseEvents(toIssue(list), {});
+  const legacyTrustAll = opts === undefined;
+  const events = boardTrail.parseEvents(toIssue(list), {
+    viewer: (opts && opts.viewer) || null,
+    allow: (opts && opts.allow) || [],
+  });
 
   // Events are produced in comment order, skipping comments whose first
   // line matches no header at all — recompute that same filter over `list`
@@ -310,7 +352,12 @@ function parseLogEntries(comments) {
     const firstNewline = body.indexOf('\n');
     const rest = firstNewline === -1 ? '' : body.slice(firstNewline + 1).replace(/^\n+/, '');
     const at = Date.parse(comment && comment.createdAt);
-    out.push({ header: ev.raw, body: rest, at: Number.isNaN(at) ? null : at, trusted: true });
+    out.push({
+      header: ev.raw,
+      body: rest,
+      at: Number.isNaN(at) ? null : at,
+      trusted: legacyTrustAll ? true : ev.trusted === true,
+    });
   }
   return out;
 }

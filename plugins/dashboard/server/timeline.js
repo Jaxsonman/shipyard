@@ -125,6 +125,11 @@ function buildRow(ticket, ctx) {
     segments.splice(insertAt, 0, synthetic);
   }
 
+  // Round-level tokens ship reported on behalf of stages that could not
+  // report their own (contract §5.6) — already de-duplicated by parseTrail.
+  tokensIn += (t.roundTokens && t.roundTokens.in) || 0;
+  tokensOut += (t.roundTokens && t.roundTokens.out) || 0;
+
   const running = RUNNING_STAGES.has(stage)
     && segments.length > 0
     && segments[segments.length - 1].stage === stage

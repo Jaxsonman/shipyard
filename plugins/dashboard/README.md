@@ -106,10 +106,13 @@ account or a listed approver) is dropped into the returned `untrusted[]`
 array and never opens a segment, contributes to an escalation, contributes
 tokens, or bumps `lastActivity`. Calling `parseTrail(comments)` with **no**
 second argument at all is a legacy/no-trust-context mode that trusts every
-event — this keeps every pre-Task-14 call site (`timeline.js`, `stats.js`,
-`metrics.js`, `server.js`) and the mock fixtures (which carry no `author`
-field) behaving exactly as they did before the trust rule existed. Passing
-`viewer`/`allow` (wiring done in a later task) turns the real trust rule on.
+event; it is reachable only from tests. Every real call site passes a context:
+`server.js` builds one per project from the cached `gh api user` login plus the
+project's `approvers`, and hands it to the board timeline, the drawer's Gantt
+and the Logs tab. `--mock` passes one too (viewer `ship-bot`), so the fixture
+board exercises the real rule rather than bypassing it — one fixture ticket
+carries a comment shaped like a QA verdict from an untrusted author, and you
+can see it reported in Logs and acted on nowhere.
 
 - `web/timeline-scale.js` — pure time-scale math for the board-wide Timeline
   (zoom presets, domain resolution, pan clamping, gridline ticks, segment →

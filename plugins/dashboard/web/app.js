@@ -709,16 +709,26 @@ function rowMatchesSearch(row) {
 // Min segment start / max segment end across the given rows — the extent
 // the Fit preset fits, as opposed to 'all' which fits the payload's
 // board-wide domain (Task 16 step 1). Null when no row has a segment.
-function visibleRowExtent(rows) {
+// The extent `fit` is measured against: the visible rows' segments, extended
+// to `now` whenever a visible row is still running. segmentRects grows a
+// running row's current bar to `now` at render time, so an extent that stopped
+// at the last recorded metric would clip that bar and push the "now" line
+// outside the domain entirely — where it is not drawn at all. Since `fit` is
+// the default preset, that was the normal case, not an edge case.
+function visibleRowExtent(rows, now) {
   let start = null;
   let end = null;
+  let anyRunning = false;
   rows.forEach((row) => {
+    if (row.running) anyRunning = true;
     (row.segments || []).forEach((seg) => {
       if (typeof seg.start === 'number' && (start === null || seg.start < start)) start = seg.start;
       if (typeof seg.end === 'number' && (end === null || seg.end > end)) end = seg.end;
     });
   });
-  return start === null || end === null ? null : { start, end };
+  if (start === null || end === null) return null;
+  if (anyRunning && typeof now === 'number' && now > end) end = now;
+  return { start, end };
 }
 
 function renderTimeline() {
@@ -819,7 +829,7 @@ function renderTimeline() {
   // step 1). Falls back to the board domain if no visible row has a segment.
   let domainExtent = { dataStart: timelineData.domain.start, dataEnd: timelineData.domain.end };
   if (state.zoom === 'fit') {
-    const extent = visibleRowExtent(renderedRows);
+    const extent = visibleRowExtent(renderedRows, timelineData.now);
     if (extent) domainExtent = { dataStart: extent.start, dataEnd: extent.end };
   }
   const domain = TimelineScale.resolveDomain(state.zoom, {
@@ -1037,11 +1047,18 @@ function closeDrawer() {
   drawerLastFocus = null;
 }
 
-function approveEligibility(stage) {
+function approveEligibility(stage, escalationCause) {
   // Approving no longer closes the ticket — it swaps ship:awaiting-review
   // for ship:approved and leaves the issue open (contract §4).
   if (stage === 'Awaiting Review') return { enabled: true, label: 'Approve → Approved' };
-  if (stage === 'Needs Human') return { enabled: true, label: 'Approve → Planned' };
+  if (stage === 'Needs Human') {
+    // Contract §4's one exception: a `reconcile` escalation from pr means the
+    // packet was already approved and only the merge failed, so the recovery
+    // restores Approved rather than sending the ticket back through the loop.
+    return escalationCause === 'reconcile'
+      ? { enabled: true, label: 'Approve → Approved' }
+      : { enabled: true, label: 'Approve → Planned' };
+  }
   // Every other stage — including the pipeline-owned Approved and PR Open —
   // is not approvable from here.
   return { enabled: false, label: 'Approve' };
@@ -1149,13 +1166,23 @@ function renderDrawer() {
     tabContent = `<p class="tab-copy">${esc(t.plan || 'Not planned yet')}</p>`;
   } else if (state.activeDrawerTab === 'Logs') {
     const logsText = (t.logs || [])
-      .map((l) => `[${l.createdAt}] ${l.header}${l.body ? `\n${l.body}` : ''}`)
+      .map((l) => {
+        // Contract §3: an untrusted comment is reported, never acted on. It
+        // must not read like a genuine pipeline event in the one place a human
+        // reads the trail as text.
+        const mark = l.trusted === false ? ' [UNTRUSTED — not acted on]' : '';
+        return `[${l.createdAt}]${mark} ${l.header}${l.body ? `\n${l.body}` : ''}`;
+      })
       .join('\n\n');
     const prLogHtml = prUrl ? `<p class="tab-copy">PR: ${prLinkHtml(prUrl)}</p>` : '';
-    tabContent = `<pre class="logs">${esc(logsText || 'No pipeline runs yet.')}</pre>${prLogHtml}`;
+    const untrustedHtml = t.untrustedCount > 0
+      ? `<p class="drawer-untrusted">${esc(String(t.untrustedCount))} comment${t.untrustedCount === 1 ? '' : 's'} on this ticket ${t.untrustedCount === 1 ? 'was' : 'were'} not written by a trusted author and ${t.untrustedCount === 1 ? 'is' : 'are'} shown but ignored.</p>`
+      : '';
+    tabContent = `${untrustedHtml}<pre class="logs">${esc(logsText || 'No pipeline runs yet.')}</pre>${prLogHtml}`;
   }
 
-  const { enabled: approveEnabled, label: approveLabel } = approveEligibility(t.stage);
+  const { enabled: approveEnabled, label: approveLabel } = approveEligibility(
+    t.stage, t.escalation && t.escalation.cause);
   const pCls = priorityClass(t.priority);
   const priorityTag = pCls
     ? `<span class="tag ${pCls}">${esc(t.priority)}</span>`

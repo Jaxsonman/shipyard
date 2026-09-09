@@ -191,6 +191,12 @@ Wait for the user to approve the proposed list from Step 3, or to request
 edits (add, remove, reword slices). Only proceed to Step 6 once they approve
 the list as a whole. Do not create anything before this gate.
 
+**This gate always fires, including on a re-run.** A list loaded from the
+manifest was approved by a *previous* run, not this one. Present the
+remaining work — the tickets Step 4 left `pending`, `failed` or `skipped`,
+alongside its **Already exists** list — and get approval for that remainder
+before Step 6.
+
 This gate is also where the user adds, removes, or edits dependency
 links. Any existing-board ref the *user* adds here must pass the same
 "Verify a ticket exists" check from Step 3 before creation starts — never

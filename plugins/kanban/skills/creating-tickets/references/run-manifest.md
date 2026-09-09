@@ -75,7 +75,10 @@ runs **exactly once per run**.
    run killed mid-create leaves a ticket on the board with its manifest
    entry still `pending` — the board scan is the only thing that catches
    it. A match → adopt its `ref` and `url`, set `state: "created"`, and
-   report it under **Already exists**; never create a second copy.
+   report it under **Already exists**; never create a second copy. An adopted
+   ticket's `ref` resolves its dependents' `Depends on:` lines exactly as a
+   freshly created one does — adoption and creation are interchangeable
+   sources of a real ref.
 4. `deferred[]` entries are offered as the next batch once nothing is pending
    (see "Deferred lifecycle" above for how they move into `tickets[]`).
 5. The manifest is the authority for *what was approved*; the `Source PRD:`

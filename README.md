@@ -120,7 +120,8 @@ are recognized from the manifest and never duplicated, and only the
 remaining pending/failed tickets are attempted. A client-side scan of the
 board for each ticket's `Source PRD:` line runs alongside the manifest, so a
 ticket created in the instant before an interrupted run could record it is
-still recognized rather than duplicated.
+still recognized rather than duplicated. A re-run always re-asks for approval
+of the remaining tickets before creating anything.
 
 After installing `planning`, run these per ticket, in order:
 

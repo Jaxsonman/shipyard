@@ -180,6 +180,25 @@ ticket at a time; bare `/ship` lists tickets ready to conduct.
 Configure the QA environment once beforehand with `/qa --env-check` —
 ship refuses to run without it.
 
+After installing `pr`, open the PR for an approved ticket:
+
+```
+/pr 42
+```
+
+Runs only on a ticket the review gate has approved (`ship:approved`) —
+anything else is a refusal naming the remedy. Dry-runs the merge against
+`baseBranch` (a conflict escalates to `Needs Human`, never a guess),
+pushes the branch, and opens a PR whose title is the ticket's and whose
+body links the ticket, spec and plan, quotes the latest trusted QA verdict
+and review packet, and carries `Closes #42`. The ticket moves to
+`PR Open`; your CI/CD takes over and the issue closes when the PR merges.
+Re-running `/pr 42` is safe — an already-open PR for the branch is
+reconciled, never duplicated. **`pr` is the only stage in the whole
+pipeline that pushes**; every other stage works locally. Jira is
+best-effort: the ticket side goes through the Atlassian MCP server, the PR
+is still opened with `gh`, and Jira comments carry no metrics footer.
+
 ## Shared scripts
 
 Every plugin's skills call the same six scripts:

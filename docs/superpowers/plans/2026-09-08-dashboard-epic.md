@@ -510,7 +510,7 @@ git commit -m "feat(dashboard): board-wide timeline model and GET /api/timeline"
 
 ```js
 // plugins/dashboard/server/stats.js
-module.exports = { percentile, buildStats, THROUGHPUT_WINDOW_DAYS };
+module.exports = { percentile, buildStats, STAGE_KEYS, THROUGHPUT_WINDOW_DAYS };
 // THROUGHPUT_WINDOW_DAYS = 28
 
 // percentile(sortedAscNumbers, p /* 0..1 */) => number
@@ -519,8 +519,9 @@ module.exports = { percentile, buildStats, THROUGHPUT_WINDOW_DAYS };
 // buildStats({ rows, now }) => {
 //   counts: { "Backlog":n, "Spec'd":n, "Planned":n, "Dev":n, "QA":n,
 //             "Awaiting Review":n, "Needs Human":n },   // every key always present
-//   stageDuration: { medianMs, p90Ms, samples },        // null medianMs/p90Ms when samples === 0
-//   tokens: { in, out },
+//   stageDuration: { medianMs, p90Ms, samples, medianLabel, p90Label },
+//                                                      // null Ms/labels when samples === 0
+//   tokens: { in, out, inLabel, outLabel },             // labels via metrics.formatTokens
 //   throughput: { perWeek, reached, windowDays },
 //   escalations: { cap:n, static:n, "stage-error":n, reconcile:n, unknown:n },
 // }
@@ -572,7 +573,9 @@ test('buildStats ignores estimated segments when timing stages', () => {
     ], tokensIn: 5, tokensOut: 1 }) ] });
   assert.equal(out.stageDuration.samples, 1);
   assert.equal(out.stageDuration.medianMs, HOUR);
-  assert.deepEqual(out.tokens, { in: 5, out: 1 });
+  assert.equal(out.stageDuration.medianLabel, '1h 0m');
+  assert.equal(out.tokens.in, 5);
+  assert.equal(out.tokens.out, 1);
 });
 
 test('buildStats tallies escalation causes, unknown included', () => {
@@ -600,7 +603,8 @@ test('buildStats on an empty board returns nulls, not NaN', () => {
   const out = stats.buildStats({ now: NOW, rows: [] });
   assert.equal(out.stageDuration.medianMs, null);
   assert.equal(out.stageDuration.p90Ms, null);
-  assert.deepEqual(out.tokens, { in: 0, out: 0 });
+  assert.equal(out.tokens.in, 0);
+  assert.equal(out.tokens.out, 0);
   assert.equal(out.throughput.perWeek, 0);
 });
 ```
@@ -862,7 +866,13 @@ Static declarations become classes. The genuinely dynamic ones — the drawer Ga
 :focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 .proj-row:focus-visible, .ticket-row:focus-visible, .tl-row:focus-visible { outline-offset: -2px; }
 ```
-Never remove an outline without an equivalent replacement.
+Never remove an outline without an equivalent replacement. Also honour reduced motion — the running pulse is the only animation in the app, and it must stop for people who ask it to:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  .dot-running, .tl-bar-running { animation: none; }
+}
+```
 
 - [ ] **Step 5: Verify no inline styles and no design-system drift**
 

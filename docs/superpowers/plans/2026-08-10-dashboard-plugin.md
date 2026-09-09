@@ -37,7 +37,7 @@
 **Interfaces:**
 - Produces: `/dashboard` command contract — runs `node ${CLAUDE_PLUGIN_ROOT}/server/server.js --open` in the background (Task 4 creates that file; command is written now, inert until then).
 
-- [ ] **Step 1: Write `plugin.json`**
+- [x] **Step 1: Write `plugin.json`**
 
 ```json
 {
@@ -50,7 +50,7 @@
 
 (Match the exact field shape of `plugins/ship/.claude-plugin/plugin.json` — read it first and mirror any additional required fields.)
 
-- [ ] **Step 2: Write `commands/dashboard.md`**
+- [x] **Step 2: Write `commands/dashboard.md`**
 
 ```markdown
 ---
@@ -65,11 +65,11 @@ Start the Shipyard dashboard server and give the user the URL.
 4. Do not keep polling it; it runs until the user stops it.
 ```
 
-- [ ] **Step 3: Write `plugins/dashboard/README.md`** — short: what it is, `/dashboard`, GitHub-only v1, requires `gh` auth, board-only actions (approve on Awaiting Review/Needs Human only), metrics convention pointer to the spec.
+- [x] **Step 3: Write `plugins/dashboard/README.md`** — short: what it is, `/dashboard`, GitHub-only v1, requires `gh` auth, board-only actions (approve on Awaiting Review/Needs Human only), metrics convention pointer to the spec.
 
-- [ ] **Step 4: Copy the design system** — `cp docs/design/dashboard/styles.css plugins/dashboard/web/styles.css` (byte-identical; do not edit).
+- [x] **Step 4: Copy the design system** — `cp docs/design/dashboard/styles.css plugins/dashboard/web/styles.css` (byte-identical; do not edit).
 
-- [ ] **Step 5: Register in `marketplace.json`** — append after the `ship` entry:
+- [x] **Step 5: Register in `marketplace.json`** — append after the `ship` entry:
 
 ```json
 {
@@ -81,11 +81,11 @@ Start the Shipyard dashboard server and give the user the URL.
 }
 ```
 
-- [ ] **Step 6: Add README stage table row** — in the `## Pipeline stages` table of root `README.md`, add below the `ship` row: `| — | `dashboard` | ✅ Available | Visual dashboard — local web UI over the board: stages, timelines, approve/reassign |`
+- [x] **Step 6: Add README stage table row** — in the `## Pipeline stages` table of root `README.md`, add below the `ship` row: `| — | `dashboard` | ✅ Available | Visual dashboard — local web UI over the board: stages, timelines, approve/reassign |`
 
-- [ ] **Step 7: Validate JSON** — Run: `node -e "JSON.parse(require('fs').readFileSync('.claude-plugin/marketplace.json')); JSON.parse(require('fs').readFileSync('plugins/dashboard/.claude-plugin/plugin.json')); console.log('ok')"` — Expected: `ok`.
+- [x] **Step 7: Validate JSON** — Run: `node -e "JSON.parse(require('fs').readFileSync('.claude-plugin/marketplace.json')); JSON.parse(require('fs').readFileSync('plugins/dashboard/.claude-plugin/plugin.json')); console.log('ok')"` — Expected: `ok`.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add plugins/dashboard .claude-plugin/marketplace.json README.md
@@ -110,7 +110,7 @@ git commit -m "feat(dashboard): scaffold dashboard plugin and register in market
 
 **Token formatting:** `420000 -> "420K"`, `1500000 -> "1.5M"`, below 1000 verbatim. **Duration:** `"Xh Ym"`, `"Ym"` under an hour, `"<1m"` under a minute.
 
-- [ ] **Step 1: Write failing tests** — `plugins/dashboard/server/metrics.test.js`:
+- [x] **Step 1: Write failing tests** — `plugins/dashboard/server/metrics.test.js`:
 
 ```js
 const { test } = require('node:test');
@@ -160,13 +160,13 @@ test('buildTimeline: falls back to header timestamps without metrics', () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — Run: `node --test "plugins/dashboard/**/*.test.js"` — Expected: FAIL, cannot find module `./metrics.js`.
+- [x] **Step 2: Run to verify failure** — Run: `node --test "plugins/dashboard/**/*.test.js"` — Expected: FAIL, cannot find module `./metrics.js`.
 
-- [ ] **Step 3: Implement `metrics.js`** — CommonJS, exports above. Extraction regex: `/<!--\s*shipyard-metrics\s+(\{[\s\S]*?\})\s*-->/g`; `JSON.parse` in try/catch; require `stage && started && finished`. Implement `formatTokens`, `formatDuration`, stage-key→row-label map `{spec:'Spec',plan:'Plan',dev:'Dev',qa:'QA',ship:'Review'}`, fallback header regexes exactly as in the Interfaces block. Current-stage mapping for `state`: row order index vs `["Spec'd","Planned","Dev","QA","Awaiting Review"]` position of `currentStage` (`"Spec'd"`→Spec current, `"Planned"`→Plan current, `"Dev"`→Dev, `"QA"`→QA, `"Awaiting Review"`/closed→Review; `"Backlog"`→all future; `"Needs Human"`→highest data-bearing row is current).
+- [x] **Step 3: Implement `metrics.js`** — CommonJS, exports above. Extraction regex: `/<!--\s*shipyard-metrics\s+(\{[\s\S]*?\})\s*-->/g`; `JSON.parse` in try/catch; require `stage && started && finished`. Implement `formatTokens`, `formatDuration`, stage-key→row-label map `{spec:'Spec',plan:'Plan',dev:'Dev',qa:'QA',ship:'Review'}`, fallback header regexes exactly as in the Interfaces block. Current-stage mapping for `state`: row order index vs `["Spec'd","Planned","Dev","QA","Awaiting Review"]` position of `currentStage` (`"Spec'd"`→Spec current, `"Planned"`→Plan current, `"Dev"`→Dev, `"QA"`→QA, `"Awaiting Review"`/closed→Review; `"Backlog"`→all future; `"Needs Human"`→highest data-bearing row is current).
 
-- [ ] **Step 4: Run tests** — Run: `node --test "plugins/dashboard/**/*.test.js"` — Expected: PASS (3 tests).
+- [x] **Step 4: Run tests** — Run: `node --test "plugins/dashboard/**/*.test.js"` — Expected: PASS (3 tests).
 
-- [ ] **Step 5: Commit** — `git add plugins/dashboard/server README.md && git commit -m "feat(dashboard): metrics parser and Gantt timeline builder"` (README staged only if hook demands it; no content change expected — if the hook blocks, add `README.md` with `git add README.md`).
+- [x] **Step 5: Commit** — `git add plugins/dashboard/server README.md && git commit -m "feat(dashboard): metrics parser and Gantt timeline builder"` (README staged only if hook demands it; no content change expected — if the hook blocks, add `README.md` with `git add README.md`).
 
 ---
 
@@ -188,7 +188,7 @@ test('buildTimeline: falls back to header timestamps without metrics', () => {
     - `assign(repo, number, login)` → `gh issue edit <number> --repo <repo> --add-assignee <login>`.
   - `repoFromPath(path, execFile) -> Promise<string>` — runs `git -C <path> remote get-url origin`, parses `owner/name` from both `git@github.com:owner/name.git` and `https://github.com/owner/name(.git)` forms; throws on no remote / non-GitHub remote.
 
-- [ ] **Step 1: Write failing tests** — `board.test.js` with a fake `execFile` that records `[cmd, args]` calls and returns canned JSON:
+- [x] **Step 1: Write failing tests** — `board.test.js` with a fake `execFile` that records `[cmd, args]` calls and returns canned JSON:
 
 ```js
 const { test } = require('node:test');
@@ -226,13 +226,13 @@ test('repoFromPath parses ssh and https remotes', async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `node --test "plugins/dashboard/**/*.test.js"` — Expected: FAIL on missing `board.js`.
+- [x] **Step 2: Run to verify failure** — `node --test "plugins/dashboard/**/*.test.js"` — Expected: FAIL on missing `board.js`.
 
-- [ ] **Step 3: Implement `board.js`** per the Interfaces block. Real `execFile` default: `node:child_process` `execFile` promisified, `{ maxBuffer: 10 * 1024 * 1024 }`.
+- [x] **Step 3: Implement `board.js`** per the Interfaces block. Real `execFile` default: `node:child_process` `execFile` promisified, `{ maxBuffer: 10 * 1024 * 1024 }`.
 
-- [ ] **Step 4: Run tests** — `node --test "plugins/dashboard/**/*.test.js"` — Expected: PASS (Tasks 2+3 suites).
+- [x] **Step 4: Run tests** — `node --test "plugins/dashboard/**/*.test.js"` — Expected: PASS (Tasks 2+3 suites).
 
-- [ ] **Step 5: Commit** — `git commit -m "feat(dashboard): gh board adapter with stage mapping and guarded approve"` (add server files; include root README.md in staging if the hook requires).
+- [x] **Step 5: Commit** — `git commit -m "feat(dashboard): gh board adapter with stage mapping and guarded approve"` (add server files; include root README.md in staging if the hook requires).
 
 ---
 
@@ -257,7 +257,7 @@ test('repoFromPath parses ssh and https remotes', async () => {
   - Anything else under `/api/` → 404 JSON. Non-API paths: serve `web/` static files (`index.html` default, `.css`→`text/css`, `.js`→`text/javascript`; path-traversal blocked by resolving against `web/` and rejecting escapes).
 - `--mock`: `createApp` swaps board+config for `fixtures.js` in-memory data (same shapes); actions mutate the in-memory store so the UI is fully exercisable offline.
 
-- [ ] **Step 1: Write failing tests** — `server.test.js` boots `createApp` with mock mode on an ephemeral port and uses `fetch`:
+- [x] **Step 1: Write failing tests** — `server.test.js` boots `createApp` with mock mode on an ephemeral port and uses `fetch`:
 
 ```js
 const { test, before, after } = require('node:test');
@@ -298,17 +298,17 @@ test('static serving and traversal guard', async () => {
 });
 ```
 
-- [ ] **Step 2: Run to verify failure** — `node --test "plugins/dashboard/**/*.test.js"` — Expected: FAIL on missing `server.js`.
+- [x] **Step 2: Run to verify failure** — `node --test "plugins/dashboard/**/*.test.js"` — Expected: FAIL on missing `server.js`.
 
-- [ ] **Step 3: Implement `fixtures.js`** — 2 mock projects, ≥6 tickets spanning every stage incl. one conflict and one Needs Human, comments containing realistic handoff headers AND `shipyard-metrics` blocks (reuse the prototype's ticket titles/owners so the UI matches the design mock).
+- [x] **Step 3: Implement `fixtures.js`** — 2 mock projects, ≥6 tickets spanning every stage incl. one conflict and one Needs Human, comments containing realistic handoff headers AND `shipyard-metrics` blocks (reuse the prototype's ticket titles/owners so the UI matches the design mock).
 
-- [ ] **Step 4: Implement `server.js`** — `node:http`, hand router (method + `url.pathname` split), helpers `readJsonBody(req)` (reject >1MB), `sendJson(res, code, obj)`. Every route handler wrapped in try/catch → 500 JSON. `main()`: port scan 7433–7453 on `EADDRINUSE`; on listen, print `Shipyard dashboard: http://127.0.0.1:<port>`; `--open` runs `open <url>` (darwin) / `xdg-open` otherwise.
+- [x] **Step 4: Implement `server.js`** — `node:http`, hand router (method + `url.pathname` split), helpers `readJsonBody(req)` (reject >1MB), `sendJson(res, code, obj)`. Every route handler wrapped in try/catch → 500 JSON. `main()`: port scan 7433–7453 on `EADDRINUSE`; on listen, print `Shipyard dashboard: http://127.0.0.1:<port>`; `--open` runs `open <url>` (darwin) / `xdg-open` otherwise.
 
-- [ ] **Step 5: Run tests** — `node --test "plugins/dashboard/**/*.test.js"` — Expected: PASS (all suites).
+- [x] **Step 5: Run tests** — `node --test "plugins/dashboard/**/*.test.js"` — Expected: PASS (all suites).
 
-- [ ] **Step 6: Manual boot check** — Run: `node plugins/dashboard/server/server.js --mock --port 7440 &` then `curl -s http://127.0.0.1:7440/api/health`; Expected: `{"ok":true,...}`; kill the server.
+- [x] **Step 6: Manual boot check** — Run: `node plugins/dashboard/server/server.js --mock --port 7440 &` then `curl -s http://127.0.0.1:7440/api/health`; Expected: `{"ok":true,...}`; kill the server.
 
-- [ ] **Step 7: Commit** — `git commit -m "feat(dashboard): stdlib HTTP server with board API, mock mode, static serving"`.
+- [x] **Step 7: Commit** — `git commit -m "feat(dashboard): stdlib HTTP server with board API, mock mode, static serving"`.
 
 ---
 
@@ -325,11 +325,11 @@ test('static serving and traversal guard', async () => {
 
 Port the prototype's markup/classes **exactly** (nav, sidebar rows, table, tags, pagination — classes `.nav`, `.btn-*`, `.tag-*`, `.table` etc. per `docs/design/dashboard/README.md` §Screens): replace its `{{ }}`/`sc-for` templating with plain DOM building (`document.createElement` or template literals + `innerHTML` of escaped strings — write an `esc(s)` HTML-escaper and use it for ALL board-sourced text). Page size 5. Stage cell: neutral tag + pulsing accent dot (CSS keyframe from prototype, 1.6s) when `ticket.running`. Priority cell: `High` accent tag / `Medium` outline / `Low` neutral / `—` plain muted when null. Conflict tickets: stage tag gets title attr `"multiple ship:* labels"`. Poll `/api/tickets` + `/api/health` every 30s preserving `page`/selection; re-render only on changed JSON (stringify compare). `ghOk:false` → full-width banner: `gh not authenticated — run: gh auth login`. "New PRD" nav button and search input: render per design; search filters client-side on title/number; New PRD shows `title` tooltip `"Run /prd in Claude Code"` and is otherwise inert (v1).
 
-- [ ] **Step 1: Read the prototype file end-to-end** (`docs/design/dashboard/Shipyard Dashboard.dc.html`) — note exact class usage, spacing, and the three-state layout before writing markup.
-- [ ] **Step 2: Write `index.html`** — static shell: nav, sidebar container `#sidebar`, main `#main`, banner slot `#banner`, drawer root `#drawer-root`, dialog root `#dialog-root`; links `styles.css` + `app.js`; inline `<style>` only for the few prototype styles not in the design system (pulse keyframe, drawer/track geometry) copied from the prototype.
-- [ ] **Step 3: Write `app.js`** — state, `esc()`, fetch helpers, the three render functions, polling loop, project click → filter+page reset, pagination clamped, row click stores `selectedTicket` (drawer arrives Task 6 — until then log to console).
-- [ ] **Step 4: Verify against mock** — Run: `node plugins/dashboard/server/server.js --mock --port 7441 &`; open `http://127.0.0.1:7441` in a browser (or `curl` the HTML and sanity-check markup); confirm: sidebar shows projects + counts, table pages by 5, stage/priority tags styled, running dot pulses, search filters. Kill server.
-- [ ] **Step 5: Commit** — `git commit -m "feat(dashboard): frontend table, sidebar, pagination against live API"`.
+- [x] **Step 1: Read the prototype file end-to-end** (`docs/design/dashboard/Shipyard Dashboard.dc.html`) — note exact class usage, spacing, and the three-state layout before writing markup.
+- [x] **Step 2: Write `index.html`** — static shell: nav, sidebar container `#sidebar`, main `#main`, banner slot `#banner`, drawer root `#drawer-root`, dialog root `#dialog-root`; links `styles.css` + `app.js`; inline `<style>` only for the few prototype styles not in the design system (pulse keyframe, drawer/track geometry) copied from the prototype.
+- [x] **Step 3: Write `app.js`** — state, `esc()`, fetch helpers, the three render functions, polling loop, project click → filter+page reset, pagination clamped, row click stores `selectedTicket` (drawer arrives Task 6 — until then log to console).
+- [x] **Step 4: Verify against mock** — Run: `node plugins/dashboard/server/server.js --mock --port 7441 &`; open `http://127.0.0.1:7441` in a browser (or `curl` the HTML and sanity-check markup); confirm: sidebar shows projects + counts, table pages by 5, stage/priority tags styled, running dot pulses, search filters. Kill server.
+- [x] **Step 5: Commit** — `git commit -m "feat(dashboard): frontend table, sidebar, pagination against live API"`.
 
 ---
 
@@ -347,11 +347,11 @@ Drawer (per design README §2): row click → `GET /api/tickets/:project/:number
 
 Add-project dialog (per design README §3): sidebar `+ Add` → `.dialog-backdrop`/`.dialog`; title `Link a local codebase`; folder input `webkitdirectory` used ONLY to prefill the name field; required text field **Path** (absolute path, helper text `The server validates this folder has a GitHub remote`); name field prefilled/editable; Cancel / `Link project` (disabled until path non-empty) → `POST /api/projects` → success: close, refresh sidebar, select new project; 400 → error line in dialog body.
 
-- [ ] **Step 1: Implement `renderDrawer()`** as specified.
-- [ ] **Step 2: Implement `renderAddDialog()`** as specified.
-- [ ] **Step 3: Verify against mock** — mock server up; click through: drawer opens with 5-row Gantt and stats (`1h 40m · 420K/38K`-style), tabs switch, Approve enabled only on Awaiting Review / Needs Human mock tickets and mutates the mock store (stage changes on refetch), add-project validation error path renders. 
-- [ ] **Step 4: Run full test suite** — `node --test "plugins/dashboard/**/*.test.js"` — Expected: PASS.
-- [ ] **Step 5: Commit** — `git commit -m "feat(dashboard): ticket drawer with Gantt timeline, actions, add-project dialog"`.
+- [x] **Step 1: Implement `renderDrawer()`** as specified.
+- [x] **Step 2: Implement `renderAddDialog()`** as specified.
+- [x] **Step 3: Verify against mock** — mock server up; click through: drawer opens with 5-row Gantt and stats (`1h 40m · 420K/38K`-style), tabs switch, Approve enabled only on Awaiting Review / Needs Human mock tickets and mutates the mock store (stage changes on refetch), add-project validation error path renders. 
+- [x] **Step 4: Run full test suite** — `node --test "plugins/dashboard/**/*.test.js"` — Expected: PASS.
+- [x] **Step 5: Commit** — `git commit -m "feat(dashboard): ticket drawer with Gantt timeline, actions, add-project dialog"`.
 
 ---
 
@@ -369,8 +369,8 @@ Add-project dialog (per design README §3): sidebar `+ Add` → `.dialog-backdro
 - Consumes: metrics block format from Global Constraints (must match `metrics.js` regex exactly).
 - Produces: each listed skill gains the identical convention paragraph at its comment-posting step.
 
-- [ ] **Step 1: Locate each comment-posting step** in the five SKILL.md files (verbatim anchors: speccing `:142-150` spec comment template, planning `:132-140` plan comment, dev `:174-194` handoff, qa `:234-260` verdict, ship `:259-279` review packet — line numbers may have drifted; search for the templates).
-- [ ] **Step 2: Append the convention paragraph** after each template (adjust `"stage"` value per plugin: `spec`, `plan`, `dev`, `qa`, `ship`):
+- [x] **Step 1: Locate each comment-posting step** in the five SKILL.md files (verbatim anchors: speccing `:142-150` spec comment template, planning `:132-140` plan comment, dev `:174-194` handoff, qa `:234-260` verdict, ship `:259-279` review packet — line numbers may have drifted; search for the templates).
+- [x] **Step 2: Append the convention paragraph** after each template (adjust `"stage"` value per plugin: `spec`, `plan`, `dev`, `qa`, `ship`):
 
 ```markdown
 **Metrics footer (dashboard integration).** Append this hidden HTML comment as the
@@ -383,8 +383,8 @@ the subagent usage reported in task notifications); never estimate.
 <!-- shipyard-metrics {"stage":"dev","started":"<ISO8601>","finished":"<ISO8601>","tokens_in":<n>,"tokens_out":<n>} -->
 ```
 
-- [ ] **Step 3: Verify parser compatibility** — Run: `node -e "const {parseMetrics}=require('./plugins/dashboard/server/metrics.js'); console.log(parseMetrics([{body:'x\n<!-- shipyard-metrics {\"stage\":\"qa\",\"started\":\"2026-08-10T00:00:00Z\",\"finished\":\"2026-08-10T00:05:00Z\"} -->',createdAt:''}]).length)"` — Expected: `1`.
-- [ ] **Step 4: Commit** — `git add plugins/planning plugins/dev plugins/qa plugins/ship README.md && git commit -m "feat(pipeline): shipyard-metrics footer convention on stage handoff comments"`.
+- [x] **Step 3: Verify parser compatibility** — Run: `node -e "const {parseMetrics}=require('./plugins/dashboard/server/metrics.js'); console.log(parseMetrics([{body:'x\n<!-- shipyard-metrics {\"stage\":\"qa\",\"started\":\"2026-08-10T00:00:00Z\",\"finished\":\"2026-08-10T00:05:00Z\"} -->',createdAt:''}]).length)"` — Expected: `1`.
+- [x] **Step 4: Commit** — `git add plugins/planning plugins/dev plugins/qa plugins/ship README.md && git commit -m "feat(pipeline): shipyard-metrics footer convention on stage handoff comments"`.
 
 ---
 
@@ -397,9 +397,26 @@ the subagent usage reported in task notifications); never estimate.
 **Interfaces:**
 - Consumes: everything.
 
-- [ ] **Step 1: Link the scratch repo for real** — locate the shipyard-e2e scratch repo used by prior plugin E2E (check `~/.claude/.../memory` note context or `ls ~/Desktop/Projects` for it; if it no longer exists, create a throwaway GitHub repo with 2 labeled issues: one `ship:awaiting-review`, one `ship:planned`). Start the real server (no `--mock`): `node plugins/dashboard/server/server.js --port 7442`. `POST /api/projects` with the scratch repo path via `curl`.
-- [ ] **Step 2: Verify reads** — `curl -s 'http://127.0.0.1:7442/api/tickets?project=all'` — Expected: real issues with correct `stage` values from their `ship:*` labels.
-- [ ] **Step 3: Verify guarded approve on the board** — approve the `ship:awaiting-review` issue via `curl -X POST`; Expected: 200, and `gh issue view <n> --json state` shows `CLOSED`. Approve a mid-pipeline issue; Expected: 409. Reopen/restore the scratch issue afterwards (`gh issue reopen`).
-- [ ] **Step 4: Full suite + JSON validation** — `node --test "plugins/dashboard/**/*.test.js"` PASS; marketplace/plugin JSON parse check from Task 1 Step 7 `ok`.
+- [x] **Step 1: Link the scratch repo for real** — locate the shipyard-e2e scratch repo used by prior plugin E2E (check `~/.claude/.../memory` note context or `ls ~/Desktop/Projects` for it; if it no longer exists, create a throwaway GitHub repo with 2 labeled issues: one `ship:awaiting-review`, one `ship:planned`). Start the real server (no `--mock`): `node plugins/dashboard/server/server.js --port 7442`. `POST /api/projects` with the scratch repo path via `curl`.
+- [x] **Step 2: Verify reads** — `curl -s 'http://127.0.0.1:7442/api/tickets?project=all'` — Expected: real issues with correct `stage` values from their `ship:*` labels.
+> **Deviation, verified 2026-09-08 (H-11).** This step as written approves a
+> `ship:awaiting-review` issue, which **closes** it. `Jaxsonman/shipyard-e2e`
+> is shared with the ship/dev/qa acceptance runs and its issues must not be
+> closed, so the guarded approve was exercised on the OTHER approve branch
+> instead — `Needs Human` → `ship:planned`, the documented human recovery
+> (design spec Decision 3) — on issue **#1** only:
+>
+> 1. `gh label create ship:needs-human -R Jaxsonman/shipyard-e2e --color B60205 --force`
+> 2. `gh issue edit 1 -R Jaxsonman/shipyard-e2e --add-label ship:needs-human` → `/api/tickets` reports stage `Needs Human`.
+> 3. `POST /api/tickets/shipyard-e2e/1/approve` → `{"ok":true}`; `gh issue view 1 --json labels,state` → `[ship:planned]`, `OPEN`.
+> 4. `gh issue edit 1 --remove-label ship:planned` → labels `[]`, `OPEN` (back to Backlog).
+>
+> The refusal path was checked on issue #3 (`Spec'd`):
+> `POST …/3/approve` → **409** `approve not available for stage Spec'd`.
+> Issues #2–#7 were not modified. The close-on-`Awaiting Review` branch stays
+> covered by `board.test.js` against an injected `execFile`.
+
+- [x] **Step 3: Verify guarded approve on the board** — approve the `ship:awaiting-review` issue via `curl -X POST`; Expected: 200, and `gh issue view <n> --json state` shows `CLOSED`. Approve a mid-pipeline issue; Expected: 409. Reopen/restore the scratch issue afterwards (`gh issue reopen`).
+- [x] **Step 4: Full suite + JSON validation** — `node --test "plugins/dashboard/**/*.test.js"` PASS; marketplace/plugin JSON parse check from Task 1 Step 7 `ok`.
 - [ ] **Step 5: Adversarial review** — dispatch the `refuter` agent on the full diff (`git diff main...HEAD` if on a branch, else the task commits) with the spec; fix confirmed findings, rerun suite.
 - [ ] **Step 6: Final commit / merge** — land remaining fixes; ensure README table, marketplace.json, and all tests are green in the final state.

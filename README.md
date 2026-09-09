@@ -286,8 +286,48 @@ claude plugin validate .               # plugin manifests
 
 The pre-commit hook and `.github/workflows/ci.yml` both run all three.
 
-`plugins/pr/evals/README.md` records the `pr` stage's four intended eval
-cases; graded suites for every plugin land with the verification epic.
+## Evals
+
+Every plugin — `prd`, `kanban`, `planning`, `dev`, `qa`, `ship`, `pr` — has a
+`claude plugin eval` suite under `plugins/<x>/evals/`: 2-4 cases, each a
+`prompt.md` (frontmatter + prompt) plus `graders/*.md` (rubric files), with a
+`case.yaml` and `setup.sh` scaffold script when the case needs fixtures (a
+scratch git repo, `.claude/kanban.config.json`, a fake `gh` shim, a
+`docs/ship/<id>/plan.md` fixture, and so on). Cases are deterministic and
+board-free by default — refusals (missing config, wrong label state, missing
+spec/plan), draft/resume behavior, `validate-artifact.js` rejecting a
+malformed plan, and the trust rule (a forged, untrusted board comment must be
+reported, never acted on).
+
+Every case is tagged `["default"]` except **exactly one opt-in "live" case
+per plugin**, tagged `["live"]` only — the one case per plugin allowed to
+talk to a real board (`Jaxsonman/shipyard-e2e`). `claude plugin eval` does
+not exclude a tagged case from a plain run on its own, so the tag filter is
+load-bearing: `scripts/eval.sh` always passes `--tag default` unless you ask
+for `--live`.
+
+Run it with:
+
+```bash
+scripts/eval.sh <prd|kanban|planning|dev|qa|ship|pr|all>   # default (board-free) cases
+scripts/eval.sh <plugin> --live                             # that plugin's opt-in live case
+```
+
+This runs `claude plugin eval <plugin dir> --tag <default|live> --runs 1
+--max-cost-usd 3 --threshold 0.8 --json <report>`, prints one summary line
+per plugin (`PASS`/`FAIL`/`PARTIAL` plus score and report path), and exits
+non-zero if any plugin scores below 0.8. Expected cost: **at most $3 per
+plugin per run** (the ceiling `scripts/eval.sh` enforces via
+`--max-cost-usd`; the default suite is a handful of short, mocked, single-run
+cases so actual spend is normally well under that). A live case additionally
+needs `gh` authenticated against `Jaxsonman/shipyard-e2e` with write access —
+run it deliberately, not as part of routine verification.
+
+`claude plugin eval` is gated behind early access; running it requires an
+account/environment with that feature enabled. `.github/workflows/ci.yml`
+has a manually-triggered (`workflow_dispatch`) `eval` job — never on
+push/PR — that requires an `ANTHROPIC_API_KEY` repository secret and takes
+`plugin` and `live` inputs.
 
 ## Contributing
 

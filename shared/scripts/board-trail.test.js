@@ -359,6 +359,33 @@ test('pipeline comments with no feature branch are irreconcilable (L-8)', () => 
   assert.equal(reconcileRounds(issue, { branchExists: false }).branchExists, false);
 });
 
+test('standalone comments alone never yield comments-without-branch (§9)', () => {
+  const issue = {
+    labels: [],
+    comments: [
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T10:00:00Z', url: 'd0', body: 'ship:dev standalone' },
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T11:00:00Z', url: 'q0',
+        body: 'ship:qa verdict FAIL standalone tier=full verified 2/2\n\n## Findings\n1. a\n' },
+    ],
+  };
+  const st = reconcileRounds(issue, { branchExists: false });
+  assert.deepEqual(st.irreconcilable, []);
+  assert.equal(st.round, 0);
+  assert.equal(st.standalone.length, 2);
+});
+
+test('a rounded handoff alongside standalone work still yields comments-without-branch', () => {
+  const issue = {
+    labels: [],
+    comments: [
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T10:00:00Z', url: 'd0', body: 'ship:dev standalone' },
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T12:00:00Z', url: 'd1', body: 'ship:dev round 1/3' },
+    ],
+  };
+  assert.ok(reconcileRounds(issue, { branchExists: false }).irreconcilable
+    .some(i => i.code === 'comments-without-branch'));
+});
+
 test('branchExists false with no pipeline comments is not irreconcilable', () => {
   const st = bt.reconcile(bt.parseEvents({ labels: [], comments: [] }, { viewer: 'x' }), { branchExists: false });
   assert.deepEqual(st.irreconcilable, []);

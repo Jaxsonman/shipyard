@@ -421,8 +421,12 @@ function reconcile(events, opts = {}) {
     bad('multiple-labels', `ticket carries multiple ship:* labels: ${labels.join(', ')}`);
   }
 
-  // Pipeline comments exist but the feature branch does not (§9, L-8).
-  if (branchExists === false && usable.some((e) => e.type === 'dev' || e.type === 'qa-verdict')) {
+  // Round-bearing pipeline comments exist but the feature branch does not
+  // (§9, L-8). Standalone comments record out-of-band work and are excluded
+  // from round arithmetic (§9), so they never make a ticket irreconcilable —
+  // they are reported in `state.standalone[]` instead.
+  if (branchExists === false
+      && usable.some((e) => !e.standalone && (e.type === 'dev' || e.type === 'qa-verdict'))) {
     bad('comments-without-branch', 'pipeline comments exist but no feat/<id>-* branch does');
   }
 

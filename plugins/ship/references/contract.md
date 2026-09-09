@@ -288,7 +288,7 @@ A standalone **escalation** is still an escalation: it sets the reconciled phase
 | `untrusted-verdict` | A verdict-shaped comment from an untrusted author (§3). |
 | `round-gap` | Round `N` has a handoff but round `N-1` does not. |
 | `multiple-labels` | The ticket carries more than one `ship:*` label. |
-| `comments-without-branch` | Pipeline comments exist but no `feat/<id>-*` branch does. |
+| `comments-without-branch` | A **round-bearing** pipeline comment (a `round N/M` dev handoff or QA verdict) exists but no `feat/<id>-*` branch does. Standalone comments never trigger it — they are excluded from round arithmetic and are reported in `state.standalone[]` instead. |
 | `malformed-header` | A first line starts with `ship:` but matches no form in §5, **and its author is trusted** (§3). |
 
 **Trust gates irreconcilability.** A malformed `ship:*` header from an untrusted author is recorded in `state.untrusted[]` and never contributes to `state.irreconcilable[]`. Irreconcilability moves a ticket to `Needs Human`, so deriving it from an untrusted comment would let anyone who can comment wedge a ticket with a line as innocuous as `ship: nice work` — §3 is explicit that such a comment is reported, never acted on. The same applies to every code in this table: only trusted events reach it.

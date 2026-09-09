@@ -10,7 +10,10 @@ footer, and config schemas, defined once in [`docs/contract.md`](docs/contract.m
 generated from `shared/references/contract.md` by `scripts/sync-shared.sh` and
 must not be hand-edited. Contract v1 additionally accepts a non-round escalation header,
 `ship:escalation <cause> standalone`, for a stage that runs outside a ship
-round (the `pr` stage); the contract version is unchanged.
+round (the `pr` stage), and it scopes the `comments-without-branch`
+irreconcilable condition to round-bearing comments only, so a ticket whose
+sole pipeline comment is a `standalone` one is still shippable; the contract
+version is unchanged.
 
 ## Adding Shipyard to Claude Code
 
@@ -61,6 +64,26 @@ gives you its slash commands and skills.
 ```
 /plugin marketplace update shipyard
 ```
+
+### Running a stage from a checkout (development and CI)
+
+To exercise a stage without installing it — from this repo's own working tree, or
+headlessly in CI — load the plugin directory instead:
+
+```bash
+claude -p "/ship:ship 42" \
+  --plugin-dir /path/to/shipyard/plugins/ship \
+  --plugin-dir /path/to/shipyard/plugins/dev \
+  --plugin-dir /path/to/shipyard/plugins/qa \
+  --plugin-dir /path/to/shipyard/plugins/pr
+```
+
+**A command loaded this way is only reachable namespaced as `<plugin>:<command>`** —
+`/ship:ship`, `/dev:dev`, `/qa:qa`, `/pr:pr`, `/planning:spec`, `/planning:plan`. A
+bare `/ship` returns `Unknown command: /ship`. The unqualified forms in the usage
+sections below assume the plugin was installed from the marketplace. Load every
+plugin a stage dispatches to: `ship` dispatches the `dev` and `qa` agents, so all
+three (plus `pr`) must be on the command line for a full run.
 
 Refreshes the marketplace manifest from this repo, so newly shipped stages
 become installable. It does not upgrade plugins you already have installed —

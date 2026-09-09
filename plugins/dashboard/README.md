@@ -44,7 +44,10 @@ resolves a directory argument as a module specifier.
 - `web/timeline-scale.js` — pure time-scale math for the board-wide Timeline
   (zoom presets, domain resolution, pan clamping, gridline ticks, segment →
   pixel-rect projection). It touches no DOM, so it is unit-tested under
-  `node --test` alongside the server modules.
+  `node --test` alongside the server modules. Gridlines are placed on the
+  **local** wall-clock grid with the UTC offset re-derived at every tick, so a
+  window spanning a daylight-saving transition keeps day steps on local
+  midnight instead of sliding an hour.
 - `server/fixtures.js` — the `--mock` mode board. Covers every timeline code
   path: metrics-backed tickets (full Spec→Review bars), an estimated-only
   ticket (handoff headers, no metrics footers), a running Dev/QA ticket, a

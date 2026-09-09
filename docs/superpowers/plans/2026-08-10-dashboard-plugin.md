@@ -415,8 +415,12 @@ the subagent usage reported in task notifications); never estimate.
 > `POST …/3/approve` → **409** `approve not available for stage Spec'd`.
 > Issues #2–#7 were not modified. The close-on-`Awaiting Review` branch stays
 > covered by `board.test.js` against an injected `execFile`.
+>
+> This step therefore stays **unticked**: the `Awaiting Review` → closed branch
+> was never exercised against a real board. What was verified is exactly the
+> four numbered items above, and no more.
 
-- [x] **Step 3: Verify guarded approve on the board** — approve the `ship:awaiting-review` issue via `curl -X POST`; Expected: 200, and `gh issue view <n> --json state` shows `CLOSED`. Approve a mid-pipeline issue; Expected: 409. Reopen/restore the scratch issue afterwards (`gh issue reopen`).
+- [ ] **Step 3: Verify guarded approve on the board** — approve the `ship:awaiting-review` issue via `curl -X POST`; Expected: 200, and `gh issue view <n> --json state` shows `CLOSED`. Approve a mid-pipeline issue; Expected: 409. Reopen/restore the scratch issue afterwards (`gh issue reopen`).
 - [x] **Step 4: Full suite + JSON validation** — `node --test "plugins/dashboard/**/*.test.js"` PASS; marketplace/plugin JSON parse check from Task 1 Step 7 `ok`.
 - [ ] **Step 5: Adversarial review** — dispatch the `refuter` agent on the full diff (`git diff main...HEAD` if on a branch, else the task commits) with the spec; fix confirmed findings, rerun suite.
 - [ ] **Step 6: Final commit / merge** — land remaining fixes; ensure README table, marketplace.json, and all tests are green in the final state.

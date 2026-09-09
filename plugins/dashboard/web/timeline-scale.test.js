@@ -143,3 +143,55 @@ test('segmentRects output is self-describing so callers need not index back into
   assert.equal(out[0].tokensLabel, '9/2');
   assert.equal(out[0].state, 'current');
 });
+
+// --- DST: gridlines must stay on the LOCAL grid across a transition. ---
+// These only mean anything in a zone that observes DST; the suite pins TZ so
+// the assertions are deterministic wherever it runs.
+const dstTest = (name, fn) => test(name, () => {
+  const prev = process.env.TZ;
+  process.env.TZ = 'America/New_York';
+  try { fn(); } finally {
+    if (prev === undefined) delete process.env.TZ; else process.env.TZ = prev;
+  }
+});
+
+dstTest('ticks keep day steps on local midnight across spring-forward', () => {
+  const a = Date.parse('2026-03-05T12:00:00-05:00');
+  const b = Date.parse('2026-03-12T12:00:00-04:00');
+  // Guard against a vacuous pass: this only tests anything if the process
+  // really is in a zone whose offset changes inside the window.
+  assert.notEqual(new Date(a).getTimezoneOffset(), new Date(b).getTimezoneOffset(),
+    'TZ override did not take effect — the DST assertions would be vacuous');
+  const out = TS.ticks(a, b, 900);
+  assert.ok(out.length >= 5);
+  for (const tick of out) {
+    const d = new Date(tick.t);
+    assert.equal(d.getHours(), 0, `tick ${d.toString()} is not local midnight`);
+    assert.equal(d.getMinutes(), 0);
+  }
+});
+
+dstTest('ticks keep day steps on local midnight across fall-back', () => {
+  const a = Date.parse('2026-10-29T12:00:00-04:00');
+  const b = Date.parse('2026-11-05T12:00:00-05:00');
+  const out = TS.ticks(a, b, 900);
+  assert.ok(out.length >= 5);
+  for (const tick of out) {
+    assert.equal(new Date(tick.t).getHours(), 0, 'tick is not local midnight');
+  }
+});
+
+dstTest('sub-day steps still mark every local midnight major across a transition', () => {
+  const a = Date.parse('2026-03-07T12:00:00-05:00');
+  const b = Date.parse('2026-03-09T12:00:00-04:00');
+  const out = TS.ticks(a, b, 900);
+  const majors = out.filter((t) => t.major).map((t) => new Date(t.t).getDate());
+  // Both Mar 8 (the transition day) and Mar 9 must get their midnight rule.
+  assert.deepEqual(majors, [8, 9]);
+  for (const tick of out) assert.equal(new Date(tick.t).getMinutes(), 0);
+});
+
+dstTest('ticks terminates on a huge span without runaway iteration', () => {
+  const out = TS.ticks(0, Date.UTC(2100, 0, 1), 900);
+  assert.ok(out.length >= 2 && out.length <= 1000);
+});

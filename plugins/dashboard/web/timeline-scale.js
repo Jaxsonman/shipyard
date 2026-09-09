@@ -95,6 +95,37 @@ function createScale(opts) {
   };
 }
 
+// Local wall-clock grid helpers. `getTimezoneOffset()` is sampled per instant,
+// not once for the window: across a DST transition the offset changes, and a
+// single sample slides every later gridline off the local hour/day grid.
+// Date semantics: UTC = local + offset, so local(t) = t - offsetMs(t).
+function offsetMs(t) {
+  return new Date(t).getTimezoneOffset() * 60000;
+}
+
+/** Smallest instant >= ms whose LOCAL time sits on the `step` grid. */
+function alignUp(ms, step) {
+  var off = offsetMs(ms);
+  var t = Math.ceil((ms - off) / step) * step + off;
+  var off2 = offsetMs(t);
+  if (off2 !== off) {
+    // The candidate landed on the far side of a transition — redo the
+    // alignment in that offset, and keep it only if it is still >= ms.
+    var t2 = Math.ceil((ms - off2) / step) * step + off2;
+    if (t2 >= ms) t = t2;
+  }
+  return t;
+}
+
+/** One `step` later on the LOCAL grid, absorbing any DST shift in between. */
+function nextGridTick(t, step) {
+  var off = offsetMs(t);
+  var n = t + step;
+  var off2 = offsetMs(n);
+  if (off2 !== off) n += off2 - off;
+  return n;
+}
+
 function fmtTime(t) {
   return new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
 }
@@ -137,13 +168,18 @@ function ticks(start, end, width) {
   }
   var subDay = step < DAY;
   var out = [];
-  // Align to the step grid in local time so day steps land on midnight.
-  var offset = new Date(start).getTimezoneOffset() * 60000;
-  var first = Math.ceil((start - offset) / step) * step + offset;
-  for (var t = first; t <= end; t += step) {
+  // Align to the step grid in LOCAL time so day steps land on local midnight,
+  // re-deriving the offset at every tick so a DST transition inside the window
+  // does not slide the rest of the gridlines off the grid.
+  var t = alignUp(start, step);
+  var guard = 0;
+  while (t <= end && guard++ < 1000) {
     var d = new Date(t);
     var major = subDay ? d.getHours() === 0 : d.getDate() === 1;
     out.push({ t: t, label: labelFor(t, step), major: major });
+    var next = nextGridTick(t, step);
+    if (next <= t) break; // never loop forever on a degenerate step
+    t = next;
   }
   if (out.length < 2) {
     out = [

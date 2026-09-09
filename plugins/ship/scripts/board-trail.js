@@ -79,14 +79,20 @@ const HEADERS = [
     type: 'qa-verdict',
     re: /^ship:qa verdict\b/,
     parse: (line) => {
-      const m = /^ship:qa verdict (\S+) (?:round (\d+)\/(\d+)|standalone) tier=(\S+) verified (\d+)\/(\d+)(?: criteria=(\S+))?\s*$/.exec(line);
+      // Legacy, accepted on read only: a repost used to append
+      // " (reposted by ship)" to the header instead of relying solely on
+      // the metrics footer's reposted:true (contract v1 §11).
+      const LEGACY_REPOST_SUFFIX = / \(reposted by ship\)$/;
+      const legacyReposted = LEGACY_REPOST_SUFFIX.test(line);
+      const stripped = legacyReposted ? line.replace(LEGACY_REPOST_SUFFIX, '') : line;
+      const m = /^ship:qa verdict (\S+) (?:round (\d+)\/(\d+)|standalone) tier=(\S+) verified (\d+)\/(\d+)(?: criteria=(\S+))?\s*$/.exec(stripped);
       if (!m) return null;
       const [, verdict, n, cap, tier, k, total, criteria] = m;
       if (!VERDICTS.includes(verdict)) return null;
       if (!TIERS.includes(tier)) return null;
       if (criteria !== undefined && criteria !== 'derived') return null;
       if (n !== undefined && !validRound(Number(n), Number(cap))) return null;
-      return {
+      const out = {
         verdict,
         tier,
         standalone: n === undefined,
@@ -95,6 +101,11 @@ const HEADERS = [
         verified: { k: Number(k), n: Number(total) },
         criteriaDerived: criteria === 'derived',
       };
+      if (legacyReposted) {
+        out.legacy = true;
+        out.reposted = true;
+      }
+      return out;
     },
   },
   {
@@ -229,7 +240,7 @@ function parseEvents(issue, opts = {}) {
         tokensIn: footer.tokensIn,
         tokensOut: footer.tokensOut,
       };
-      ev.reposted = footer.reposted === true;
+      ev.reposted = ev.reposted === true || footer.reposted === true;
     }
 
     events.push(ev);

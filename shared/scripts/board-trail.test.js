@@ -77,6 +77,16 @@ test('the metrics footer is extracted onto the event', () => {
   assert.match(dev.metrics.started, /^\d{4}-/);
 });
 
+test('a legacy repost header suffix " (reposted by ship)" is accepted on read, sets reposted true, not malformed', () => {
+  const ev = mk('ship:qa verdict PASS round 1/3 tier=full verified 1/1 (reposted by ship)');
+  assert.equal(ev.length, 1);
+  assert.equal(ev[0].type, 'qa-verdict');
+  assert.equal(ev[0].malformed, false);
+  assert.equal(ev[0].reposted, true);
+  assert.equal(ev[0].verdict, 'PASS');
+  assert.equal(ev[0].round, 1);
+});
+
 test('a reposted verdict is flagged', () => {
   const ev = bt.parseEvents({
     comments: [{ author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T12:00:00Z', url: 'u',

@@ -318,6 +318,8 @@ If `comment.md` is not found, the reposted comment reproduces the QA comment sha
 
 The `"reposted":true` field is how a parser distinguishes a reposted verdict from an original. A repost never creates a new round and never changes the verdict.
 
+*Accepted on read (legacy):* a `ship:qa verdict …` header ending in the literal suffix ` (reposted by ship)` is parsed as the verdict it otherwise matches, with `reposted: true` (not `malformed: true`).
+
 ## 12. Config schemas
 
 Both files live in `.claude/` in the target repository, hold **no secrets**, and are bootstrapped, validated and normalized by `config.js`. Both carry `"version": 1`. Authentication is separate: `gh auth` for GitHub, an OAuth prompt on first Jira tool call for Jira.

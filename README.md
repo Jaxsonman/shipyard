@@ -184,7 +184,7 @@ Every plugin's skills call the same six scripts:
 - `preflight.js` — stage-agnostic environment and repository checks, run before any interview (CLI rejects a flag-shaped token as another flag's value, e.g. `--cwd --quiet`, mirroring config.js)
 - `config.js` — bootstrap, validate and normalize `.claude/kanban.config.json` and `.claude/ship.config.json` (targets are validated after normalization: `owner/repo` for GitHub, an upper-case project key for Jira; board identity — `backend`/`target` — lives only in `kanban.config.json`, `ship.config.json` never requires them)
 - `validate-artifact.js` — enforce the required sections of `spec.md` and `plan.md` (heading extraction skips fenced ``` / ~~~ code blocks so an example heading in a fence doesn't count)
-- `metrics.js` — ISO-8601 timestamps and the metrics footer line
+- `metrics.js` — ISO-8601 timestamps and the metrics footer line (`--tokens-in`/`--tokens-out` must be non-negative integers; anything else is a usage error)
 - `redact.js` — strip secrets from log excerpts before they reach a board comment
 
 All six require Node >= 18, are CommonJS, and have zero dependencies. A skill

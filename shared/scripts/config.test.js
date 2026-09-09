@@ -39,6 +39,23 @@ test('validateConfig reports a missing target', () => {
   assert.ok(r.errors.some(e => /target/.test(e)));
 });
 
+test('validateConfig for kind "ship" does not require backend/target — board identity lives in kanban.config.json (contract §12)', () => {
+  const r = c.validateConfig('ship', { baseBranch: 'main', loopCap: 3, approvers: [] });
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.errors, []);
+});
+
+test('validateConfig for kind "ship" still validates backend/target format when present', () => {
+  const r = c.validateConfig('ship', { backend: 'github', target: 'not a repo' });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some(e => /target/i.test(e)));
+});
+
+test('a ship config written exactly as contract §12.2 shows validates ok', () => {
+  const r = c.validateConfig('ship', { version: 1, baseBranch: 'main', loopCap: 3, approvers: [] });
+  assert.equal(r.ok, true);
+});
+
 test('bootstrap writes .claude/kanban.config.json inside a repo', () => {
   const dir = tmpRepo(false);
   const r = c.bootstrap({ kind: 'kanban', backend: 'github', target: 'https://github.com/o/r', cwd: dir });

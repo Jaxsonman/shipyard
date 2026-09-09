@@ -182,7 +182,7 @@ Every plugin's skills call the same six scripts:
 
 - `board-trail.js` — parse ticket comments into typed, trust-marked events and reconcile pipeline state
 - `preflight.js` — stage-agnostic environment and repository checks, run before any interview
-- `config.js` — bootstrap, validate and normalize `.claude/kanban.config.json` and `.claude/ship.config.json` (targets are validated after normalization: `owner/repo` for GitHub, an upper-case project key for Jira)
+- `config.js` — bootstrap, validate and normalize `.claude/kanban.config.json` and `.claude/ship.config.json` (targets are validated after normalization: `owner/repo` for GitHub, an upper-case project key for Jira; board identity — `backend`/`target` — lives only in `kanban.config.json`, `ship.config.json` never requires them)
 - `validate-artifact.js` — enforce the required sections of `spec.md` and `plan.md`
 - `metrics.js` — ISO-8601 timestamps and the metrics footer line
 - `redact.js` — strip secrets from log excerpts before they reach a board comment

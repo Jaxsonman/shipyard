@@ -79,14 +79,20 @@ const HEADERS = [
     type: 'qa-verdict',
     re: /^ship:qa verdict\b/,
     parse: (line) => {
-      const m = /^ship:qa verdict (\S+) (?:round (\d+)\/(\d+)|standalone) tier=(\S+) verified (\d+)\/(\d+)(?: criteria=(\S+))?\s*$/.exec(line);
+      // Legacy, accepted on read only: a repost used to append
+      // " (reposted by ship)" to the header instead of relying solely on
+      // the metrics footer's reposted:true (contract v1 §11).
+      const LEGACY_REPOST_SUFFIX = / \(reposted by ship\)$/;
+      const legacyReposted = LEGACY_REPOST_SUFFIX.test(line);
+      const stripped = legacyReposted ? line.replace(LEGACY_REPOST_SUFFIX, '') : line;
+      const m = /^ship:qa verdict (\S+) (?:round (\d+)\/(\d+)|standalone) tier=(\S+) verified (\d+)\/(\d+)(?: criteria=(\S+))?\s*$/.exec(stripped);
       if (!m) return null;
       const [, verdict, n, cap, tier, k, total, criteria] = m;
       if (!VERDICTS.includes(verdict)) return null;
       if (!TIERS.includes(tier)) return null;
       if (criteria !== undefined && criteria !== 'derived') return null;
       if (n !== undefined && !validRound(Number(n), Number(cap))) return null;
-      return {
+      const out = {
         verdict,
         tier,
         standalone: n === undefined,
@@ -95,6 +101,11 @@ const HEADERS = [
         verified: { k: Number(k), n: Number(total) },
         criteriaDerived: criteria === 'derived',
       };
+      if (legacyReposted) {
+        out.legacy = true;
+        out.reposted = true;
+      }
+      return out;
     },
   },
   {
@@ -200,6 +211,9 @@ function parseEvents(issue, opts = {}) {
   const events = [];
 
   for (const c of comments) {
+    if (c === null || typeof c !== 'object' || Array.isArray(c)) {
+      throw new TypeError(`each comment entry must be an object, got ${JSON.stringify(c)}`);
+    }
     const body = typeof c.body === 'string' ? c.body : '';
     const first = body.split('\n')[0].replace(/\r$/, '').trimEnd();
     const match = HEADERS.find((h) => h.re.test(first));
@@ -229,7 +243,7 @@ function parseEvents(issue, opts = {}) {
         tokensIn: footer.tokensIn,
         tokensOut: footer.tokensOut,
       };
-      ev.reposted = footer.reposted === true;
+      ev.reposted = ev.reposted === true || footer.reposted === true;
     }
 
     events.push(ev);
@@ -284,18 +298,19 @@ function reconcile(events, opts = {}) {
     }
   };
 
-  // Untrusted and malformed events never take part in reconciliation.
+  // Untrusted and malformed events never take part in reconciliation, but
+  // both are still reported — a malformed header from an untrusted author
+  // is both malformed-header AND counted in state.untrusted.
   for (const e of events) {
-    if (e.malformed) {
-      bad('malformed-header', `unrecognised pipeline header: ${e.raw}`, e.url);
-      continue;
-    }
     if (!e.trusted) {
       state.untrusted.push({ type: e.type, author: e.author, url: e.url, raw: e.raw });
       state.trusted = false;
-      if (e.type === 'qa-verdict') {
+      if (e.type === 'qa-verdict' && !e.malformed) {
         bad('untrusted-verdict', `verdict-shaped comment from untrusted author ${e.author}: ${e.raw}`, e.url);
       }
+    }
+    if (e.malformed) {
+      bad('malformed-header', `unrecognised pipeline header: ${e.raw}`, e.url);
     }
   }
 
@@ -359,21 +374,28 @@ function reconcile(events, opts = {}) {
     }
   }
 
-  // Round gaps.
+  // Round gaps: based on the presence of a dev handoff per round, not mere
+  // key existence — a round that exists only because it carries a QA
+  // verdict or metrics comment does not satisfy "round N-1 has a handoff"
+  // (§9, code `round-gap`).
   const devRounds = roundNumbers.filter((n) => state.rounds[String(n)].dev);
-  for (const n of devRounds) {
-    if (n > 1 && !state.rounds[String(n - 1)]) {
+  for (const n of roundNumbers) {
+    if (n <= 1) continue;
+    const prev = state.rounds[String(n - 1)];
+    if (!prev || !prev.dev) {
       bad('round-gap', `round ${n} has a dev handoff but round ${n - 1} does not`);
     }
   }
 
   state.round = devRounds.length ? Math.max(...devRounds) : 0;
 
+  // Latest by createdAt wins, consistent with round selection (§9).
   const escalations = usable.filter((e) => e.type === 'escalation' || e.type === 'dev-escalation');
-  state.escalation = escalations.length ? escalations[escalations.length - 1] : null;
+  state.escalation = latestWins(escalations).winner;
 
   const pr = usable.filter((e) => e.type === 'pr-opened');
-  if (pr.length) state.prUrl = pr[pr.length - 1].prUrl;
+  const prWinner = latestWins(pr).winner;
+  if (prWinner) state.prUrl = prWinner.prUrl;
 
   state.phase = derivePhase(state, usable);
   return state;
@@ -474,7 +496,13 @@ function main(argv) {
     if (r.code === 0) viewer = r.stdout.trim() || null;
   }
 
-  const events = parseEvents(issue, { allow, viewer });
+  let events;
+  try {
+    events = parseEvents(issue, { allow, viewer });
+  } catch (err) {
+    die(`invalid input: ${err.message}`, 2);
+    return;
+  }
   const labels = Array.isArray(issue.labels) ? issue.labels.map((l) => l.name) : [];
   const state = reconcile(events, { cap, labels });
 

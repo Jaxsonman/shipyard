@@ -78,3 +78,102 @@ test('load reports malformed JSON without throwing', () => {
   assert.equal(r.ok, false);
   assert.ok(r.errors.some(e => /JSON/i.test(e)));
 });
+
+test('CLI: a flag-shaped token is not swallowed as the value of a preceding flag', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfg-cli-'));
+  const cwdDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfg-cli-cwd-'));
+  let threw = false;
+  let stderr = '';
+  try {
+    execFileSync(
+      process.execPath,
+      [require.resolve('./config.js'), 'bootstrap', 'kanban', '--backend', 'github', '--target', '--cwd', dir],
+      { cwd: cwdDir, stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+  } catch (e) {
+    threw = true;
+    stderr = String(e.stderr);
+    assert.equal(e.status, 2);
+  }
+  assert.ok(threw, 'expected the CLI to exit non-zero');
+  assert.ok(/usage/i.test(stderr), stderr);
+  assert.ok(!fs.existsSync(path.join(dir, '.claude', 'kanban.config.json')));
+  assert.ok(!fs.existsSync(path.join(cwdDir, '.claude', 'kanban.config.json')));
+});
+
+test('CLI: a flag missing its value is a usage error, exit 2, nothing written', () => {
+  const cwdDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfg-cli-cwd-'));
+  let threw = false;
+  let stderr = '';
+  try {
+    execFileSync(
+      process.execPath,
+      [require.resolve('./config.js'), 'bootstrap', 'kanban', '--backend', 'github', '--target'],
+      { cwd: cwdDir, stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+  } catch (e) {
+    threw = true;
+    stderr = String(e.stderr);
+    assert.equal(e.status, 2);
+  }
+  assert.ok(threw, 'expected the CLI to exit non-zero');
+  assert.ok(/usage/i.test(stderr), stderr);
+  assert.ok(!fs.existsSync(path.join(cwdDir, '.claude', 'kanban.config.json')));
+});
+
+test('bootstrap rejects a malformed github target (e.g. "not a repo"), nothing written', () => {
+  const dir = tmpRepo(false);
+  assert.throws(() => {
+    c.bootstrap({ kind: 'kanban', backend: 'github', target: 'not a repo', cwd: dir });
+  }, /target/i);
+  assert.ok(!fs.existsSync(path.join(dir, '.claude', 'kanban.config.json')));
+});
+
+test('bootstrap rejects a malformed jira target, nothing written', () => {
+  const dir = tmpRepo(false);
+  assert.throws(() => {
+    c.bootstrap({ kind: 'ship', backend: 'jira', target: '123bad key', cwd: dir });
+  }, /target/i);
+  assert.ok(!fs.existsSync(path.join(dir, '.claude', 'ship.config.json')));
+});
+
+test('bootstrap accepts a valid jira project key', () => {
+  const dir = tmpRepo(false);
+  const r = c.bootstrap({ kind: 'ship', backend: 'jira', target: 'shp', cwd: dir });
+  assert.equal(r.created, true);
+  assert.equal(r.value.target, 'SHP');
+});
+
+test('CLI: bootstrap with a malformed target exits 1 and writes nothing', () => {
+  const cwdDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfg-cli-cwd-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cfg-cli-target-'));
+  execFileSync('git', ['init', '-q', dir]);
+  let threw = false;
+  let stderr = '';
+  try {
+    execFileSync(
+      process.execPath,
+      [require.resolve('./config.js'), 'bootstrap', 'kanban', '--backend', 'github', '--target', 'not a repo', '--cwd', dir],
+      { cwd: cwdDir, stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+  } catch (e) {
+    threw = true;
+    stderr = String(e.stderr);
+    assert.equal(e.status, 1);
+  }
+  assert.ok(threw, 'expected the CLI to exit non-zero');
+  assert.ok(/target/i.test(stderr), stderr);
+  assert.ok(!fs.existsSync(path.join(dir, '.claude', 'kanban.config.json')));
+});
+
+test('validateConfig rejects a malformed github target on an existing config (validate path)', () => {
+  const r = c.validateConfig('kanban', { backend: 'github', target: 'not a repo' });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some(e => /target/i.test(e)));
+});
+
+test('validateConfig rejects a malformed jira target on an existing config (validate path)', () => {
+  const r = c.validateConfig('ship', { backend: 'jira', target: '123bad' });
+  assert.equal(r.ok, false);
+  assert.ok(r.errors.some(e => /target/i.test(e)));
+});

@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "Resume an interrupted PRD draft"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

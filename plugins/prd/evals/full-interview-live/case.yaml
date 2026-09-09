@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "Full interview writes a finished PRD (live, un-mocked)"
+tags: ["live"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

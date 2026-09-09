@@ -139,9 +139,11 @@ const HEADERS = [
     type: 'escalation',
     re: /^ship:escalation\b/,
     parse: (line) => {
-      const m = /^ship:escalation (\S+) round (0|[1-9]\d*)\/(0|[1-9]\d*)\s*$/.exec(line);
+      const m = /^ship:escalation (\S+) (?:round (0|[1-9]\d*)\/(0|[1-9]\d*)|standalone)\s*$/.exec(line);
       if (!m) return null;
       if (!CAUSES.includes(m[1])) return null;
+      // Non-round form (§5.8): raised outside a ship round, e.g. by /pr.
+      if (m[2] === undefined) return { cause: m[1], standalone: true };
       const round = Number(m[2]); const cap = Number(m[3]);
       if (!validRound(round, cap)) return null;
       return { cause: m[1], round, cap };

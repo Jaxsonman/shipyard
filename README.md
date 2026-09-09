@@ -8,7 +8,9 @@ adopt one stage or the whole line.
 footer, and config schemas, defined once in [`docs/contract.md`](docs/contract.md)
 (contract v1); `docs/contract.md` and `plugins/*/references/contract.md` are
 generated from `shared/references/contract.md` by `scripts/sync-shared.sh` and
-must not be hand-edited.
+must not be hand-edited. Contract v1 additionally accepts a non-round escalation header,
+`ship:escalation <cause> standalone`, for a stage that runs outside a ship
+round (the `pr` stage); the contract version is unchanged.
 
 ## Adding Shipyard to Claude Code
 
@@ -42,6 +44,7 @@ gives you its slash commands and skills.
    /plugin install dev@shipyard
    /plugin install qa@shipyard
    /plugin install ship@shipyard
+   /plugin install pr@shipyard
    ```
 
    Repeat for any other stages you want (see the table below). Installing adds
@@ -49,8 +52,9 @@ gives you its slash commands and skills.
 
 4. **Verify they're installed** — `/plugin` should list `prd@shipyard`,
    `kanban@shipyard`, `planning@shipyard`, `dev@shipyard`, `qa@shipyard`,
-   and `ship@shipyard` as installed, and `/prd`, `/kanban`, `/spec`, `/plan`,
-   `/dev`, `/qa`, and `/ship` should autocomplete as slash commands.
+   `ship@shipyard`, and `pr@shipyard` as installed, and `/prd`, `/kanban`,
+   `/spec`, `/plan`, `/dev`, `/qa`, `/ship`, and `/pr` should autocomplete
+   as slash commands.
 
 ### Keeping it up to date
 
@@ -82,7 +86,7 @@ Uninstall plugins before removing the marketplace they came from.
 | 3 | `planning` | ✅ Available | Per-ticket `/spec` + `/plan` collaborative sessions |
 | 4 | `dev` | ✅ Available | Autonomous implementation of planned tickets |
 | 5 | `qa` | ✅ Available | Autonomous verification — tests plus real end-to-end checks |
-| 6 | `pr` | Planned | Open PRs into your existing CI/CD |
+| 6 | `pr` | ✅ Available | Open the PR for an approved ticket and hand off to your CI/CD |
 | — | `ship` | ✅ Available | Conductor — drives one planned ticket through the dev ⇄ QA loop (v1) |
 | — | `dashboard` | ✅ Available | Visual dashboard — local web UI over the board: stages, timelines, approve/reassign |
 
@@ -234,12 +238,34 @@ remove it when you are done:
 git worktree remove ../<repo-dir-name>-ship/dev-42
 ```
 
+After installing `pr`, open the PR for an approved ticket:
+
+```
+/pr 42
+```
+
+Runs only on a ticket the review gate has approved (`ship:approved`) —
+anything else is a refusal naming the remedy. Dry-runs the merge against
+`baseBranch` (a conflict escalates to `Needs Human`, never a guess),
+pushes the branch, and opens a PR whose title is the ticket's and whose
+body links the ticket, spec and plan, quotes the latest trusted QA verdict
+and review packet, and carries `Closes #42`. The ticket moves to
+`PR Open`; your CI/CD takes over and the issue closes when the PR merges.
+Re-running `/pr 42` is safe — an already-open PR for the branch is
+reconciled, never duplicated, and a ticket already at `PR Open` is
+reconciled rather than refused. A merge-conflict escalation is recoverable:
+the comment names the command that restores `ship:approved` once the
+rebase is done, so the ticket does not have to go back through the loop. **`pr` is the only stage in the whole
+pipeline that pushes**; every other stage works locally. Jira is
+best-effort: the ticket side goes through the Atlassian MCP server, the PR
+is still opened with `gh`, and Jira comments carry no metrics footer.
+
 ## Shared scripts
 
 Every plugin's skills call the same six scripts:
 
 - `board-trail.js` — parse ticket comments into typed, trust-marked events and reconcile pipeline state, including the no-progress detector ship uses to stop a stuck loop early (also accepts the legacy `(reposted by ship)` header suffix on read, marking the event `reposted: true`; a null/non-object `--stdin` comment entry is a usage error, not a crash; `round-gap` detection is based on the presence of a dev handoff per round, not mere round-key existence; escalation and PR-opened selection pick the latest by `createdAt`, and a malformed header from an untrusted author is counted in both)
-- `preflight.js` — stage-agnostic environment and repository checks, run before any interview (CLI rejects a flag-shaped token as another flag's value, e.g. `--cwd --quiet`, mirroring config.js)
+- `preflight.js` — stage-agnostic environment and repository checks, run before any interview; `--stage pr` also enforces the `ship:approved` gate (treating `ship:pr-open` as a reconcile, not a refusal), reports an existing open PR for the branch, treats a branch held by another worktree as informational, and makes a branch *behind* `origin/<branch>` fatal (CLI rejects a flag-shaped token as another flag's value, e.g. `--cwd --quiet`, mirroring config.js)
 - `config.js` — bootstrap, validate and normalize `.claude/kanban.config.json` and `.claude/ship.config.json` (targets are validated after normalization: `owner/repo` for GitHub, an upper-case project key for Jira; board identity — `backend`/`target` — lives only in `kanban.config.json`, `ship.config.json` never requires them)
 - `validate-artifact.js` — enforce the required sections of `spec.md` and `plan.md` (heading extraction skips fenced ``` / ~~~ code blocks so an example heading in a fence doesn't count)
 - `metrics.js` — ISO-8601 timestamps and the metrics footer line (`--tokens-in`/`--tokens-out` must be non-negative integers; anything else is a usage error)
@@ -265,6 +291,9 @@ claude plugin validate .               # plugin manifests
 ```
 
 The pre-commit hook and `.github/workflows/ci.yml` both run all three.
+
+`plugins/pr/evals/README.md` records the `pr` stage's four intended eval
+cases; graded suites for every plugin land with the verification epic.
 
 ## Contributing
 

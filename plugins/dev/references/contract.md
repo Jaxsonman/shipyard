@@ -68,7 +68,9 @@ gh label create "ship:in-dev" --repo <owner/repo> --color "0E8A16" --description
 - `planning` owns `ship:specced` and `ship:planned` only.
 - `ship` owns `ship:in-dev`, `ship:in-qa`, `ship:awaiting-review` and `ship:needs-human` only. Ship never applies `ship:specced` or `ship:planned` — moving a ticket back to Planned after an escalation is the human's re-entry action.
 - The **review gate** (a human, or the dashboard's guarded approve action) swaps `ship:awaiting-review` → `ship:approved` on approval. Approving a Needs Human ticket instead resets it to `ship:planned`. Approval does **not** close the issue; the issue closes when the PR merges.
-- `pr` consumes `ship:approved` and swaps it for `ship:pr-open`.
+- `pr` consumes `ship:approved` and swaps it for `ship:pr-open`. When the branch will not merge cleanly into `baseBranch`, `pr` instead swaps `ship:approved` → `ship:needs-human` after posting `ship:escalation reconcile standalone` (§5.8). `pr` owns no other label.
+- A `reconcile` escalation raised by `pr` is the **one** Needs Human state a human clears by restoring `ship:approved` rather than resetting to `ship:planned`: the review packet was already approved and only the merge failed, so re-running the whole pipeline would be wrong. Every other Needs Human state resets to `ship:planned` as above. The escalation comment names the restoring command.
+- A ticket at `ship:pr-open` is not a refusal for `pr`: a re-run reconciles the existing pull request (idempotency), it never opens a second one.
 - `dev` and `qa` never change status or labels. They post comments only.
 
 **Jira equivalent.** Prefer the issue's real workflow status, matched case-insensitively with close variants: `Spec'd`/`Specced`/`Spec` → Spec'd; `Planned`/`Planning done` → Planned; `In Dev`/`In Development`/`In Progress` → In Dev; `In QA`/`QA`/`Testing` → In QA; `Awaiting Review`/`In Review`/`Review` → Awaiting Review; `Approved` → Approved; `PR Open` → PR Open; `Needs Human`/`Blocked` → Needs Human. When the workflow has no matching transition, tell the user so and fall back to the hyphenated labels `ship-specced`, `ship-planned`, `ship-in-dev`, `ship-in-qa`, `ship-awaiting-review`, `ship-approved`, `ship-pr-open`, `ship-needs-human` — same map, hyphen instead of colon. Neither → Backlog. Never silently fail and never skip the user-facing explanation.
@@ -205,7 +207,16 @@ Emitted by `ship` when QA passes. Accompanies the transition to `ship:awaiting-r
 ship:escalation <cause> round N/M
 ```
 
-Emitted by `ship`. `<cause>` is one of the values in §8. For a cap escalation `N` equals `M`. For a `reconcile` escalation, `N` is ship's best guess at the round.
+or, for an escalation raised outside a ship round (§9):
+
+```
+ship:escalation <cause> standalone
+```
+
+The round form is emitted by `ship`. The standalone form is emitted by a stage
+that has no round of its own — currently `pr`, which runs after the loop has
+finished. `<cause>` is one of the values in §8. For a cap escalation `N` equals
+`M`. For a `reconcile` escalation, `N` is ship's best guess at the round.
 
 ### 5.9 PR opened
 
@@ -261,10 +272,12 @@ No other cause value is valid. A parser encountering one records it as `malforme
 
 **Latest-header-wins dedupe.** When two trusted events of the same type carry the same round, the one with the later `createdAt` wins; the loser is retained as superseded and is never treated as a second round.
 
-**Standalone semantics.** A `ship:dev standalone` or `ship:qa verdict <VERDICT> standalone …` comment records work done outside a ship run. Standalone comments:
+**Standalone semantics.** A `ship:dev standalone`, `ship:qa verdict <VERDICT> standalone …`, or `ship:escalation <cause> standalone` comment records work done outside a ship run. Standalone comments:
 - are **excluded from round counting** — they never advance `N` and never consume cap;
 - are never matched to a round's dev handoff or verdict;
 - are **reported on resume** so the human can see that out-of-band work happened.
+
+A standalone **escalation** is still an escalation: it sets the reconciled phase to escalated exactly like the round form, it just carries no round.
 
 **Irreconcilable conditions.** Each produces an entry in `state.irreconcilable[]` with the given code; ship posts `ship:escalation reconcile round <best-guess>/M` and sets `ship:needs-human`. Never guess.
 
@@ -444,7 +457,7 @@ Exactly one line per ticket, carrying the PRD slug (the PRD filename without dir
 | §4 Label ladder | plugin backend references | `kanban`, `planning`, `ship`, `pr`, `dashboard` |
 | §5 Header grammar | `board-trail.js` (`parseEvents`) | `ship`, `dev`, `qa`, `pr`, `dashboard` |
 | §6–§7 Enums | `qa` | `ship`, `dashboard` |
-| §8 Escalation causes | `ship` | `dashboard` (Needs Human cause tag) |
+| §8 Escalation causes | `ship`, `pr` | `dashboard` (Needs Human cause tag) |
 | §9 Round arithmetic | `board-trail.js` (`reconcile`) | `ship` |
 | §10 Metrics footer | `metrics.js` | `board-trail.js`, `dashboard` |
 | §11 Repost shape | `ship` | `board-trail.js` |

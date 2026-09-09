@@ -94,8 +94,12 @@ After installing `prd`, run:
 ```
 
 Claude interviews you one question at a time (problem, users, success metrics,
-scope, requirements, risks) and writes the finished PRD to
-`docs/prd/YYYY-MM-DD-<slug>.md` in your project.
+scope, requirements, risks), persisting your answers after each one to
+`docs/prd/<YYYY-MM-DD>-<slug>.draft.md` so an interrupted interview resumes
+on the next `/prd` run, even across days or a reworded slug. It refuses to
+silently overwrite an existing PRD for the same slug (any date) — asking to
+revise, use a new slug, or abort — and writes the finished PRD to
+`docs/prd/YYYY-MM-DD-<slug>.md`, then offers (never assumes) to commit it.
 
 After installing `kanban`, run:
 
@@ -103,12 +107,21 @@ After installing `kanban`, run:
 /kanban docs/prd/2026-07-20-reef-tank.md
 ```
 
-The first run in a project asks once which board to use (GitHub or Jira)
-and where, then Claude proposes a full breakdown of small, vertical-slice
-tickets — each one a single outcome a human can verify end-to-end, with
-`Depends on:` links where one slice genuinely requires another. Approve
-the list and Claude creates the tickets on your board in dependency
-order.
+The first run in a project bootstraps `.claude/kanban.config.json` (asking
+once which board to use, GitHub or Jira, and where) and offers to commit it,
+then Claude proposes a full breakdown of small, vertical-slice tickets —
+each one a single outcome a human can verify end-to-end, with `Depends on:`
+links where one slice genuinely requires another, capped at 15 slices per
+run (the rest are offered as a deferred batch on a follow-up run). Approve
+the list and Claude creates the tickets on your board in dependency order,
+tracking progress in a run manifest at `docs/kanban/<slug>.run.json`.
+Re-running `/kanban` on the same PRD is idempotent: already-created tickets
+are recognized from the manifest and never duplicated, and only the
+remaining pending/failed tickets are attempted. A client-side scan of the
+board for each ticket's `Source PRD:` line runs alongside the manifest, so a
+ticket created in the instant before an interrupted run could record it is
+still recognized rather than duplicated. A re-run always re-asks for approval
+of the remaining tickets before creating anything.
 
 After installing `planning`, run these per ticket, in order:
 
@@ -118,8 +131,13 @@ After installing `planning`, run these per ticket, in order:
 
 A guided PM/UX session that aligns on what the ticket really means — what
 "done" looks like, UX intent, edge cases, and the context an implementer
-needs. It writes `docs/ship/42/spec.md`, marks the ticket `Spec'd`, and
-fixes the ticket body on the board if the session reveals it was unclear.
+needs, persisting answers after each one to `docs/ship/42/spec.draft.md` so
+an interrupted session resumes on the next `/spec` run. It writes
+`docs/ship/42/spec.md` (validated against the required section headings
+before it's committed), marks the ticket `Spec'd`, fixes the ticket body on
+the board if the session reveals it was unclear, and posts a
+contract-shaped `ship:spec approved` comment carrying a metrics footer on
+GitHub (Jira comments carry none).
 
 ```
 /plan 42
@@ -127,8 +145,11 @@ fixes the ticket body on the board if the session reveals it was unclear.
 
 An engineer session over the approved spec: architecture options and
 trade-offs discussed with you, security and testing approach, then an
-ordered, executable task list in `docs/ship/42/plan.md`. The ticket is
-marked `Planned` — ready for the autonomous stages (or hand execution).
+ordered, executable task list in `docs/ship/42/plan.md`, validated against
+its required sections before it's committed. The ticket is marked
+`Planned` — ready for the autonomous stages (or hand execution) — and the
+session posts a contract-shaped `ship:plan approved` comment with a
+metrics footer on GitHub.
 
 After installing `qa`, run:
 

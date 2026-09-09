@@ -12,35 +12,57 @@ A per-ticket Engineer session, heavily human-driven. Output:
 Backend mechanics live in `../../references/github.md` and
 `../../references/jira.md` (relative to this skill's directory). Whenever a
 step says "via the backend reference," read the file matching
-`config.backend` and follow its named operation exactly (auth check, fetch
-ticket, edit ticket body, set status, post comment).
+`config.backend` and follow its named operation exactly (fetch ticket, edit
+ticket body, set status, post comment).
 
-## Step 1: Config and ticket
+**Contract:** `${CLAUDE_PLUGIN_ROOT}/references/contract.md` (contract v1).
+"§N" in this skill means that file's section N; open the cited section
+when a step references it.
 
-Identical to speccing: read `.claude/kanban.config.json` (bootstrap with
-the same two questions if missing, commit it, never re-prompt if present);
-resolve the ticket reference to the canonical `<id>`; auth check; fetch
-the ticket. Fetch failure → report the exact error and stop.
+## Step 1: Preflight and ticket
+
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/preflight.js" --stage plan
+
+Exit 0 → continue. Exit 2 → usage error, stop.
+
+Exit 1 → read the JSON `checks[]` array (ids live there, not in `reasons[]`).
+If the only failing check has id `config`, bootstrap it (ask backend and
+target, one question at a time, then
+`node "${CLAUDE_PLUGIN_ROOT}/scripts/config.js" bootstrap kanban --backend <b> --target <t>`,
+printing any `notes` the script returned verbatim) and re-run preflight;
+otherwise print the `reasons` verbatim and stop.
+
+Read the config with `node "${CLAUDE_PLUGIN_ROOT}/scripts/config.js" show kanban`
+— `.kanban.backend` and `.kanban.target` (schema: contract §12.1). Then
+resolve the user's ticket reference to the canonical `<id>` per the backend
+reference, and fetch the ticket. Fetch failure → report the exact error and
+stop.
+
+Capture the stage start now — it goes in the comment's metrics footer:
+
+    node "${CLAUDE_PLUGIN_ROOT}/scripts/metrics.js" now
+
+`<id>` in every path below is the canonical id resolved above.
 
 ## Step 2: Preconditions
 
 - **`docs/ship/<id>/spec.md` must exist.** If it doesn't, stop and tell
   the user to run `/spec <id>` first — planning always builds on an
   aligned spec. File presence is the gate.
-- If spec.md exists but the ticket's status isn't `Spec'd`, warn and offer
-  to fix the status via the backend reference — don't block on it.
+- If spec.md exists but the ticket's status isn't `Spec'd` (contract §4),
+  warn and offer to fix the status via the backend reference — don't block
+  on it.
 - **`docs/ship/<id>/plan.md` already exists** → present three options and
   wait: **revise** (continue from Step 4, using the existing plan.md as the
   draft under discussion), **finish board updates** (skip to Step 7's board
   operations — for re-runs after a board operation failed), or **abort**.
 
-## Step 3: Model check
+## Step 3: Model recommendation
 
-This session is judgment-heavy — architecture trade-offs and security
-scrutiny are where a frontier model earns its cost. If the current session
-is not running on Fable or Opus, recommend the user restart `/plan <id>`
-on one (via `/model`). This is a recommendation, not a gate — proceed if
-the user says to.
+This session is judgment-heavy: architecture trade-offs and security
+scrutiny are where a frontier model earns its cost. Recommend, once and
+without checking anything, that the user run `/plan <id>` on Fable or Opus
+(`/model`). This is a recommendation, not a gate — continue if they say to.
 
 ## Step 4: Investigation — orchestrated, not inline
 
@@ -115,7 +137,16 @@ edits. Write nothing before approval.
 
 In order:
 
-1. Write `docs/ship/<id>/plan.md` and commit **only that path**:
+1. Write `docs/ship/<id>/plan.md`, then validate it against contract §13
+   before committing:
+
+       node "${CLAUDE_PLUGIN_ROOT}/scripts/validate-artifact.js" plan docs/ship/<id>/plan.md
+
+   Exit 0 → commit below. Exit 1 → the missing or renamed sections (or a
+   renamed `### Task` heading) are printed on stderr (`--json` for the
+   full report); fix the file and re-run. Never commit an artifact that
+   fails this gate — downstream fix-list and progress parsing depend on
+   the exact headings.
 
    ```bash
    git add docs/ship/<id>/plan.md
@@ -126,18 +157,18 @@ In order:
    skip this sub-step and proceed to the board operations.
 
 2. Set status → `Planned` via the backend reference (this removes the
-   `Spec'd`-stage label if present).
-3. Post a ticket comment via the backend reference:
+   `Spec'd`-stage label if present); the ladder, its labels, colours and
+   descriptions are contract §4.
+3. Build the comment. Its **first line is the header** `ship:plan approved`
+   and the emoji title moves to line two — the exact shape is contract
+   §5.2; copy it from there rather than from memory.
 
-   ```
-   🗺️ Plan approved — `docs/ship/<id>/plan.md`
+   On the **GitHub backend only**, append the metrics footer as the last
+   line (contract §10; Jira comments carry none):
 
-   - <one line: chosen architecture>
-   - <one line: number of tasks and rough shape>
+       node "${CLAUDE_PLUGIN_ROOT}/scripts/metrics.js" footer --stage plan --started <the ISO time from Step 1> --finished "$(node "${CLAUDE_PLUGIN_ROOT}/scripts/metrics.js" now)"
 
-   Next: /ship <id> (once available) — until then the plan is
-   hand-executable.
-   ```
+   Nothing hand-writes that line. Post the file via the backend reference.
 
 If a board operation fails after the commit, report the exact error
 verbatim and stop. Re-running `/plan <id>` recovers via Step 2's "finish

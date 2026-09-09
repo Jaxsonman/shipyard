@@ -170,11 +170,24 @@ satisfied, QA environment configured), creates the branch and
 worktree, then loops dev → QA rounds (default cap 3) until QA
 passes — posting a `ship:review-packet` and marking the ticket
 `Awaiting Review` — or escalates to `Needs Human` with a summary of
-what kept failing. Resume a dead session by re-running `/ship 42`;
-it reconstructs the round from the board trail. v1 conducts one
-ticket at a time; bare `/ship` lists tickets ready to conduct.
-Configure the QA environment once beforehand with `/qa --env-check` —
-ship refuses to run without it.
+what kept failing. Resume a dead session by re-running `/ship 42`; it
+reconstructs the round from the board trail, using only comments whose
+author is you or a login in `approvers` — a verdict from anyone else is
+reported, never acted on. v1 conducts one ticket at a time; bare `/ship`
+lists tickets ready to conduct. Configure the QA environment once
+beforehand with `/qa --env-check` — ship refuses to run without it.
+
+**Where a ship run ends.** `Awaiting Review` (QA passed — a
+`ship:review-packet` comment carries the evidence and a merge dry-run
+against the base branch) or `Needs Human` (an escalation comment names
+the cause). Those are the only two terminal states in v1. **Nothing is
+pushed** — ship commits to the feature branch and stops; opening the PR
+is yours. The worktree is kept after both outcomes so you can inspect it;
+remove it when you are done:
+
+```
+git worktree remove ../<repo-dir-name>-ship/dev-42
+```
 
 ## Shared scripts
 

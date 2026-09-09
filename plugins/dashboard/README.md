@@ -37,6 +37,13 @@ The glob must be quoted so Node — not the shell — expands it. The bare-direc
 form (`node --test plugins/dashboard/server/`) fails on Node 23 and newer, which
 resolves a directory argument as a module specifier.
 
+## Shared contract code
+
+`scripts/` and `references/contract.md` are **vendored copies** of `shared/scripts/`
+and `docs/contract.md`, written by `scripts/sync-shared.sh` at the repo root.
+Never hand-edit them: change `shared/`, add a test there, re-run the sync, and
+`scripts/check-shared-sync.sh` will confirm the copies match.
+
 ## Architecture
 
 `server/trail.js` is the single place comment bodies are parsed — metrics blocks, stage-handoff headers, escalation headers, and pipeline-log entries (`trail.parseLogEntries`, used for the ticket drawer's Logs tab) all go through it and come out as one normalized trail. Every other module (`metrics.js`, `timeline.js`, `stats.js`, and `server.js` itself) consumes `trail.js`'s exports instead of parsing comment bodies itself.

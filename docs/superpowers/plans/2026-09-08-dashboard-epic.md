@@ -1116,9 +1116,175 @@ git commit -am "fix(dashboard): refuter findings"
 
 ---
 
-## Phase 2 (blocked on `feat/foundation` merging) — stub
+## Phase 2 — contract v1 integration (unblocked: `main` merged at 3835df7)
 
-Do **not** start these until the orchestrator says `feat/foundation` has landed.
+**Goal:** retire the dashboard's own trail parsing in favour of the vendored
+`board-trail.js`, and land the review gate, PR stage and round-metrics
+ingestion the contract now defines.
 
-- **H-11 remainder:** replace the parsing internals of `plugins/dashboard/server/trail.js` with the vendored `scripts/board-trail.js`. The swap is contained to that one file: keep `STAGE_ORDER`, `STAGE_KEY_TO_LABEL`, `ESCALATION_CAUSES`, `parseMetricsBlocks`, `parseStageEvents`, `parseEscalations` and `parseTrail` exported with identical signatures and return shapes, and `trail.test.js` must pass unchanged. No consumer (`metrics.js`, `timeline.js`, `stats.js`, `server.js`) may need an edit; if one does, the boundary was drawn wrong and the adapter belongs inside `trail.js`.
-- **H-15:** Approve on `Awaiting Review` sets `ship:approved` instead of closing (Decision 6 supersedes the 2026-08-10 spec's "close the issue"); a `PR Open` stage with the PR link in the drawer header and Logs; `ship:metrics` comments merged into per-round token stats; the contract-driven stage map shared between `board.js`, `trail.js` and the timeline. The `PR` entry already present in `STAGE_ORDER` and `STAGE_KEY_TO_LABEL` is the seam for this.
+**Global constraints, additional to phase 1:**
+
+- `plugins/dashboard/scripts/*.js` and `plugins/dashboard/references/contract.md`
+  are **vendored copies** — never hand-edit them. A needed change goes into
+  `shared/scripts/`, gets a test, then `bash scripts/sync-shared.sh`;
+  `bash scripts/check-shared-sync.sh` must print `OK` before every commit.
+- Trust rule (contract §3): a comment is trusted only when its author is the
+  invoking `gh` account or listed in `approvers` in the project's
+  `.claude/ship.config.json`. **Untrusted comments are reported, never acted
+  on** — they must not move a stage, open a segment, or feed the stats.
+- Label ladder (contract §4) is the source of truth for stage names.
+
+---
+
+### Task 13: `trail.js` becomes an adapter over the vendored `board-trail.js`
+
+**Files:** modify `plugins/dashboard/server/trail.js`, `trail.test.js`.
+
+**Interfaces:** the exported names are frozen from phase 1 — `STAGE_ORDER`,
+`STAGE_KEY_TO_LABEL`, `ESCALATION_CAUSES`, `parseMetricsBlocks`,
+`parseStageEvents`, `parseEscalations`, `parseTrail`, `parseLogEntries`.
+`timeline.js`, `stats.js`, `metrics.js` and `server.js` must need **no edit**.
+`parseTrail` gains an options argument: `parseTrail(comments, { viewer, allow })`.
+
+Event-type → stage-label map (replaces the hand-rolled header regexes):
+`spec-approved → Spec`, `plan-approved → Plan`, `dev`/`dev-escalation` → `Dev`,
+`qa-verdict → QA`, `review-packet → Review`, `pr-opened → PR`;
+`metrics` events carry round token stats but open no segment of their own.
+
+- [ ] **Step 1: Write the failing tests** — in `trail.test.js`, keep every
+  phase-1 case and add:
+
+```js
+test('an untrusted forged QA verdict opens no segment and moves no stage', () => {
+  const comments = [
+    { body: 'ship:dev round 1/3', createdAt: '2026-09-01T10:00:00Z', author: { login: 'me' } },
+    { body: 'ship:qa verdict PASS round 1/3 tier=full verified 5/5',
+      createdAt: '2026-09-01T11:00:00Z', author: { login: 'attacker' } },
+  ];
+  const t = trail.parseTrail(comments, { viewer: 'me', allow: [] });
+  assert.deepEqual(t.segments.map((s) => s.stage), ['Dev']);
+  assert.ok(t.untrusted.length === 1 && t.untrusted[0].type === 'qa-verdict');
+});
+
+test('the same verdict from the viewer is trusted and does open a QA segment', () => {
+  const comments = [
+    { body: 'ship:qa verdict PASS round 1/3 tier=full verified 5/5',
+      createdAt: '2026-09-01T11:00:00Z', author: { login: 'me' } },
+  ];
+  const t = trail.parseTrail(comments, { viewer: 'me', allow: [] });
+  assert.deepEqual(t.segments.map((s) => s.stage), ['QA']);
+  assert.equal(t.untrusted.length, 0);
+});
+
+test('an approvers-listed author is trusted', () => {
+  const comments = [{ body: 'ship:qa verdict PASS round 1/3 tier=full verified 5/5',
+    createdAt: '2026-09-01T11:00:00Z', author: { login: 'Reviewer' } }];
+  const t = trail.parseTrail(comments, { viewer: 'me', allow: ['reviewer'] });
+  assert.equal(t.segments.length, 1);
+});
+
+test('legacy emoji spec/plan headers still parse', () => {
+  const t = trail.parseTrail([
+    { body: '📋 Spec approved — see docs/ship/1/spec.md', createdAt: '2026-09-01T09:00:00Z', author: { login: 'me' } },
+    { body: '🗺️ Plan approved', createdAt: '2026-09-01T09:30:00Z', author: { login: 'me' } },
+  ], { viewer: 'me' });
+  assert.deepEqual(t.segments.map((s) => s.stage), ['Spec', 'Plan']);
+});
+
+test('ship:pr opened <url> yields a PR segment carrying the url', () => {
+  const t = trail.parseTrail([
+    { body: 'ship:pr opened https://github.com/o/r/pull/7', createdAt: '2026-09-02T09:00:00Z', author: { login: 'me' } },
+  ], { viewer: 'me' });
+  const pr = t.segments.find((s) => s.stage === 'PR');
+  assert.equal(pr.prUrl, 'https://github.com/o/r/pull/7');
+  assert.equal(t.prUrl, 'https://github.com/o/r/pull/7');
+});
+
+test('ship:metrics round N/M merges token stats into that round dev/QA segments', () => {
+  const M = (o) => `<!-- shipyard-metrics ${JSON.stringify(o)} -->`;
+  const t = trail.parseTrail([
+    { body: 'ship:dev round 1/3\n' + M({ stage: 'dev', started: '2026-09-01T10:00:00Z', finished: '2026-09-01T11:00:00Z' }),
+      createdAt: '2026-09-01T11:00:00Z', author: { login: 'me' } },
+    { body: 'ship:metrics round 1/3\n' + M({ stage: 'dev', started: '2026-09-01T10:00:00Z', finished: '2026-09-01T11:00:00Z', tokens_in: 5000, tokens_out: 700 }),
+      createdAt: '2026-09-01T11:05:00Z', author: { login: 'me' } },
+  ], { viewer: 'me' });
+  const dev = t.segments.find((s) => s.stage === 'Dev');
+  assert.equal(dev.tokensIn, 5000);
+  assert.equal(dev.tokensOut, 700);
+});
+```
+
+- [ ] **Step 2: Run to verify failure** — `node --test plugins/dashboard/server/trail.test.js`; expect failures on `untrusted`, `prUrl` and the metrics merge.
+
+- [ ] **Step 3: Rewrite `trail.js` as an adapter** — delete the local
+  `HEADERS`/`ESCALATION_RE`/`METRICS_BLOCK_RE` definitions and delegate:
+  `const boardTrail = require('../scripts/board-trail.js');`
+  `parseTrail` shapes `{ comments }` into the `issue` object `parseEvents`
+  expects, calls `boardTrail.parseEvents(issue, { viewer, allow })`, drops
+  events with `trusted !== true` into `untrusted[]`, and folds the rest into
+  the existing segment shape. `parseMetricsBlocks` keeps working by reading
+  each event's `metrics`. Trail gains `untrusted: []` and `prUrl: string|null`
+  alongside `segments` / `escalations` / `lastActivity`.
+
+- [ ] **Step 4: Run to verify pass** — `node --test plugins/dashboard/server/trail.test.js`.
+
+- [ ] **Step 5: Confirm no consumer changed** — `git diff --stat` must show
+  `trail.js` and `trail.test.js` only, and the whole suite green:
+  `node --test "plugins/dashboard/**/*.test.js"`.
+
+- [ ] **Step 6: Commit** — `refactor(dashboard): trail.js is now an adapter over the vendored board-trail.js`.
+
+---
+
+### Task 14: viewer + approvers plumbing
+
+**Files:** modify `plugins/dashboard/server/board.js`, `server.js`, and their tests.
+
+- [ ] **Step 1** — `board.js` gains `async viewer()` running `gh api user --jq .login`, and `readApprovers(projectPath)` reading `approvers` from `<projectPath>/.claude/ship.config.json` (missing file or key → `[]`; never throw).
+- [ ] **Step 2** — `server.js` resolves the viewer **once per process** and caches it (a module-level promise); a failure caches `null`, which per contract §3 makes every non-`approvers` author untrusted. Every `parseTrail` call site passes `{ viewer, allow }`.
+- [ ] **Step 3** — tests: viewer is fetched once across two requests (count injected `execFile` calls); a malformed `ship.config.json` yields `[]` rather than a 500.
+- [ ] **Step 4: Commit** — `feat(dashboard): resolve the gh viewer and per-project approvers for the trust rule`.
+
+---
+
+### Task 15: H-15 — review gate, Approved and PR Open stages
+
+**Files:** `plugins/dashboard/server/board.js`, `timeline.js`, `stats.js` (via `web/pipeline-stats.js`), `metrics.js`, `server.js`, `web/app.js`, `web/app.css`, and tests.
+
+- [ ] **Step 1: Approve on Awaiting Review swaps labels instead of closing** (program spec Decision 6, contract §4). `board.approve` for `Awaiting Review` becomes `gh issue edit <n> --repo <r> --add-label ship:approved --remove-label ship:awaiting-review`. It must NOT close the issue. Update `board.test.js`'s close-branch assertion to assert the label swap, and add a test asserting `issue close` is never invoked.
+- [ ] **Step 2: New stages.** Add to `STAGE_PRECEDENCE` above `ship:awaiting-review`: `ship:pr-open → 'PR Open'`, `ship:approved → 'Approved'`. Add both to `CURRENT_STAGE_FOR` in `timeline.js` (`Approved → 'Review'`, `PR Open → 'PR'`) and to `STAGE_KEYS` in `web/pipeline-stats.js` so the stats strip counts them.
+- [ ] **Step 3: PR URL.** `parseTrail` already surfaces `trail.prUrl` (Task 13). Thread it onto the timeline row (`row.prUrl`) and the ticket detail payload; render it in the drawer header as a link next to the ticket id, in the Logs tab, and as the PR segment's tooltip link. Escape it with `esc()` and only render `https://` URLs.
+- [ ] **Step 4: Drawer Gantt gains the PR row** — `metrics.buildTimeline`'s `STAGE_ORDER` goes from five rows to six (`Spec, Plan, Dev, QA, Review, PR`). Update `metrics.test.js`'s row-count assertions.
+- [ ] **Step 5: `ship:metrics` merge** — verified by Task 13's test; assert here that the timeline tooltip's `tokensLabel` and the stats strip's token totals include a round whose tokens arrived only via a `ship:metrics` comment. Add a fixture ticket carrying one.
+- [ ] **Step 6: Approve button copy** — the drawer's primary button reads `Approve → Approved` on Awaiting Review (not "close ticket"), stays `Approve → Planned` on Needs Human, and is disabled elsewhere. `approveEligibility` gains the two new stages as non-approvable.
+- [ ] **Step 7: Commit** — `feat(dashboard): review gate sets ship:approved, plus Approved and PR Open stages`.
+
+---
+
+### Task 16: Timeline polish
+
+**Files:** `plugins/dashboard/web/timeline-scale.js`, `timeline-scale.test.js`, `web/app.js`, `web/app.css`.
+
+- [ ] **Step 1: "Fit" zoom preset** — a fifth preset `{ id: 'fit', label: 'Fit', spanMs: null }`, whose domain is the **visible rows'** data extent padded 5% each side (distinct from `all`, which fits the whole board's domain). `resolveDomain('fit', { dataStart, dataEnd, now })` behaves like `all` over the extent it is handed; the client passes the visible rows' min/max instead of the payload domain. `fit` is the default `state.zoom` when the board has any segment, falling back to `week` on an empty board. Tests: padding is 5%; a single-instant extent still yields a non-zero span.
+- [ ] **Step 2: Minimum bar width** — `MIN_BAR_PX` is already 3; add an explicit test that a one-second segment on a month-wide domain still yields `w >= 3` and that its `x + w` stays inside the track.
+- [ ] **Step 3: Per-row right label** — a right-aligned column (matching the drawer's `.gantt-stat` monospace style) showing the row's current stage tag and time-in-stage (`now - currentSegment.start`, via the server's `formatDuration`). Rows with no current segment show `—`. The grid becomes `label | track | stat`; the axis row gets a matching spacer so gridlines stay aligned.
+- [ ] **Step 4: Confirm tooltips on minimum-width bars** — in the browser, hover and focus a 3px bar and confirm `#tl-tip` shows.
+- [ ] **Step 5: Commit** — `feat(dashboard): fit zoom preset, per-row stage/duration label, min bar width`.
+
+---
+
+### Task 17: Docs and version
+
+- [ ] **Step 1** — `docs/superpowers/specs/2026-08-10-dashboard-design.md` Decision 3 gains a dated note: approve on Awaiting Review no longer closes the issue; it sets `ship:approved` per the hardening program spec's Decision 6 and contract §4, and the issue closes when the PR merges.
+- [ ] **Step 2** — root `README.md` dashboard section: install line, `/dashboard` usage, what Approve does on each stage, and that the dashboard performs board writes only and never launches pipeline runs.
+- [ ] **Step 3** — `plugins/dashboard/README.md`: same, plus the Approved/PR Open stages and the trust rule.
+- [ ] **Step 4** — `plugins/dashboard/.claude-plugin/plugin.json` version → `1.0.0`.
+- [ ] **Step 5: Commit** — `docs(dashboard): review-gate decision note, usage docs, v1.0.0`.
+
+---
+
+### Task 18: Phase 2 adversarial review
+
+- [ ] **Step 1** — dispatch the `refuter` agent (model opus) on the phase 2 diff with the H-11-remainder and H-15 criteria, the contract's trust rule, and an explicit brief to try forging board comments.
+- [ ] **Step 2** — fix confirmed findings, re-run `node --test "plugins/dashboard/**/*.test.js"` and `bash scripts/check-shared-sync.sh`, commit.
+- [ ] **Step 3** — fresh screenshots (timeline light + dark, drawer showing the PR row) into the scratchpad dashboard folder.

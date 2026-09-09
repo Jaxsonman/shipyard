@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "Cap escalation names cause `cap` at round M/M and moves toward Needs Human"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

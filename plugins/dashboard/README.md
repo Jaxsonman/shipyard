@@ -194,14 +194,20 @@ two can never disagree.
 
 **Timeline** — a board-wide Gantt across every ticket. Rows are grouped by
 project and sorted by last activity; the axis is real time with gridlines, a
-"now" line and day/week/month/all zoom presets. Horizontal pan (wheel, drag or
-arrow keys) applies to the day/week/month presets; `all` always fits the full
-data range, so pan is inactive there and the track shows no grab cursor. One bar per stage the trail has evidence for: accent for the stage
+"now" line and fit/day/week/month/all zoom presets. `fit` (the default,
+falling back to `week` on an empty board) fits the *visible* rows' own
+segment span — distinct from `all`, which always fits the whole board's
+domain regardless of any active filter. Horizontal pan (wheel, drag or arrow
+keys) applies to the day/week/month presets; `fit` and `all` always fit their
+respective extent, so pan is inactive on both and the track shows no grab
+cursor. One bar per stage the trail has evidence for: accent for the stage
 the ticket is in now, a neutral ramp by recency for earlier stages, and a hatch
 overlay for bars estimated from comment timestamps rather than metrics footers.
 The active bar pulses. Hovering or focusing a bar shows stage, round, duration,
-tokens in/out and whether it is estimated. Stage chips and a "hide backlog"
-toggle filter the view; clicking or pressing Enter on a row opens the drawer.
+tokens in/out and whether it is estimated. Each row also carries a right-hand
+label — the current stage and time-in-stage, `—` when the row has no current
+segment (e.g. Backlog). Stage chips and a "hide backlog" toggle filter the
+view; clicking or pressing Enter on a row opens the drawer.
 
 ## Accessibility
 

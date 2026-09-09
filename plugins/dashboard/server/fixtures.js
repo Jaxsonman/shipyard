@@ -25,6 +25,25 @@ function plainComment(body, minutesAgo) {
   return { body, createdAt: iso(minutesAgo) };
 }
 
+// A standalone `ship:metrics round N/M` comment carrying its own footer —
+// distinct from a stage-handoff comment (e.g. `ship:dev round N/M`) that
+// carries no footer of its own. trail.js merges either shape into the
+// footer's own `stage` segment, so this exercises a dev round whose tokens
+// arrive only via this comment (Task 15 step 5).
+function standaloneMetricsComment(round, cap, stage, startedAgoMin, finishedAgoMin, tokensIn, tokensOut) {
+  const body = `ship:metrics round ${round}/${cap}\n\n<!-- shipyard-metrics {"stage":"${stage}","started":"${iso(startedAgoMin)}","finished":"${iso(finishedAgoMin)}","tokens_in":${tokensIn},"tokens_out":${tokensOut}} -->`;
+  return { body, createdAt: iso(finishedAgoMin) };
+}
+
+// The one board-trail header format that actually sets `trail.prUrl`:
+// exactly `ship:pr opened <url>` on the comment's first line (contract v1
+// §5). Carries its own metrics footer so the PR segment renders as a real
+// (non-estimated) bar.
+function prOpenedComment(url, startedAgoMin, finishedAgoMin, tokensIn, tokensOut) {
+  const body = `ship:pr opened ${url}\n\n<!-- shipyard-metrics {"stage":"pr","started":"${iso(startedAgoMin)}","finished":"${iso(finishedAgoMin)}","tokens_in":${tokensIn},"tokens_out":${tokensOut}} -->`;
+  return { body, createdAt: iso(finishedAgoMin) };
+}
+
 const PROJECTS = [
   { id: 'core', name: 'Core platform', path: '/mock/core', repo: 'org/shipyard-core' },
   { id: 'reef', name: 'Reef Tracker', path: '/mock/reef', repo: 'org/reef-tracker' },
@@ -130,6 +149,25 @@ const TICKETS = {
         plainComment('📋 Spec approved — `docs/ship/55/spec.md`', 30300),
         plainComment('🗺️ Plan approved — `docs/ship/55/plan.md`', 30220),
         plainComment('ship:dev round 1/3', 30150),
+      ],
+    },
+    {
+      number: 71,
+      title: 'Report scheduling — recurring exports',
+      body: 'Recurring scheduled exports of saved reports on a per-user cadence.',
+      labels: [{ name: 'ship:approved' }, { name: 'priority: medium' }],
+      state: 'open',
+      url: 'https://github.com/org/shipyard-core/issues/71',
+      assignees: [{ login: 'j.okafor' }],
+      updatedAt: iso(200),
+      spec: 'Done means: cadence configurable per user, delivery via email, skips empty reports.',
+      plan: '1. Cadence model\n2. Scheduler job\n3. Email delivery\n4. QA pass',
+      comments: [
+        metricsComment('📋 Spec approved — `docs/ship/71/spec.md`', 'spec', 600, 574, 68000, 11000),
+        metricsComment('🗺️ Plan approved — `docs/ship/71/plan.md`', 'plan', 560, 538, 54000, 9000),
+        metricsComment('ship:dev round 1/1', 'dev', 500, 300, 420000, 38000),
+        metricsComment('ship:qa verdict full', 'qa', 290, 259, 96000, 14000),
+        metricsComment('ship:review-packet — ready for human review', 'ship', 250, 238, 27000, 5000),
       ],
     },
     {
@@ -266,6 +304,29 @@ const TICKETS = {
         metricsComment('ship:qa verdict full', 'qa', 1590, 1560, 94000, 13000),
         metricsComment('ship:review-packet — ready for human review', 'ship', 1550, 1530, 26000, 5000),
         metricsComment('ship:pr-open — https://github.com/org/reef-tracker/pull/92', 'pr', 60, 3, 18000, 3000),
+      ],
+    },
+    {
+      number: 93,
+      title: 'Batch import legacy water-test logs',
+      body: 'One-time batch importer for CSV water-test history exported from the old spreadsheet tracker.',
+      labels: [{ name: 'ship:pr-open' }, { name: 'priority: medium' }],
+      state: 'open',
+      url: 'https://github.com/org/reef-tracker/issues/93',
+      assignees: [{ login: 'dev-agent' }],
+      updatedAt: iso(60),
+      spec: 'Done means: validates rows before commit, reports skipped/duplicate rows, handles 10k+ row files.',
+      plan: '1. CSV schema validator\n2. Dedup + batch insert\n3. Import report UI\n4. Tests per task',
+      comments: [
+        metricsComment('📋 Spec approved — `docs/ship/93/spec.md`', 'spec', 2000, 1980, 68000, 11000),
+        metricsComment('🗺️ Plan approved — `docs/ship/93/plan.md`', 'plan', 1970, 1950, 54000, 9000),
+        // The ship:dev handoff itself carries no metrics footer — its
+        // tokens arrive only via the standalone ship:metrics comment below.
+        plainComment('ship:dev round 1/3', 1900),
+        standaloneMetricsComment(1, 3, 'dev', 1900, 1600, 410000, 37000),
+        metricsComment('ship:qa verdict full', 'qa', 1590, 1560, 94000, 13000),
+        metricsComment('ship:review-packet — ready for human review', 'ship', 1550, 1530, 26000, 5000),
+        prOpenedComment('https://github.com/org/reef-tracker/pull/7', 90, 60, 18000, 3000),
       ],
     },
   ],

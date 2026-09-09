@@ -25,6 +25,9 @@ const state = {
   search: '',
   // Timeline view (Task 8).
   view: 'tickets',
+  // Set once, on the first timeline load, to TimelineScale.DEFAULT_PRESET_ID
+  // ('fit') when the board has any segment, else EMPTY_BOARD_PRESET_ID
+  // ('week') — see loadTimeline()'s zoomInitialized guard below.
   zoom: 'week',
   panMs: 0,
   stageFilter: new Set(),
@@ -43,6 +46,10 @@ let lastStatsJson = null;
 
 // Latest /api/timeline payload ({ now, domain, groups, rows, warnings }).
 let timelineData = null;
+// Set true after the zoom preset's one-time auto-init on the first timeline
+// load (Task 16 step 1) — later loads (polling, project switches) must not
+// stomp on a zoom the user picked by hand.
+let zoomInitialized = false;
 // Scale in effect for the last timeline render — reused by wheel/drag/keyboard
 // pan handlers so they don't have to recompute domain+width themselves.
 let tlScale = null;
@@ -66,6 +73,30 @@ function priorityClass(p) {
   if (p === 'Medium') return 'tag-outline';
   if (p === 'Low') return 'tag-neutral';
   return null;
+}
+
+// Renders a PR url as a link ONLY when it starts with "https://" — anything
+// else (a malformed or non-https value that somehow made it through the
+// server's trust boundary) renders as plain escaped text, never an anchor.
+// Text is the PR number ("PR #7") when the url shape is recognisable, else
+// the bare fallback "PR".
+function prLinkHtml(url) {
+  if (!url) return '';
+  const m = /\/pull\/(\d+)/.exec(url);
+  const text = m ? `PR #${m[1]}` : 'PR';
+  if (/^https:\/\//.test(url)) {
+    return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(text)}</a>`;
+  }
+  return esc(text);
+}
+
+// The ticket-detail payload carries no prUrl of its own — only the
+// board-wide /api/timeline rows do (server/timeline.js). Look it up there,
+// keyed by project+number, same pattern as causeForTicket().
+function prUrlForTicket(project, number) {
+  if (!timelineData || !Array.isArray(timelineData.rows)) return null;
+  const row = timelineData.rows.find((r) => r.project === project && r.number === number);
+  return row ? row.prUrl || null : null;
 }
 
 function relativeTime(iso) {
@@ -158,6 +189,11 @@ async function loadTimeline() {
   const { now, ...comparable } = data;
   const json = JSON.stringify(comparable);
   timelineData = data;
+  if (!zoomInitialized) {
+    zoomInitialized = true;
+    const hasSegment = (data.rows || []).some((r) => (r.segments || []).length > 0);
+    state.zoom = hasSegment ? TimelineScale.DEFAULT_PRESET_ID : TimelineScale.EMPTY_BOARD_PRESET_ID;
+  }
   if (json === lastTimelineJson) return;
   lastTimelineJson = json;
   renderMain();
@@ -598,17 +634,24 @@ function timelineRowsForProject() {
   return { groups, rowsByProject };
 }
 
+// 'all' and 'fit' both resolve via resolveDomain's spanMs===null branch,
+// which always fits an extent and ignores panMs by design — neither preset
+// is pannable (Task 16 step 1: fit behaves like all in this respect).
+function isFitPreset(zoomId) {
+  return zoomId === 'all' || zoomId === 'fit';
+}
+
 function tlPanBySpan(fraction) {
-  if (!tlScale || state.zoom === 'all') return;
+  if (!tlScale || isFitPreset(state.zoom)) return;
   const spanMs = tlScale.end - tlScale.start;
   applyTlPan(state.panMs + spanMs * fraction);
 }
 
 function applyTlPan(panMs) {
-  // resolveDomain('all', …) always fits the full data range and ignores
+  // resolveDomain('all'|'fit', …) always fits its handed extent and ignores
   // panMs by design — accumulating it here would be a silent no-op the next
-  // render throws away, so don't pretend pan does anything in this preset (C5).
-  if (!timelineData || state.zoom === 'all') return;
+  // render throws away, so don't pretend pan does anything in these presets (C5).
+  if (!timelineData || isFitPreset(state.zoom)) return;
   const preset = TimelineScale.ZOOM_PRESETS.find((p) => p.id === state.zoom) || TimelineScale.ZOOM_PRESETS[1];
   const spanMs = preset.spanMs === null ? (tlScale ? tlScale.end - tlScale.start : 0) : preset.spanMs;
   state.panMs = TimelineScale.clampPan(panMs, spanMs, {
@@ -651,6 +694,33 @@ function rowMatchesCauseFilter(row) {
   return cause === state.causeFilter;
 }
 
+// Search box filter for the Timeline view, matching ticketsForProject()'s
+// number/title match — kept in sync so "visible rows" means the same thing
+// whether it's driving the stats strip (visibleTimelineRows) or the Fit
+// preset's data extent (Task 16 step 1).
+function rowMatchesSearch(row) {
+  const q = state.search.trim().toLowerCase();
+  if (!q) return true;
+  const num = String(row.number).toLowerCase();
+  const title = (row.title || '').toLowerCase();
+  return num.includes(q) || title.includes(q);
+}
+
+// Min segment start / max segment end across the given rows — the extent
+// the Fit preset fits, as opposed to 'all' which fits the payload's
+// board-wide domain (Task 16 step 1). Null when no row has a segment.
+function visibleRowExtent(rows) {
+  let start = null;
+  let end = null;
+  rows.forEach((row) => {
+    (row.segments || []).forEach((seg) => {
+      if (typeof seg.start === 'number' && (start === null || seg.start < start)) start = seg.start;
+      if (typeof seg.end === 'number' && (end === null || seg.end > end)) end = seg.end;
+    });
+  });
+  return start === null || end === null ? null : { start, end };
+}
+
 function renderTimeline() {
   const el = document.getElementById('main');
   if (!el) return;
@@ -678,19 +748,27 @@ function renderTimeline() {
   const renderedRows = [];
   const groupsHtml = groups
     .map((g) => {
-      const rows = (rowsByProject.get(g.projectId) || []).filter(rowMatchesStageFilter).filter(rowMatchesCauseFilter);
+      const rows = (rowsByProject.get(g.projectId) || [])
+        .filter(rowMatchesStageFilter)
+        .filter(rowMatchesCauseFilter)
+        .filter(rowMatchesSearch);
       if (!rows.length) return '';
       const rowsHtml = rows
         .map((row) => {
           const rowIdx = renderedRows.length;
           renderedRows.push(row);
           const label = `${row.title}, stage ${row.stage}`;
+          const currentSeg = (row.segments || []).find((s) => s.state === 'current');
+          const statHtml = currentSeg
+            ? `<span class="tag tag-neutral">${esc(currentSeg.stage)}</span> ${esc(window.PipelineStats.formatDuration(timelineData.now - currentSeg.start))}`
+            : '<span class="text-muted">—</span>';
           return `
             <div class="tl-row" tabindex="0" role="button" data-project="${esc(row.project)}" data-number="${esc(row.number)}" aria-label="${esc(label)}">
               <div class="tl-row-label"><span class="tl-num">#${esc(row.number)}</span> ${esc(row.title)}</div>
               <div class="tl-track">
                 <div class="tl-track-layer" data-row-idx="${rowIdx}"></div>
               </div>
+              <div class="tl-stat">${statHtml}</div>
             </div>
           `;
         })
@@ -718,10 +796,11 @@ function renderTimeline() {
           Hide backlog
         </label>
       </div>
-      <div class="tl${state.zoom === 'all' ? '' : ' is-pannable'}" id="tl" tabindex="0">
+      <div class="tl${isFitPreset(state.zoom) ? '' : ' is-pannable'}" id="tl" tabindex="0">
         <div class="tl-axis-row">
           <div class="tl-axis-label"></div>
           <div class="tl-axis" id="tl-axis"></div>
+          <div class="tl-axis-stat"></div>
         </div>
         <div class="tl-body" id="tl-body">
           ${groupsHtml || '<p class="text-muted tl-empty">No tickets match the current filters.</p>'}
@@ -735,9 +814,17 @@ function renderTimeline() {
   const firstLayer = el.querySelector('.tl-track-layer');
   const trackWidth = firstLayer ? firstLayer.clientWidth : Math.max((el.clientWidth || 900) - 272, 200);
 
+  // Fit's extent is the VISIBLE rows' own segment span, not the payload's
+  // board-wide domain — that is what distinguishes it from 'all' (Task 16
+  // step 1). Falls back to the board domain if no visible row has a segment.
+  let domainExtent = { dataStart: timelineData.domain.start, dataEnd: timelineData.domain.end };
+  if (state.zoom === 'fit') {
+    const extent = visibleRowExtent(renderedRows);
+    if (extent) domainExtent = { dataStart: extent.start, dataEnd: extent.end };
+  }
   const domain = TimelineScale.resolveDomain(state.zoom, {
-    dataStart: timelineData.domain.start,
-    dataEnd: timelineData.domain.end,
+    dataStart: domainExtent.dataStart,
+    dataEnd: domainExtent.dataEnd,
     now: timelineData.now,
     panMs: state.panMs,
   });
@@ -873,7 +960,7 @@ function wireTimelineControls() {
     });
 
     tlEl.addEventListener('wheel', (ev) => {
-      if (state.zoom === 'all') return;
+      if (isFitPreset(state.zoom)) return;
       const delta = ev.deltaX !== 0 ? ev.deltaX : (ev.shiftKey ? ev.deltaY : 0);
       if (delta === 0 || !tlScale || !tlScale.pxPerMs) return;
       ev.preventDefault();
@@ -951,8 +1038,12 @@ function closeDrawer() {
 }
 
 function approveEligibility(stage) {
-  if (stage === 'Awaiting Review') return { enabled: true, label: 'Approve — close ticket' };
+  // Approving no longer closes the ticket — it swaps ship:awaiting-review
+  // for ship:approved and leaves the issue open (contract §4).
+  if (stage === 'Awaiting Review') return { enabled: true, label: 'Approve → Approved' };
   if (stage === 'Needs Human') return { enabled: true, label: 'Approve → Planned' };
+  // Every other stage — including the pipeline-owned Approved and PR Open —
+  // is not approvable from here.
   return { enabled: false, label: 'Approve' };
 }
 
@@ -1017,6 +1108,7 @@ function renderDrawer() {
   }
 
   const t = drawerDetail;
+  const prUrl = prUrlForTicket(t.project, t.number);
   const tabs = ['Overview', 'Spec', 'Plan', 'Logs'];
   const tabsHtml = tabs
     .map((tab) => {
@@ -1032,11 +1124,15 @@ function renderDrawer() {
       const isPast = row.state === 'past';
       const activeCls = isCurrent ? ' is-active' : '';
       const barStateCls = isCurrent ? 'gantt-bar-current' : isPast ? 'gantt-bar-past' : 'gantt-bar-future';
+      // The PR segment's tooltip carries its trusted URL as plain text (a
+      // title attribute can't hold a clickable link) — esc()'d regardless.
+      const tipText = row.stage === 'PR' && prUrl ? (row.stat ? `${row.stat} · ${prUrl}` : prUrl) : '';
+      const titleAttr = tipText ? ` title="${esc(tipText)}"` : '';
       return `
         <div class="gantt-grid">
           <div class="gantt-label${activeCls}">${esc(row.label)}</div>
           <div class="gantt-track">
-            <div class="gantt-bar ${barStateCls}" style="--bar-left:${row.startPct}%; --bar-width:${row.widthPct}%"></div>
+            <div class="gantt-bar ${barStateCls}" style="--bar-left:${row.startPct}%; --bar-width:${row.widthPct}%"${titleAttr}></div>
           </div>
           <div class="gantt-stat${activeCls}">${esc(row.stat)}</div>
         </div>
@@ -1055,7 +1151,8 @@ function renderDrawer() {
     const logsText = (t.logs || [])
       .map((l) => `[${l.createdAt}] ${l.header}${l.body ? `\n${l.body}` : ''}`)
       .join('\n\n');
-    tabContent = `<pre class="logs">${esc(logsText || 'No pipeline runs yet.')}</pre>`;
+    const prLogHtml = prUrl ? `<p class="tab-copy">PR: ${prLinkHtml(prUrl)}</p>` : '';
+    tabContent = `<pre class="logs">${esc(logsText || 'No pipeline runs yet.')}</pre>${prLogHtml}`;
   }
 
   const { enabled: approveEnabled, label: approveLabel } = approveEligibility(t.stage);
@@ -1073,7 +1170,7 @@ function renderDrawer() {
       <div class="drawer-panel" id="drawer-panel" role="dialog" aria-modal="true">
         <div class="drawer-head">
           <div>
-            <div class="card-kicker">#${esc(t.number)} · ${esc(t.projectName)}</div>
+            <div class="card-kicker">#${esc(t.number)}${prUrl ? ` · ${prLinkHtml(prUrl)}` : ''} · ${esc(t.projectName)}</div>
             <h4 class="drawer-title">${esc(t.title)}</h4>
           </div>
           <button class="btn btn-icon btn-ghost" id="drawer-close">×</button>

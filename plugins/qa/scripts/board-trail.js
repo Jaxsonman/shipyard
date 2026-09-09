@@ -298,18 +298,19 @@ function reconcile(events, opts = {}) {
     }
   };
 
-  // Untrusted and malformed events never take part in reconciliation.
+  // Untrusted and malformed events never take part in reconciliation, but
+  // both are still reported — a malformed header from an untrusted author
+  // is both malformed-header AND counted in state.untrusted.
   for (const e of events) {
-    if (e.malformed) {
-      bad('malformed-header', `unrecognised pipeline header: ${e.raw}`, e.url);
-      continue;
-    }
     if (!e.trusted) {
       state.untrusted.push({ type: e.type, author: e.author, url: e.url, raw: e.raw });
       state.trusted = false;
-      if (e.type === 'qa-verdict') {
+      if (e.type === 'qa-verdict' && !e.malformed) {
         bad('untrusted-verdict', `verdict-shaped comment from untrusted author ${e.author}: ${e.raw}`, e.url);
       }
+    }
+    if (e.malformed) {
+      bad('malformed-header', `unrecognised pipeline header: ${e.raw}`, e.url);
     }
   }
 
@@ -388,11 +389,13 @@ function reconcile(events, opts = {}) {
 
   state.round = devRounds.length ? Math.max(...devRounds) : 0;
 
+  // Latest by createdAt wins, consistent with round selection (§9).
   const escalations = usable.filter((e) => e.type === 'escalation' || e.type === 'dev-escalation');
-  state.escalation = escalations.length ? escalations[escalations.length - 1] : null;
+  state.escalation = latestWins(escalations).winner;
 
   const pr = usable.filter((e) => e.type === 'pr-opened');
-  if (pr.length) state.prUrl = pr[pr.length - 1].prUrl;
+  const prWinner = latestWins(pr).winner;
+  if (prWinner) state.prUrl = prWinner.prUrl;
 
   state.phase = derivePhase(state, usable);
   return state;

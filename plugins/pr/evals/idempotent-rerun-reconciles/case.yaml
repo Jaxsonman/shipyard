@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "/pr re-run reconciles an already-open PR instead of duplicating it"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

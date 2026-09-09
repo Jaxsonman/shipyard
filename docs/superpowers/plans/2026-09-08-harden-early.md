@@ -37,7 +37,7 @@
 **Interfaces:**
 - Produces: the draft file convention `docs/prd/<slug>.draft.md`, reused by Task 3's spec interview (which uses `docs/ship/<id>/spec.draft.md`).
 
-- [ ] **Step 1: Add Step 0 preflight to the skill**
+- [x] **Step 1: Add Step 0 preflight to the skill**
 
 Insert as the first numbered step, before any interview question:
 
@@ -53,7 +53,7 @@ tell the user how to fix them (usually `gh auth login`, or running inside a
 git repository), and stop. Exit 2 → report the usage error and stop.
 ```
 
-- [ ] **Step 2: Add slug derivation + overwrite refusal**
+- [x] **Step 2: Add slug derivation + overwrite refusal**
 
 After preflight, before the interview: derive the slug as `YYYY-MM-DD-<kebab-slug>` early enough to name the draft. Add:
 
@@ -72,7 +72,7 @@ is `docs/prd/<YYYY-MM-DD>-<slug>.md` (contract §13).
   from the next unanswered area or **start over** (deleting the draft).
 ```
 
-- [ ] **Step 3: Add per-turn draft persistence**
+- [x] **Step 3: Add per-turn draft persistence**
 
 Add to the interview rules section, replacing nothing:
 
@@ -84,7 +84,7 @@ Add to the interview rules section, replacing nothing:
   This file is the resume point; it is not committed.
 ```
 
-- [ ] **Step 4: Add commit offer and draft cleanup to the handoff**
+- [x] **Step 4: Add commit offer and draft cleanup to the handoff**
 
 In the "Writing the PRD" / "Handoff" sections:
 
@@ -98,20 +98,20 @@ commit** (do not commit unasked):
 Commit only that path — the user's tree may be dirty.
 ```
 
-- [ ] **Step 5: Cut to fit the budget**
+- [x] **Step 5: Cut to fit the budget**
 
 Trim the skill so it stays ≤115 lines: the PRD template block stays verbatim (it is the output shape), but collapse prose in "Interview rules" and "Interview sequence" that restates itself. Verify with `wc -l plugins/prd/skills/writing-prds/SKILL.md`.
 
-- [ ] **Step 6: README + version**
+- [x] **Step 6: README + version**
 
 Add to README's `/prd` paragraph: draft persistence to `docs/prd/<slug>.draft.md` with resume on the next run, refusal to overwrite an existing PRD, and the commit offer. Bump `plugins/prd/.claude-plugin/plugin.json` version to `1.1.0`.
 
-- [ ] **Step 7: Verify**
+- [x] **Step 7: Verify**
 
 Run: `claude plugin validate .`
 Expected: passes, 0 warnings.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add plugins/prd README.md

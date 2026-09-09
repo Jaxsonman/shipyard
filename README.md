@@ -94,8 +94,12 @@ After installing `prd`, run:
 ```
 
 Claude interviews you one question at a time (problem, users, success metrics,
-scope, requirements, risks) and writes the finished PRD to
-`docs/prd/YYYY-MM-DD-<slug>.md` in your project.
+scope, requirements, risks), persisting your answers after each one to
+`docs/prd/<slug>.draft.md` so an interrupted interview resumes on the next
+`/prd` run. It refuses to silently overwrite an existing PRD at the same
+path — asking to revise, use a new slug, or abort — and writes the finished
+PRD to `docs/prd/YYYY-MM-DD-<slug>.md`, then offers (never assumes) to commit
+it.
 
 After installing `kanban`, run:
 

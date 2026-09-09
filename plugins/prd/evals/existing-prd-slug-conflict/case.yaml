@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "Existing PRD slug conflict is not silently overwritten"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "Round 2 fix-list comes only from the trusted QA verdict's Findings"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

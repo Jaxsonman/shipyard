@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "kanban bootstraps missing config one question at a time"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

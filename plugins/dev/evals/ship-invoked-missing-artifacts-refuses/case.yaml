@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "Ship-invoked dev refuses when plan.md is missing"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

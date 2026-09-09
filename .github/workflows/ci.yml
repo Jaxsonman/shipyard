@@ -3,6 +3,17 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: 'Plugin to eval (or "all")'
+        required: false
+        default: 'all'
+      live:
+        description: 'Run the opt-in live case (requires a real board) instead of the default suite'
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   verify:
@@ -22,3 +33,33 @@ jobs:
 
       - name: Plugin manifests validate
         run: npx --yes @anthropic-ai/claude-code@2.1.258 plugin validate .
+
+  eval:
+    # Manually triggered only — never on push/PR. `claude plugin eval` costs
+    # real tokens per run (scripts/eval.sh caps each plugin at $3 via
+    # --max-cost-usd) and the "live" mode talks to a real board, so this
+    # never runs unattended.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run eval suite
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          EVAL_PLUGIN: ${{ github.event.inputs.plugin }}
+          EVAL_LIVE: ${{ github.event.inputs.live }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "ANTHROPIC_API_KEY secret is required for this job" >&2
+            exit 1
+          fi
+          args=("${EVAL_PLUGIN:-all}")
+          if [ "$EVAL_LIVE" = "true" ]; then
+            args+=(--live)
+          fi
+          bash scripts/eval.sh "${args[@]}"

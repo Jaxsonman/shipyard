@@ -32,10 +32,24 @@ function normalize(text) {
   return String(text).trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
+const FENCE_RE = /^(```+|~~~+)/;
+
 function extractHeadings(text) {
   const headings = [];
   const lines = String(text).split(/\r?\n/);
+  let fence = null; // the exact fence marker (e.g. "```") currently open, or null
   for (const line of lines) {
+    const fenceMatch = line.match(FENCE_RE);
+    if (fenceMatch) {
+      if (fence === null) {
+        fence = fenceMatch[1];
+      } else if (fenceMatch[1].startsWith(fence[0]) && fenceMatch[1].length >= fence.length) {
+        // A closing fence must use the same character and be at least as long.
+        fence = null;
+      }
+      continue;
+    }
+    if (fence !== null) continue;
     const m = line.match(/^#{1,6}\s+(.*)$/);
     if (m) headings.push(m[1]);
   }

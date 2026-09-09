@@ -73,7 +73,7 @@ const HEADERS = [
     re: /^ship:dev (?:round\b|standalone\b)/,
     parse: (line) => {
       if (/^ship:dev standalone\s*$/.test(line)) return { standalone: true };
-      const m = /^ship:dev round (\d+)\/(\d+)\s*$/.exec(line);
+      const m = /^ship:dev round (0|[1-9]\d*)\/(0|[1-9]\d*)\s*$/.exec(line);
       if (!m) return null;
       const round = Number(m[1]); const cap = Number(m[2]);
       if (!validRound(round, cap)) return null;
@@ -90,7 +90,7 @@ const HEADERS = [
       const LEGACY_REPOST_SUFFIX = / \(reposted by ship\)$/;
       const legacyReposted = LEGACY_REPOST_SUFFIX.test(line);
       const stripped = legacyReposted ? line.replace(LEGACY_REPOST_SUFFIX, '') : line;
-      const m = /^ship:qa verdict (\S+) (?:round (\d+)\/(\d+)|standalone) tier=(\S+) verified (\d+)\/(\d+)(?: criteria=(\S+))?\s*$/.exec(stripped);
+      const m = /^ship:qa verdict (\S+) (?:round (0|[1-9]\d*)\/(0|[1-9]\d*)|standalone) tier=(\S+) verified (\d+)\/(\d+)(?: criteria=(\S+))?\s*$/.exec(stripped);
       if (!m) return null;
       const [, verdict, n, cap, tier, k, total, criteria] = m;
       if (!VERDICTS.includes(verdict)) return null;
@@ -117,7 +117,7 @@ const HEADERS = [
     type: 'metrics',
     re: /^ship:metrics\b/,
     parse: (line) => {
-      const m = /^ship:metrics round (\d+)\/(\d+)\s*$/.exec(line);
+      const m = /^ship:metrics round (0|[1-9]\d*)\/(0|[1-9]\d*)\s*$/.exec(line);
       if (!m) return null;
       const round = Number(m[1]); const cap = Number(m[2]);
       if (!validRound(round, cap)) return null;
@@ -128,7 +128,7 @@ const HEADERS = [
     type: 'review-packet',
     re: /^ship:review-packet\b/,
     parse: (line) => {
-      const m = /^ship:review-packet round (\d+)\/(\d+)\s*$/.exec(line);
+      const m = /^ship:review-packet round (0|[1-9]\d*)\/(0|[1-9]\d*)\s*$/.exec(line);
       if (!m) return null;
       const round = Number(m[1]); const cap = Number(m[2]);
       if (!validRound(round, cap)) return null;
@@ -139,7 +139,7 @@ const HEADERS = [
     type: 'escalation',
     re: /^ship:escalation\b/,
     parse: (line) => {
-      const m = /^ship:escalation (\S+) round (\d+)\/(\d+)\s*$/.exec(line);
+      const m = /^ship:escalation (\S+) round (0|[1-9]\d*)\/(0|[1-9]\d*)\s*$/.exec(line);
       if (!m) return null;
       if (!CAUSES.includes(m[1])) return null;
       const round = Number(m[2]); const cap = Number(m[3]);
@@ -165,7 +165,9 @@ const HEADERS = [
   },
 ];
 
-/** Round and cap are 1-based counts; 0 or negative is a malformed header. */
+/** Round and cap are 1-based counts; 0, negative, or zero-padded (the header
+ *  regexes reject a leading zero — a producer never emits `round 01/3`, §1)
+ *  is a malformed header. */
 function validRound(n, cap) {
   return Number.isInteger(n) && n >= 1 && Number.isInteger(cap) && cap >= 1;
 }
@@ -195,14 +197,38 @@ function blankEvent() {
   };
 }
 
+/** Lines that end the `## Findings` section: the next heading, or the §5.5
+ *  trailer that follows the last section, or the metrics footer (§10). */
+const FINDINGS_END = /^(?:##\s+\S|(?:Suite|Repro|Artifacts):|<!--\s*shipyard-metrics\b)/;
+
 /**
  * Extract a QA verdict comment's `## Findings` section (contract v1 §5.5) and
  * hash it, so two consecutive rounds reporting byte-identical findings can be
- * detected as no progress (§9). Returns null when the section is absent.
+ * detected as no progress (§9). Returns null when the section is absent or
+ * empty.
  *
- * Normalisation is whitespace-only — CRLF folded, trailing spaces stripped,
- * leading/trailing blank lines dropped — so the hash is stable across
- * backends but still byte-sensitive to any change in the findings themselves.
+ * The section ends at the next `##` heading, at the §5.5 trailer
+ * (`Suite:`/`Repro:`/`Artifacts:`), or at the metrics footer — whichever comes
+ * first. Bounding on headings alone is not enough: §5.5 says empty sections
+ * are omitted, so a FAIL with no unverifiable criteria has no `## Unverifiable`
+ * heading and the section would otherwise swallow the trailer and the footer,
+ * both of which carry per-round values that differ every round.
+ *
+ * Normalisation then removes what necessarily varies between rounds even when
+ * the defect is identical, so that "byte-identical findings" means what a
+ * human would mean by it:
+ *
+ * - **fenced blocks are dropped.** QA inlines each failing criterion's
+ *   evidence — a redacted `app.log` tail — in a fence. Those bytes carry
+ *   timestamps and differ on every run, so hashing them would guarantee the
+ *   detector never fires. The finding's prose (symptom, repro, criterion,
+ *   evidence path) sits outside the fence and is what gets hashed.
+ * - `round-<n>` path segments collapse to `round-N`: every evidence path is
+ *   `<main-root>/.qa/<id>/round-<N>/…` (§13) and so differs by construction.
+ * - ISO-8601 timestamps collapse to a placeholder.
+ * - CRLF folded, trailing spaces stripped, leading/trailing blanks dropped.
+ *
+ * Everything else stays byte-sensitive.
  *
  * @param {string} body
  * @returns {string|null} sha256 hex digest
@@ -212,13 +238,31 @@ function findingsHash(body) {
   const start = lines.findIndex((l) => /^##\s+Findings\s*$/.test(l));
   if (start === -1) return null;
   const rest = lines.slice(start + 1);
-  const end = rest.findIndex((l) => /^##\s+\S/.test(l));
-  const section = (end === -1 ? rest : rest.slice(0, end))
+  const end = rest.findIndex((l) => FINDINGS_END.test(l));
+  const raw = end === -1 ? rest : rest.slice(0, end);
+
+  // Drop fenced blocks, including an unterminated one (treat it as running to
+  // the end of the section rather than silently hashing half of it).
+  const kept = [];
+  let fence = null;
+  for (const line of raw) {
+    const m = /^\s*(```+|~~~+)/.exec(line);
+    if (fence === null) {
+      if (m) { fence = m[1][0]; continue; }
+      kept.push(line);
+    } else if (m && m[1][0] === fence) {
+      fence = null;
+    }
+  }
+
+  const section = kept
     .map((l) => l.replace(/[ \t]+$/, ''))
     .join('\n')
     .replace(/^\n+/, '')
-    .replace(/\n+$/, '');
-  if (section === '') return null;
+    .replace(/\n+$/, '')
+    .replace(/\bround-\d+\b/g, 'round-N')
+    .replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/g, '<ts>');
+  if (section.trim() === '') return null;
   return createHash('sha256').update(section, 'utf8').digest('hex');
 }
 
@@ -344,15 +388,25 @@ function reconcile(events, opts = {}) {
   };
 
   // Untrusted and malformed events never take part in reconciliation, but
-  // both are still reported — a malformed header from an untrusted author
-  // is both malformed-header AND counted in state.untrusted.
+  // both are still reported.
+  //
+  // Trust gates `malformed-header` deliberately. An irreconcilable entry makes
+  // ship post an escalation and move the ticket to Needs Human (§9), so
+  // deriving one from a stranger's comment would let anyone who can comment
+  // force two board writes and wedge the ticket — a line as innocuous as
+  // "ship: nice work" matches the catch-all header. §3 is explicit that a
+  // comment from an untrusted author is *reported, never acted on*, so an
+  // untrusted malformed header lands in state.untrusted[] and stops there.
   for (const e of events) {
     if (!e.trusted) {
-      state.untrusted.push({ type: e.type, author: e.author, url: e.url, raw: e.raw });
+      state.untrusted.push({
+        type: e.type, author: e.author, url: e.url, raw: e.raw, malformed: e.malformed,
+      });
       state.trusted = false;
       if (e.type === 'qa-verdict' && !e.malformed) {
         bad('untrusted-verdict', `verdict-shaped comment from untrusted author ${e.author}: ${e.raw}`, e.url);
       }
+      continue;
     }
     if (e.malformed) {
       bad('malformed-header', `unrecognised pipeline header: ${e.raw}`, e.url);
@@ -433,7 +487,12 @@ function reconcile(events, opts = {}) {
     if (n <= 1) continue;
     const prev = state.rounds[String(n - 1)];
     if (!prev || !prev.dev) {
-      bad('round-gap', `round ${n} has a dev handoff but round ${n - 1} does not`);
+      // The message names what round n actually carries. A round key can be
+      // created by a lone metrics or review-packet comment, so asserting it
+      // "has a dev handoff" would be false for exactly the trails that need
+      // a human to read the report.
+      const what = state.rounds[String(n)].dev ? 'a dev handoff' : 'pipeline activity';
+      bad('round-gap', `round ${n} has ${what} but round ${n - 1} has no dev handoff`);
     }
   }
 
@@ -450,9 +509,12 @@ function reconcile(events, opts = {}) {
     }
   };
   for (const n of roundNumbers) {
-    if (n < 2) continue;
+    // Only rounds that actually ran can have failed to progress: both this
+    // round and its predecessor need a dev handoff, and a round above
+    // state.round exists only because some later comment mentioned it.
+    if (n < 2 || n > state.round) continue;
     const prev = state.rounds[String(n - 1)];
-    if (!prev) continue;
+    if (!prev || !prev.dev || !state.rounds[String(n)].dev) continue;
     const head = heads[String(n)];
     const prevHead = heads[String(n - 1)];
     if (head && prevHead && head === prevHead) {

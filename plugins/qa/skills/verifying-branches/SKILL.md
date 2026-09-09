@@ -51,6 +51,11 @@ Fetch the ticket via the backend reference when one resolved. Ticket or
 branch not found → fail fast with the exact error; no artifacts, no
 comment, no verdict.
 
+**`--env-check` skips this whole step's board half:** it needs no ticket
+and performs no board operation, so it never fetches a ticket, never runs
+the auth check, and never bootstraps a board config. Resolution reduces to
+branch + config; go straight to Step 2.
+
 `.claude/kanban.config.json` missing + standalone → bootstrap it exactly as
 kanban/planning do (two questions: backend github|jira, target owner/repo or
 project key), write and commit the file. If the user declines (repo has no
@@ -149,12 +154,25 @@ launch, and health — then continue to Step 5.
    stdout+stderr redirected to `<artifacts>/app.log` and its PID written
    to `<artifacts>/app.pid`. Poll the health URL every 2s until
    `healthTimeoutSeconds` elapses. A response counts as **green** only
-   when both hold: the expected HTTP status, AND the process actually
-   holding `{PORT}` resolves (e.g. via `lsof -ti:PORT`) to `app.pid` or
-   its process group. HTTP 200 from a different PID means a stray
-   listener won the port, not our app — treat health as never green
-   (cause: "port occupied by another process") and continue on the
-   tests-only path.
+   when both hold: the expected HTTP status, AND the response comes from
+   the app this run launched. Check the second by **process group**, not
+   by PID — for the common `run: "npm run dev"`, `app.pid` is npm's and
+   the listener is a forked child, so comparing PIDs directly would
+   reject every healthy run:
+
+   ```bash
+   LPID=$(lsof -ti:"$PORT" | head -1)
+   [ "$(ps -o pgid= -p "$LPID" | tr -d ' ')" = "$(ps -o pgid= -p "$(cat <artifacts>/app.pid)" | tr -d ' ')" ]
+   ```
+
+   Same process group → green. A different group means a stray listener
+   won the port, not our app: treat health as never green (cause: "port
+   occupied by another process") and continue on the tests-only path. If
+   the listener PID cannot be resolved at all (no `lsof`, permissions),
+   do **not** fail on that alone — fall back to asserting an
+   app-identifying signal in the response body or headers, and only when
+   that too is unavailable treat health as never green, naming which
+   check was impossible.
 4. **Any bring-up failure:** capture evidence as
    `tail -n 50 <artifacts>/app.log | node "${CLAUDE_PLUGIN_ROOT}/scripts/redact.js"`
    and continue on the tests-only path — never abort the whole run
@@ -274,7 +292,14 @@ comment that it cannot advance a ticket.
      plain words (evidence under `.qa/` exists only on the machine that
      ran QA, not in the repo) — and paths alone are never sufficient.
      So for every **FAILING** criterion, inline the evidence itself in
-     the comment body, not just its path:
+     the comment body, not just its path. **Put every inlined excerpt in
+     a fenced block**, and keep the finding's own prose — symptom, repro,
+     criterion, evidence path — outside the fence. That split is
+     load-bearing in both directions: dev's fix-list reads the prose, and
+     ship's no-progress detector (§9) hashes the findings section with
+     fenced blocks removed, so a log tail whose timestamps differ every
+     round cannot disguise two byte-identical defects as progress. The
+     evidence for each failing criterion:
      - the **key excerpt** in a fenced block — the failing assertion,
        error or log lines, always through
        `tail -n 50 <artifacts>/app.log | node "${CLAUDE_PLUGIN_ROOT}/scripts/redact.js"`;

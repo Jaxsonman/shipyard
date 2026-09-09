@@ -211,6 +211,9 @@ function parseEvents(issue, opts = {}) {
   const events = [];
 
   for (const c of comments) {
+    if (c === null || typeof c !== 'object' || Array.isArray(c)) {
+      throw new TypeError(`each comment entry must be an object, got ${JSON.stringify(c)}`);
+    }
     const body = typeof c.body === 'string' ? c.body : '';
     const first = body.split('\n')[0].replace(/\r$/, '').trimEnd();
     const match = HEADERS.find((h) => h.re.test(first));
@@ -485,7 +488,13 @@ function main(argv) {
     if (r.code === 0) viewer = r.stdout.trim() || null;
   }
 
-  const events = parseEvents(issue, { allow, viewer });
+  let events;
+  try {
+    events = parseEvents(issue, { allow, viewer });
+  } catch (err) {
+    die(`invalid input: ${err.message}`, 2);
+    return;
+  }
   const labels = Array.isArray(issue.labels) ? issue.labels.map((l) => l.name) : [];
   const state = reconcile(events, { cap, labels });
 

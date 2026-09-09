@@ -165,6 +165,26 @@ test('an untrusted dev handoff never advances the round', () => {
   assert.equal(st.phase, 'unstarted');
 });
 
+test('parse --stdin with a null comment entry is a usage error (exit 2), not a stack trace', () => {
+  const { execFileSync } = require('node:child_process');
+  let threw = false;
+  let stderr = '';
+  try {
+    execFileSync('node', [path.join(__dirname, 'board-trail.js'), 'parse', '--stdin', '--viewer', 'Jaxsonman'],
+      { input: JSON.stringify({ comments: [null], labels: [] }), stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch (e) {
+    threw = true;
+    stderr = String(e.stderr);
+    assert.equal(e.status, 2);
+  }
+  assert.ok(threw, 'expected the CLI to exit non-zero');
+  assert.ok(!/TypeError|at Object|node:internal/.test(stderr), stderr);
+});
+
+test('parseEvents throws a plain TypeError (not a raw crash) on a non-object comment entry', () => {
+  assert.throws(() => bt.parseEvents({ comments: [null], labels: [] }, { viewer: 'x' }), /comment/i);
+});
+
 test('parseEvents tolerates a missing comments key and a missing author', () => {
   assert.deepEqual(bt.parseEvents({ labels: [] }, { viewer: 'x' }), []);
   assert.deepEqual(bt.parseEvents(undefined, { viewer: 'x' }), []);

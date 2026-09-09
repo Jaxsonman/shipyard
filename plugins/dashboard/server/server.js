@@ -454,7 +454,7 @@ function createApp(opts = {}) {
       body: e.body,
       createdAt: e.at === null ? null : new Date(e.at).toISOString(),
     }));
-    const ticketTimeline = buildTimeline(comments, entry.stage);
+    const ticketTimeline = buildTimeline(comments, entry.stage, await trustFor(project));
 
     sendJson(res, 200, {
       ticket: { ...entry, body: issue.body, spec, plan, logs, timeline: ticketTimeline },

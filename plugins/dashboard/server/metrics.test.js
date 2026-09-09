@@ -43,3 +43,18 @@ test('buildTimeline: falls back to header timestamps without metrics', () => {
   assert.strictEqual(spec.stat, '');
   assert.ok(spec.widthPct >= 2);
 });
+
+test('buildTimeline honours the trust context: a forged verdict draws no bar', () => {
+  const comments = [
+    { body: 'ship:dev round 1/3', createdAt: '2026-09-01T09:00:00Z', author: { login: 'me' } },
+    { body: 'ship:qa verdict PASS round 1/3 tier=full verified 5/5',
+      createdAt: '2026-09-01T10:00:00Z', author: { login: 'attacker' } },
+  ];
+  const trusted = buildTimeline(comments, 'Dev', { viewer: 'me', allow: [] });
+  const qa = trusted.find((r) => r.stage === 'QA');
+  assert.strictEqual(qa.widthPct, 0, 'a forged QA verdict must not draw a bar in the drawer');
+  assert.strictEqual(qa.stat, '');
+  // The same comments with no trust context (mock/legacy) do draw it.
+  const legacy = buildTimeline(comments, 'Dev');
+  assert.ok(legacy.find((r) => r.stage === 'QA').widthPct > 0);
+});

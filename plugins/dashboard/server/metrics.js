@@ -50,11 +50,16 @@ function formatDuration(ms) {
  * ["Spec","Plan","Dev","QA","Review"] order.
  * @param {Array<{body: string, createdAt: string}>} comments
  * @param {string} currentStage display stage name (e.g. "Dev")
+ * @param {{viewer: string|null, allow: string[]}} [trust] contract v1 §3 trust
+ *   context. Required in real mode: without it the drawer would draw bars from
+ *   comments the timeline view correctly refuses to trust, so a forged verdict
+ *   would look like fact in the one place a human inspects a single ticket.
+ *   Undefined only in --mock, whose fixtures carry no authorship.
  * @returns {Array<{stage: string, label: string, startPct: number, widthPct: number, stat: string, state: 'past'|'current'|'future'}>}
  */
-function buildTimeline(comments, currentStage) {
+function buildTimeline(comments, currentStage, trustCtx) {
   const list = comments || [];
-  const t = trail.parseTrail(list);
+  const t = trail.parseTrail(list, trustCtx);
 
   // Only the drawer's five rows; segments for other stages (e.g. PR) are
   // dropped here since this Gantt has no row for them.

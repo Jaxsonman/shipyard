@@ -75,6 +75,10 @@ When the invoking account cannot be determined the server fails closed: every
 author outside `approvers` is untrusted. `--mock` mode has no real authorship
 and stays in the parser's legacy trust-everything path.
 
+This applies to **both** views and to the drawer's per-ticket Gantt — a
+forged verdict draws no bar anywhere, including the one screen a human
+opens to inspect a single ticket.
+
 ## Shared contract code
 
 `scripts/` and `references/contract.md` are **vendored copies** of `shared/scripts/`

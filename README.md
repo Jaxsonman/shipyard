@@ -8,7 +8,9 @@ adopt one stage or the whole line.
 footer, and config schemas, defined once in [`docs/contract.md`](docs/contract.md)
 (contract v1); `docs/contract.md` and `plugins/*/references/contract.md` are
 generated from `shared/references/contract.md` by `scripts/sync-shared.sh` and
-must not be hand-edited.
+must not be hand-edited. Contract v1 additionally accepts a non-round escalation header,
+`ship:escalation <cause> standalone`, for a stage that runs outside a ship
+round (the `pr` stage); the contract version is unchanged.
 
 ## Adding Shipyard to Claude Code
 

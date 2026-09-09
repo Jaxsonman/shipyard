@@ -161,3 +161,44 @@ test('parseEvents tolerates a missing comments key and a missing author', () => 
   const ev = bt.parseEvents({ comments: [{ createdAt: 'x', body: 'ship:dev round 1/3' }], labels: [] }, { viewer: 'x' });
   assert.equal(ev[0].trusted, false);
 });
+
+test('a non-round escalation parses as standalone (contract v1 §5.8)', () => {
+  const ev = mk('ship:escalation reconcile standalone\n\nMerge conflict against main.');
+  assert.equal(ev.length, 1);
+  assert.equal(ev[0].type, 'escalation');
+  assert.equal(ev[0].cause, 'reconcile');
+  assert.equal(ev[0].standalone, true);
+  assert.equal(ev[0].malformed, false);
+});
+
+test('a standalone escalation escalates without advancing a round', () => {
+  const ev = bt.parseEvents({
+    comments: [
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T09:00:00Z', url: 'u0',
+        body: 'ship:dev round 1/3\n\n## What changed and why\nx' },
+      { author: { login: 'Jaxsonman' }, createdAt: '2026-09-08T10:00:00Z', url: 'u1',
+        body: 'ship:escalation reconcile standalone\n\nMerge conflict against main.' },
+    ],
+    labels: [],
+  }, { viewer: 'Jaxsonman' });
+  const st = bt.reconcile(ev, { cap: 3 });
+  assert.equal(st.round, 1);
+  assert.equal(st.phase, 'escalated');
+  assert.equal(st.escalation.standalone, true);
+  assert.ok(st.standalone.some((e) => e.type === 'escalation'));
+});
+
+test('a standalone escalation with an unknown cause is malformed', () => {
+  const ev = mk('ship:escalation vibes standalone');
+  assert.equal(ev.length, 1);
+  assert.equal(ev[0].malformed, true);
+});
+
+test('the round escalation form still parses (regression)', () => {
+  const ev = mk('ship:escalation cap round 3/3');
+  assert.equal(ev[0].type, 'escalation');
+  assert.equal(ev[0].cause, 'cap');
+  assert.equal(ev[0].round, 3);
+  assert.equal(ev[0].cap, 3);
+  assert.notEqual(ev[0].standalone, true);
+});

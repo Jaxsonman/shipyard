@@ -235,3 +235,13 @@ PR title: `<slug>: <first line of Problem>`. Screenshots stay local (git-exclude
 - Multiple intents per run or splitting one intent into several PRs.
 - Automatic cleanup of prior failed runs.
 - Token accounting per round (the harness does not reliably report subagent usage; nothing is estimated).
+
+## Refinements from planning (2026-09-15)
+
+The implementation plan (`docs/superpowers/plans/2026-09-15-forge-plugin.md`) refines the design in these ways after an adversarial review. They supersede the text above where they differ.
+
+1. **Path-root split.** `state.json` and `report.md` live at the main checkout under `.forge/<slug>/run/`; every agent-written artifact (`round-N/*`, `review-R/*`) lives at the same relative path inside the run's worktree, so agents never write outside their worktree. On a ready terminal the loop copies the worktree's `run/` into the main-root `run/` before removing the worktree. `state.worktree` is stored absolute.
+2. **Guards run before the cap check.** On every QA `FAIL`, both oscillation guards evaluate first (recording `escalated` and `noProgress[]`), then the cap branch. Guard B is an exact comparison of the merged `findings[]` including evidence paths, with no exclusions. Finding ids are stable across rounds for the same `(criterion, repro)` so guard A can fire.
+3. **qa-orchestrator has three modes** carried in the prompt: `full` (default), `bring-up`, `merge-only`. In `full` mode, if nested dispatch is unavailable it ends with the exact message `nested-dispatch-unavailable`; the loop then runs `bring-up`, dispatches the verifiers itself, and runs `merge-only`. The handshake shapes are in `references/contracts.md`.
+4. **Terminal ordering.** `report.md` is written first with `PR: (pending)`, then `gh pr create --body-file` runs, then the local copy's PR line is rewritten with the URL. The whole `.forge/` directory is git-excluded and `intent.md`/`context/` are force-added on the branch.
+5. **Repo conventions.** Agent frontmatter is `name` and `description` only; effort and tool scope are stated in each prompt body. Plugin-path changes land in two commits to satisfy the README pre-commit hook. `scripts/eval.sh --live` skips forge, which has no live case.

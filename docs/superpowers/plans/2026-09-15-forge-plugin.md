@@ -506,6 +506,17 @@ per the rule in `agents/qa-orchestrator.md`.
 `"blocking"` or `"major"`; a report with only `"minor"` findings, or
 none, is `"PASS"`.
 
+One kind of `findings[]` entry is not merged from any verifier but
+**synthesized** by `qa-orchestrator`: for every verifier whose
+`observations[]` carries an entry starting `budget-exceeded:` it writes
+one `"major"` finding with `criterion` `"verification budget exceeded"`,
+a `repro` naming what that verifier never reached, and one
+`kind: "command"` evidence entry running `tail -n 20` against that
+verifier's `round-N/qa/verifier-K/transcript.md`. Its presence forces
+this round's `verdict` to `"FAIL"` whatever the other severities are —
+a verifier that ran out of budget left work unverified, which is never a
+pass.
+
 ## `.forge/<slug>/run/review-R/review.json` (worktree)
 
 Written by `peer-reviewer`.
@@ -637,13 +648,53 @@ an existing draft, or report that one is already approved. It never
 starts a forge run itself — that is `/forge`'s job, and `/forge` refuses
 to start on anything but `status: approved`.
 
-## Step 0: Ensure the exclude rule exists
+## Path convention — the standard preamble
 
-Before creating or touching anything under `.forge/`, ensure `.forge/`
-is listed in the shared exclude file (idempotent — check before
-appending, since this runs on every `/intent` invocation):
+Every `.forge/<slug>/...` path in this skill is relative to **main-root**
+— this checkout's root, resolved from the shared git common dir, never
+assumed to be the cwd. `/intent` and `/forge` resolve the same root by
+the same mechanism, so an intent authored from a worktree, a subdirectory,
+or the main checkout always lands in one place and `/forge <slug>` always
+finds it. Every fenced block below that touches a `.forge/` path — and
+every step that writes one through an editing tool — runs after this
+preamble, which is the same one `skills/running-forge/SKILL.md` uses:
 
 ```bash
+MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+cd "$MAIN_ROOT"
+```
+
+Shell state does not survive from one fenced block to the next, so each
+block below repeats it at its own top rather than relying on an earlier
+one having run.
+
+## Step 0: Validate the slug, then ensure the exclude rule exists
+
+**Before anything else**, validate the slug the command passed in (Step 1
+covers the case where it is missing entirely):
+
+```bash
+if printf '%s\n' "<slug>" | grep -Eq '^[a-z0-9][a-z0-9-]{0,63}$'; then
+  echo "slug-ok"
+else
+  echo "slug-invalid"
+  exit 1
+fi
+```
+
+Anything other than a printed `slug-ok` — `slug-invalid`, no output, or
+a non-zero exit for any reason — → stop: "slug must be lowercase
+letters, digits and dashes, starting with a letter or digit". The `else`
+branch is what makes this fail closed: an unvalidated slug is never
+interpolated into a path.
+
+Then, before creating or touching anything under `.forge/`, ensure
+`.forge/` is listed in the shared exclude file (idempotent — check
+before appending, since this runs on every `/intent` invocation):
+
+```bash
+MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+cd "$MAIN_ROOT"
 EXCLUDE="$(git rev-parse --path-format=absolute --git-common-dir)/info/exclude"
 grep -qxF ".forge/" "$EXCLUDE" 2>/dev/null || echo ".forge/" >> "$EXCLUDE"
 ```
@@ -656,16 +707,39 @@ deliberate commit may show up as a dirty working tree.
 
 The slug comes from the command's argument. Missing → ask: "What's a
 short kebab-case name for this piece of work?" before doing anything
-else — every forge artifact path is keyed by it.
+else — every forge artifact path is keyed by it. An answer given here
+goes through Step 0's validation fence before it is used, exactly as an
+argument would.
 
 ## Step 2: Branch on whether `.forge/<slug>/intent.md` exists
 
+Probe at main-root, never at the cwd:
+
+```bash
+MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+cd "$MAIN_ROOT"
+test -f .forge/<slug>/intent.md && echo "intent=present" || echo "intent=absent"
+echo "MAIN_ROOT=$MAIN_ROOT"
+```
+
+Branch on the printed lines. The printed `MAIN_ROOT` is the absolute
+root every path below is relative to — the same root `/forge <slug>`
+will resolve when it looks for this intent.
+
 **Does not exist:**
 
-1. `mkdir -p .forge/<slug>/context`.
+1. Create the directory at main-root:
+
+   ```bash
+   MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+   cd "$MAIN_ROOT"
+   mkdir -p .forge/<slug>/context
+   ```
 2. Read `.claude/forge.config.json`'s `baseBranch` if the file exists,
-   else use `"main"`.
-3. Write `.forge/<slug>/intent.md` from `references/intent-template.md`,
+   else use `"main"` — that path, too, is relative to the printed
+   `MAIN_ROOT`, not the cwd.
+3. Write `<MAIN_ROOT>/.forge/<slug>/intent.md` from
+   `references/intent-template.md`,
    substituting `<slug>`, `<baseBranch>`, and `<YYYY-MM-DD>` (today,
    ISO date) into the frontmatter and title.
 4. Report the file's path and, one line each, what every section wants
@@ -675,7 +749,9 @@ else — every forge artifact path is keyed by it.
    this file is intentionally uncommitted until `/forge`'s preflight
    commits it onto the feature branch.
 
-**Exists, `status: draft`:**
+**Exists, `status: draft`:** every read and write below is against
+`<MAIN_ROOT>/.forge/<slug>/intent.md`, the file the probe fence above
+found — never a same-named path resolved against some other cwd.
 
 1. For each of the 7 sections, **in template order**, check whether its
    body (trimmed) is byte-identical to that section's placeholder text
@@ -710,6 +786,9 @@ interview." Make no changes.
 - Never set `status: approved` without the explicit yes above.
 - Never commit `.forge/<slug>/intent.md` or `context/` — that is
   `/forge`'s preflight, on the feature branch, not this skill's job.
+- Never resolve a `.forge/` path against the cwd. Every step that
+  touches one runs after the standard preamble above, so `/intent` and
+  `/forge` always agree on which checkout the intent belongs to.
 ```
 
 - [ ] **Step 3: Write the `/intent` command**
@@ -722,12 +801,22 @@ description: Scaffold or interview a forge intent — the human step before /for
 argument-hint: "<slug>"
 ---
 
-Read and follow `${CLAUDE_PLUGIN_ROOT}/skills/authoring-intent/SKILL.md`.
-
 Slug from the user (may be empty): $ARGUMENTS
 
-If empty, ask for a short kebab-case slug before doing anything else —
-every forge artifact path is keyed by it.
+Before anything else — before reading the skill, before touching any
+file — validate it. It must match `^[a-z0-9][a-z0-9-]{0,63}$`:
+lowercase letters, digits and dashes only, starting with a letter or a
+digit, 64 characters at most. Anything else (uppercase, a slash, a dot,
+a space, a leading dash, an empty-but-nonblank value) → stop with
+exactly: "slug must be lowercase letters, digits and dashes, starting
+with a letter or digit". Do not normalise it, do not guess a correction
+— every forge artifact path is keyed by this string.
+
+If empty, ask for a short kebab-case slug before doing anything else,
+then validate the answer the same way.
+
+Then read and follow
+`${CLAUDE_PLUGIN_ROOT}/skills/authoring-intent/SKILL.md`.
 ```
 
 - [ ] **Step 4: Validate**
@@ -840,9 +929,15 @@ these — the loop is unattended after intent approval, so bring-up
 commands are derived fresh each round from the intent's **How to run**
 section (setup, seed, launch commands, env var names, ports) plus the
 first matching recipe below for anything "How to run" does not specify.
-Apply the first matching recipe in file order — docker-compose
-deliberately outranks node so a composed app is not mis-detected by its
-`package.json`. If neither "How to run" nor the matched recipe
+Apply the first matching recipe in file order. That order is load-
+bearing, not alphabetical, and two precedences are deliberate:
+**docker-compose outranks every language recipe**, so a composed app is
+not mis-detected by its `package.json`; and **CLI-only outranks
+node / npm**, so a package whose only entry point is a `bin` (no server,
+no port, nothing to launch) is brought up as a CLI rather than having
+`qa-orchestrator` wait 60 seconds for a health URL that will never turn
+green. A `package.json` reaches the node / npm recipe only after CLI-only
+has declined it. If neither "How to run" nor the matched recipe
 establishes a port-injection mechanism (see each recipe), bring-up is
 treated as failed: `qa-orchestrator` reports `FAIL` with one blocking
 finding carrying the bring-up command's output. Forge never guesses a
@@ -869,9 +964,30 @@ port, this is a bring-up failure — a hard-coded port cannot receive the
 port this round won, and forge has no human to ask to edit the compose
 file.
 
+## CLI-only
+
+**Detect:** a `bin` entry in `package.json` and no server entry point
+(no `scripts.dev`/`scripts.start` that opens a listener, no server
+dependency, no port reference), or a main package in any language that
+never opens a listener.
+
+**Bring-up:**
+- `setup`: per the matching language recipe below (`npm ci`, venv,
+  `go mod download`)
+- `seed`: omit unless present
+- `run`: omit — there is nothing to launch
+- `test`: per the matching language recipe below
+- `health`: omit
+- `mode`: `cli`
+
+**Port injection:** not applicable. In `cli` mode `qa-orchestrator` skips
+launch and health entirely; bring-up is setup + seed, and verifiers
+invoke the CLI directly.
+
 ## node / npm
 
-**Detect:** `package.json` at repo root (and no compose file).
+**Detect:** `package.json` at repo root (and no compose file, and the
+CLI-only recipe above did not already match it).
 
 **Bring-up:**
 - `setup`: `npm ci` — or `pnpm install --frozen-lockfile` if
@@ -934,23 +1050,6 @@ and no test framework.
 - `mode`: `browser`
 
 **Port injection:** the `-l {PORT}` flag shown above.
-
-## CLI-only
-
-**Detect:** a `bin` entry in `package.json`, or a main package that never
-opens a listener (no server dependency, no port reference).
-
-**Bring-up:**
-- `setup`: per the language recipe above (`npm ci`, venv, `go mod download`)
-- `seed`: omit unless present
-- `run`: omit — there is nothing to launch
-- `test`: per the language recipe
-- `health`: omit
-- `mode`: `cli`
-
-**Port injection:** not applicable. In `cli` mode `qa-orchestrator` skips
-launch and health entirely; bring-up is setup + seed, and verifiers
-invoke the CLI directly.
 ```
 
 - [ ] **Step 3: Validate**
@@ -1147,6 +1246,14 @@ exact shape documented in
 commit sha this round), `summary`, `filesChanged[]`, `testsAdded[]`,
 `howToRun`, `selfCheck`, `deferred[]`, `fixListAddressed[]` (round 2+:
 the ids from the fix-list you addressed; round 1: `[]`).
+
+`howToRun` passes through the same redaction rule as every log excerpt
+in this loop, because it lands verbatim in `report.md`'s "How it works"
+section and therefore in the PR body: if a command in it carries a
+secret value — an env var assignment, a token, an `Authorization`
+header — keep the variable or header **name** and replace the value with
+`<redacted>`. A reader needs to know which variable to set, never what
+this environment's value for it was.
 
 Confirm `git status` is clean in the worktree before writing the handoff
 — anything uncommitted is a Step 3 verification you missed; resolve it
@@ -1398,10 +1505,12 @@ recipe's defaults.
    variable *name* with no value reachable in this environment is a
    bring-up failure — skip straight to the failure path below, never
    guess a value. Bound every setup, install, and seed command to 600
-   seconds: start it in the background, poll for exit every 5 seconds,
-   and at the deadline kill its process group and treat the expiry as
-   a bring-up failure whose evidence excerpt reads `timed out after
-   600s` followed by the last lines of its output.
+   seconds: start it in the background and in its own process group
+   (`set -m` or `setsid` where available) so the deadline kill reaches
+   every child, poll for exit every 5 seconds, and at the deadline kill
+   its process group and treat the expiry as a bring-up failure whose
+   evidence excerpt reads `timed out after 600s` followed by the last
+   lines of its output.
 2. **Port:** starting at port 4100, probe upward for a free port; bind a
    listener on the first free one and hold it while setup/seed finish,
    then release it and launch the run command in the same step so no
@@ -1537,6 +1646,20 @@ handles it. Merge:
    new this round: assign it `qa-<round>-<n>`, `<n>` starting at 1 and
    counting only this round's genuinely new findings, in whatever order
    you merged them.
+6. **A budget-exceeded verifier fails the round.** If any verifier's
+   `observations[]` contains an entry starting `budget-exceeded:`, the
+   round `verdict` is `"FAIL"` regardless of every severity present —
+   rule 3 does not get to call such a round a `"PASS"` — and each such
+   verifier contributes one synthesized finding: `severity` `"major"`,
+   `id` assigned by rule 5's scheme exactly like any other new finding,
+   `criterion` `"verification budget exceeded"`, `repro` the single
+   step `"verifier K stopped at its wall-clock budget before reaching:
+   <the observation's remainder — everything after `budget-exceeded:`>"`,
+   and `evidence` exactly one `kind: "command"` entry whose `command` is
+   `tail -n 20 round-N/qa/verifier-K/transcript.md` (that verifier's own
+   transcript path), `exitCode` `0`, and `excerpt` those lines, redacted
+   the same way every other excerpt is. An unfinished verifier is
+   unverified work, never a pass.
 
 Write `round-N/qa/report.json` in the exact shape in
 `${CLAUDE_PLUGIN_ROOT}/references/contracts.md`, `verifierFiles[]`
@@ -1785,7 +1908,28 @@ cd "$MAIN_ROOT"
 
 ## Step 0: Preflight
 
-`<slug>` comes from the command invocation. Check, in this exact order,
+`<slug>` comes from the command invocation. **Before any check below** —
+before reading, fetching, appending, or creating anything at all —
+validate it:
+
+```bash
+if printf '%s\n' "<slug>" | grep -Eq '^[a-z0-9][a-z0-9-]{0,63}$'; then
+  echo "slug-ok"
+else
+  echo "slug-invalid"
+  exit 1
+fi
+```
+
+Anything other than a printed `slug-ok` — `slug-invalid`, no output at
+all, or a non-zero exit for any reason — → stop: "slug must be lowercase
+letters, digits and dashes, starting with a letter or digit". The
+`else` branch is what makes this fail closed: every way the test can go
+wrong lands there rather than falling through to the checks below, which
+would otherwise interpolate an unvalidated `<slug>` into paths and
+branch names.
+
+Then check, in this exact order,
 and stop with a plain message on the first failure. Preflight writes
 nothing under `.forge/` and creates no branch or worktree before every
 check passes; it may append the exclude rule and fetch the base branch,
@@ -1939,8 +2083,9 @@ MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
 REPO_DIR="$(basename "$MAIN_ROOT")"
 WORKTREE="$(dirname "$MAIN_ROOT")/${REPO_DIR}-forge/<slug>"
 cd "$MAIN_ROOT"
-git branch forge/<slug> <baseBranch>
-git worktree add "$WORKTREE" forge/<slug>
+git branch "forge/<slug>" "<baseBranch>" || exit 1
+git worktree add "$WORKTREE" "forge/<slug>" || exit 1
+git -C "$WORKTREE" rev-parse --git-dir >/dev/null 2>&1 || exit 1
 mkdir -p "$WORKTREE/.forge/<slug>"
 cp .forge/<slug>/intent.md "$WORKTREE/.forge/<slug>/intent.md"
 cp -r .forge/<slug>/context "$WORKTREE/.forge/<slug>/context"
@@ -1958,6 +2103,19 @@ the top of this very block, so it should never be empty, but if it ever
 were, a bare `cd ""` silently no-ops and stays in the main checkout —
 these two lines turn that into a hard failure instead of a commit
 landing on the user's actual branch.)
+
+(The `|| exit 1` on `git branch` and `git worktree add`, plus the
+`rev-parse --git-dir` post-condition before anything else in the block,
+are what make creation fail closed: the branch must have been created,
+the worktree must have been added, and the added directory must actually
+be a working git worktree before a single file is copied into it.)
+
+**The orchestrator writes `state.json` only if that fence exited 0.** On
+a non-zero exit it stops with the fence's output verbatim and creates
+nothing further — no state file, no run directory, no dispatch — so a
+half-made branch or worktree never gets a run recorded against it. The
+user's next `/forge <slug>` then lands on Step 0 check 6's
+`state=absent` collision rule, which names exactly what to remove.
 
 Still from the main checkout root, write the initial state file, with
 `worktree` set to the freshly-recomputed `$WORKTREE`, and
@@ -1999,6 +2157,23 @@ expansion at all, it is the literal integer from check 4's printed
 output, substituted in by the orchestrator before this block runs. Every
 other heredoc in this skill that writes literal `<slug>`/`<baseBranch>`
 placeholders stays quoted.)
+
+Immediately after that heredoc — and after every later write of
+`state.json` that goes through a heredoc rather than an edit — run the
+sanity fence:
+
+```bash
+MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+cd "$MAIN_ROOT"
+grep -q '<' .forge/<slug>/run/state.json && exit 1 || true
+```
+
+A leftover `<placeholder>` means a substitution was missed; stop. No
+field this skill ever writes into `state.json` legitimately contains a
+`<` character, so a single match is proof that a literal like `<ahead>`
+or `<slug>` reached disk unsubstituted — a run started on that file
+would branch on nonsense. Do not repair it in place: stop, report the
+grep's output, and remove `.forge/<slug>/run/` before starting over.
 
 Continue to Step 1 with `devRound` about to become `1`.
 
@@ -2369,8 +2544,12 @@ passed to `gh pr create --body-file`), in exactly this section order:
 6. **PR link, branch, worktree state.** The PR URL, `forge/<slug>`, and
    — draft only — the worktree removal command. Written as the literal
    line `PR: (pending)` the first time this section is produced (below),
-   corrected afterward once `gh pr create` returns a URL, or to
-   "PR creation failed: <error>" if it never does.
+   corrected afterward once `gh pr create` (or Terminal's `gh pr view`
+   fallback) returns a URL, or to "PR creation failed: <error>" if
+   neither ever does. The one case where it is written right rather than
+   corrected is the nothing-to-push outcome, where it reads
+   `PR: none — no commits to push (cause: <cause>)` and no PR call runs
+   at all.
 
 This section is written **twice** per Terminal call, never once: first
 before any push or PR call (its section 6 cannot know the PR URL yet),
@@ -2394,6 +2573,42 @@ once here: `<pr_url_or_null>` means substitute the URL that fence's
 trailing `echo "$PR_URL"` printed, quoted as a JSON string; if that line
 was empty, substitute the bare `null` instead.
 
+**Nothing to push — checked once, before either path below.** A run can
+reach Terminal with an empty branch: a stage error on round 1, before
+the developer's first commit, is the ordinary way it happens. Run this
+fence first, whatever `state.terminal.kind` says:
+
+```bash
+MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+REPO_DIR="$(basename "$MAIN_ROOT")"
+WORKTREE="$(dirname "$MAIN_ROOT")/${REPO_DIR}-forge/<slug>"
+cd "$MAIN_ROOT"
+git -C "$WORKTREE" rev-list --count "<baseBranch>..forge/<slug>"
+```
+
+A printed `0` → **skip the push and `gh pr create` entirely** on
+whichever path below would have run them (the Ready path's step 3, the
+Draft path's step 2, and the label calls that ride with it). Instead:
+write `report.md` once per "Writing report.md" above — this is the one
+Terminal case where it is written once rather than twice, since no PR
+URL will ever arrive to correct — with its section 6 as the literal line
+
+```
+PR: none — no commits to push (cause: <cause>)
+```
+
+where `<cause>` is `state.terminal.cause`, or the literal word `none` on
+a ready outcome where that field is `null`. Then record
+`state.terminal.pr = null`, `state.phase = "terminal"`, save, and **keep
+the worktree** — on the ready path this means step 2's copy-out and step
+6's `git worktree remove` do not run either, because nothing was opened
+to remove it in favour of. Say it plainly in the in-chat report: the run
+produced no commits, so no branch was pushed and no PR was opened, and
+name the cause. A non-zero count → continue with the path below,
+unchanged. The fence itself failing (non-zero exit — a missing worktree,
+an unreadable base ref) is treated exactly like a printed `0`: fail
+closed rather than push a branch whose contents could not be counted.
+
 **Ready** (`state.terminal.kind == "ready"`, set by Step 5's `APPROVE`
 branch), in this exact order:
 
@@ -2414,7 +2629,8 @@ branch), in this exact order:
    (`state.json`/`report.md` already live at main-root and are never
    present under the worktree's copy, so this merges round-*/review-*
    directories in without touching either.)
-3. Push and open the PR — `$REPO` and `$TITLE` computed here, in this
+3. Push and open the PR (skipped entirely when the nothing-to-push
+   check above printed `0`) — `$REPO` and `$TITLE` computed here, in this
    same fence, not carried in from anywhere else:
    ```bash
    MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
@@ -2423,9 +2639,22 @@ branch), in this exact order:
    PROBLEM_LINE="$(sed -n '/^## Problem$/,/^## /{/^## /d;/./p;}' .forge/<slug>/intent.md | head -1)"
    TITLE="<slug>: $PROBLEM_LINE"
    git -C <worktree> push -u origin forge/<slug>
-   PR_URL="$(gh pr create --repo "$REPO" --base <baseBranch> --head forge/<slug> --title "$TITLE" --body-file .forge/<slug>/run/report.md)"
+   PR_URL="$(gh pr create --repo "$REPO" --base <baseBranch> --head forge/<slug> --title "$TITLE" --body-file .forge/<slug>/run/report.md)" || PR_URL=""
+   if [ -z "$PR_URL" ]; then
+     PR_URL="$(gh pr view "forge/<slug>" --repo "$REPO" --json url -q .url 2>/dev/null)" || PR_URL=""
+   fi
    echo "$PR_URL"
    ```
+   (`gh pr create` failing does not by itself mean no PR exists — the
+   commonest cause is that this exact branch already has one open, from a
+   resumed run whose earlier Terminal died after creating it. So a
+   failed create falls back to `gh pr view "forge/<slug>"`, and a
+   non-empty URL from either call is the PR: it is echoed as the same
+   trailing `PR_URL` line the steps below read. **Only when both come
+   back empty** is this a PR-creation failure — see "Push or PR creation
+   itself fails" below. This is what makes Terminal idempotent across a
+   re-entry: running it twice opens one PR, not two, and never reports a
+   failure for a PR that is sitting open.)
 4. Rewrite report.md's PR line with the real URL — read from step 3's
    printed output and substituted below as the literal `<pr_url>`, the
    same way check 4's `<ahead>` works, never as a `$PR_URL` shell
@@ -2452,7 +2681,8 @@ names which of `no-progress`, `qa-cap`, `review-cap`, or
 `stage-error:<agent>`), same write-then-correct order:
 
 1. Write `.forge/<slug>/run/report.md`, section 6 as `PR: (pending)`.
-2. `$REPO` and `$TITLE` computed here, in this same fence:
+2. `$REPO` and `$TITLE` computed here, in this same fence (the whole
+   fence is skipped when the nothing-to-push check above printed `0`):
    ```bash
    MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
    cd "$MAIN_ROOT"
@@ -2461,13 +2691,22 @@ names which of `no-progress`, `qa-cap`, `review-cap`, or
    TITLE="<slug>: $PROBLEM_LINE"
    gh label create "forge:not-passed" --repo "$REPO" --color "B60205" --description "Forge run finished without a full pass — see the run report" --force
    git -C <worktree> push -u origin forge/<slug>
-   PR_URL="$(gh pr create --repo "$REPO" --base <baseBranch> --head forge/<slug> --draft --title "$TITLE" --body-file .forge/<slug>/run/report.md)"
-   gh pr edit "$PR_URL" --repo "$REPO" --add-label "forge:not-passed"
+   PR_URL="$(gh pr create --repo "$REPO" --base <baseBranch> --head forge/<slug> --draft --title "$TITLE" --body-file .forge/<slug>/run/report.md)" || PR_URL=""
+   if [ -z "$PR_URL" ]; then
+     PR_URL="$(gh pr view "forge/<slug>" --repo "$REPO" --json url -q .url 2>/dev/null)" || PR_URL=""
+   fi
+   [ -n "$PR_URL" ] && gh pr edit "$PR_URL" --repo "$REPO" --add-label "forge:not-passed"
    echo "$PR_URL"
    ```
    The label-create and label-add steps are best-effort — a failure in
    either is reported in `report.md`'s outcome line but never blocks the
    PR itself (skip straight to `gh pr create` if label creation failed).
+   The `gh pr view` fallback is the same one the ready path's step 3
+   uses and for the same reason: a failed `gh pr create` most often
+   means this branch already has an open PR from an earlier, half-
+   finished Terminal, and re-entering must find that PR rather than
+   report a failure or open a second one. Only when both calls come back
+   empty is this a PR-creation failure.
 3. Rewrite report.md's PR line with the literal `<pr_url>` read from step
    2's printed output, the same way the ready path's step 4 does.
 4. Record `state.terminal = {"kind": "draft", "cause": "<cause>", "pr":
@@ -2475,7 +2714,9 @@ names which of `no-progress`, `qa-cap`, `review-cap`, or
    step runs on this path, since nothing is removed — and print the
    removal command (`git worktree remove <worktree>`) in the report.
 
-**Push or PR creation itself fails** (network, auth, permissions): print
+**Push or PR creation itself fails** (network, auth, permissions — and,
+for PR creation, only once both `gh pr create` and the `gh pr view`
+fallback have come back empty): print
 the error verbatim in the report, correct report.md's PR line to
 "PR creation failed: <error>" instead of a URL, set
 `state.terminal.pr = null`, still set `phase = "terminal"` and the
@@ -2543,12 +2784,23 @@ description: Run the autonomous forge loop for an approved intent — developer,
 argument-hint: "<slug>"
 ---
 
-Read and follow `${CLAUDE_PLUGIN_ROOT}/skills/running-forge/SKILL.md`.
-
 Slug from the user (may be empty): $ARGUMENTS
 
+Before anything else — before reading the skill, before touching any
+file, before creating a branch or a worktree — validate it. It must
+match `^[a-z0-9][a-z0-9-]{0,63}$`: lowercase letters, digits and dashes
+only, starting with a letter or a digit, 64 characters at most. Anything
+else (uppercase, a slash, a dot, a space, a leading dash, an
+empty-but-nonblank value) → stop with exactly: "slug must be lowercase
+letters, digits and dashes, starting with a letter or digit". Do not
+normalise it, do not guess a correction — this string becomes a branch
+name, a worktree directory, and every artifact path in the run.
+
 If empty, list the slugs under `.forge/*/intent.md` with their `status`
-and stop — do not guess which one to run. Otherwise begin the skill's
+and stop — do not guess which one to run.
+
+Otherwise read and follow
+`${CLAUDE_PLUGIN_ROOT}/skills/running-forge/SKILL.md` and begin its
 preflight for that slug.
 ```
 
@@ -2688,7 +2940,14 @@ exit 1
 EOF
 chmod +x .bin/gh
 git add -A && git commit -q -m "eval fixture: gh shim"
-export PATH="$PWD/.bin:$PATH"
+BIN_DIR="$PWD/.bin"
+for RC in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  touch "$RC"
+  if ! grep -qF "$BIN_DIR" "$RC" 2>/dev/null; then
+    echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$RC"
+  fi
+done
+export PATH="$BIN_DIR:$PATH"
 ```
 
 Create `plugins/forge/evals/intent-gate-draft-refuses/graders/refuses-citing-draft-status.md`:
@@ -2734,8 +2993,8 @@ min: 0
 max: 0
 ---
 
-`gh auth status` is Step 0 check 4 — later than the draft-status check
-(check 1). A run that stops at check 1 never reaches check 4. This
+`gh auth status` is Step 0 check 5 — later than the draft-status check
+(check 1). A run that stops at check 1 never reaches check 5. This
 proves the checks short-circuit in the documented order rather than
 running all of them and reporting the first failure after the fact.
 ```
@@ -3093,7 +3352,14 @@ exit 1
 EOF
 chmod +x .bin/gh
 git add -A && git commit -q -m "eval fixture: gh shim"
-export PATH="$PWD/.bin:$PATH"
+BIN_DIR="$PWD/.bin"
+for RC in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  touch "$RC"
+  if ! grep -qF "$BIN_DIR" "$RC" 2>/dev/null; then
+    echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$RC"
+  fi
+done
+export PATH="$BIN_DIR:$PATH"
 ```
 
 Create `plugins/forge/evals/loop-pass-approve/graders/terminal-ready-pr-opened.md`:
@@ -3396,7 +3662,14 @@ exit 1
 EOF
 chmod +x .bin/gh
 git add -A && git commit -q -m "eval fixture: gh shim"
-export PATH="$PWD/.bin:$PATH"
+BIN_DIR="$PWD/.bin"
+for RC in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  touch "$RC"
+  if ! grep -qF "$BIN_DIR" "$RC" 2>/dev/null; then
+    echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$RC"
+  fi
+done
+export PATH="$BIN_DIR:$PATH"
 ```
 
 Create `plugins/forge/evals/loop-fail-fix-pass/graders/reports-fail-then-pass.md`:
@@ -3692,7 +3965,14 @@ exit 1
 EOF
 chmod +x .bin/gh
 git add -A && git commit -q -m "eval fixture: gh shim"
-export PATH="$PWD/.bin:$PATH"
+BIN_DIR="$PWD/.bin"
+for RC in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  touch "$RC"
+  if ! grep -qF "$BIN_DIR" "$RC" 2>/dev/null; then
+    echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$RC"
+  fi
+done
+export PATH="$BIN_DIR:$PATH"
 ```
 
 Create `plugins/forge/evals/loop-guard-a-escalation/graders/escalation-and-cap-reported.md`:
@@ -3986,7 +4266,14 @@ exit 1
 EOF
 chmod +x .bin/gh
 git add -A && git commit -q -m "eval fixture: gh shim"
-export PATH="$PWD/.bin:$PATH"
+BIN_DIR="$PWD/.bin"
+for RC in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  touch "$RC"
+  if ! grep -qF "$BIN_DIR" "$RC" 2>/dev/null; then
+    echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$RC"
+  fi
+done
+export PATH="$BIN_DIR:$PATH"
 ```
 
 Create `plugins/forge/evals/loop-guard-b-early-stop/graders/reports-no-progress-early-stop.md`:
@@ -4010,20 +4297,39 @@ Create `plugins/forge/evals/loop-guard-b-early-stop/graders/state-cause-no-progr
 ```markdown
 ---
 type: regex
-pattern: "\"escalated\": true[\\s\\S]*\"cause\": \"no-progress\""
+pattern: "\"cause\": \"no-progress\""
 flags: ""
 match: contains
 target: {source: file, path: ".forge/static-header/run/state.json"}
 ---
 
 This checks the exact terminal cause string `no-progress` was written to
-`state.json`, not `qa-cap` or any other value. It also asserts
-`"escalated": true`: round 1 and round 2's findings are byte-identical,
-so the finding-id set is trivially identical too — guard A fires here
-just as guard B does — before guard B's terminal override wins. Field
-order in `state.json` puts `escalated` ahead of `terminal.cause` (see
-`references/contracts.md`'s example), so a single ordered pattern
-checks both.
+`state.json.terminal.cause`, not `qa-cap` or any other value. Guard B
+fires on a byte-identical report and its terminal override wins over the
+ordinary cap outcome, so this is the only cause that can be correct
+here. This grader asserts that one field and nothing else — it never
+depends on where `escalated` sits in the file, so field order in
+`state.json` cannot make it pass or fail for the wrong reason.
+```
+
+Create `plugins/forge/evals/loop-guard-b-early-stop/graders/state-escalated-true.md`:
+
+```markdown
+---
+type: regex
+pattern: "\"escalated\": true"
+flags: ""
+match: contains
+target: {source: file, path: ".forge/static-header/run/state.json"}
+---
+
+This checks `state.escalated` was set to `true`. Round 1 and round 2's
+findings are byte-identical, so the finding-id set is trivially
+identical too — guard A fires here just as guard B does, and both guards
+run on every FAIL before the cap branch. This grader asserts that one
+field and nothing else, in no particular position relative to
+`terminal.cause`, so it can neither mask nor be masked by the
+cause grader beside it.
 ```
 
 Create `plugins/forge/evals/loop-guard-b-early-stop/graders/no-progress-array-populated.md`:
@@ -4045,7 +4351,7 @@ the exact reason string was recorded.
 - [ ] **Step 11: Validate what exists so far**
 
 Run: `find plugins/forge/evals/loop-guard-b-early-stop -type f`
-Expected: `case.yaml`, `prompt.md`, `setup.sh`, and 3 files under
+Expected: `case.yaml`, `prompt.md`, `setup.sh`, and 4 files under
 `graders/`.
 
 - [ ] **Step 12: `loop-review-changes-fix-regression-approve`**
@@ -4311,7 +4617,14 @@ exit 1
 EOF
 chmod +x .bin/gh
 git add -A && git commit -q -m "eval fixture: gh shim"
-export PATH="$PWD/.bin:$PATH"
+BIN_DIR="$PWD/.bin"
+for RC in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  touch "$RC"
+  if ! grep -qF "$BIN_DIR" "$RC" 2>/dev/null; then
+    echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$RC"
+  fi
+done
+export PATH="$BIN_DIR:$PATH"
 ```
 
 Create `plugins/forge/evals/loop-review-changes-fix-regression-approve/graders/reports-full-cycle.md`:
@@ -4402,8 +4715,12 @@ valid JSON — the plain text:
 
 > I'm still working on this — give me another moment.
 
+No dev round has committed anything to `forge/broken-json-app` — the
+branch is still exactly where `main` was when Step 0 created it.
+
 Per `skills/running-forge/SKILL.md`'s stage-error rule, decide what
-happens now and carry it out to completion.
+happens now and carry it out to completion, including whatever Terminal
+does about pushing and opening a PR.
 ```
 
 Create `plugins/forge/evals/loop-stage-error-terminal/setup.sh`:
@@ -4537,7 +4854,14 @@ exit 1
 EOF
 chmod +x .bin/gh
 git add -A && git commit -q -m "eval fixture: gh shim"
-export PATH="$PWD/.bin:$PATH"
+BIN_DIR="$PWD/.bin"
+for RC in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  touch "$RC"
+  if ! grep -qF "$BIN_DIR" "$RC" 2>/dev/null; then
+    echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$RC"
+  fi
+done
+export PATH="$BIN_DIR:$PATH"
 ```
 
 Create `plugins/forge/evals/loop-stage-error-terminal/graders/reports-stage-error.md`:
@@ -4545,7 +4869,7 @@ Create `plugins/forge/evals/loop-stage-error-terminal/graders/reports-stage-erro
 ```markdown
 ---
 type: llm
-criteria: "The response identifies this as a stage error on the developer agent (two consecutive non-JSON final messages for round 1), records it, and reaches a draft terminal with cause stage-error:developer — opening a draft PR labeled forge:not-passed — never claiming any round actually completed, never fabricating a dev-handoff.json, and never inferring a pass/fail verdict from the agent's prose."
+criteria: "The response identifies this as a stage error on the developer agent (two consecutive non-JSON final messages for round 1), records it, and reaches a draft terminal with cause stage-error:developer. It then finds that the branch carries no commits, so it opens NO pull request at all and says so plainly — the run produced no commits, nothing was pushed, no PR exists — rather than reporting a PR, a PR URL, or a PR-creation failure. It never claims any round actually completed, never fabricates a dev-handoff.json, and never infers a pass/fail verdict from the agent's prose."
 focus: last_message
 ---
 
@@ -4553,8 +4877,15 @@ Per `skills/running-forge/SKILL.md`'s stage-error rule: a dispatched
 agent's final message that is missing or not valid JSON is retried once;
 a second such failure is a stage error, recorded in `state.stageErrors`,
 leading straight to Terminal (draft, cause `stage-error:developer`).
-Score FAIL if the response invents a handoff, treats the prose as a
-progress report, or claims a normal round outcome.
+
+Terminal's nothing-to-push check then runs before either path's push.
+The stage error struck on round 1 before the developer committed
+anything, so `main..forge/broken-json-app` counts `0` commits: the push
+and `gh pr create` are skipped, `terminal.pr` stays `null`, and the
+report says so. Score FAIL if the response invents a handoff, treats the
+prose as a progress report, claims a normal round outcome, opens or
+claims a PR, or reports a PR-creation failure — nothing failed to be
+created here; nothing was attempted.
 ```
 
 Create `plugins/forge/evals/loop-stage-error-terminal/graders/state-stage-error-cause.md`:
@@ -4572,24 +4903,50 @@ This checks the exact cause string `stage-error:developer` was written
 to `state.json.terminal.cause`.
 ```
 
-Create `plugins/forge/evals/loop-stage-error-terminal/graders/draft-pr-with-label.md`:
+Create `plugins/forge/evals/loop-stage-error-terminal/graders/no-pr-created.md`:
 
 ```markdown
 ---
 type: tool_used
 tool: Bash
-input_match: "gh pr create.*--draft"
-min: 1
-max: 1
+input_match: "gh pr create"
+min: 0
+max: 0
 ---
 
-A stage-error terminal is a draft outcome — `gh pr create` must be
-called exactly once, with `--draft`.
+The branch `forge/broken-json-app` was created from `main` and the stage
+error struck on round 1, before the `developer` agent committed
+anything — so `git rev-list --count main..forge/broken-json-app` is `0`.
+Terminal's nothing-to-push check runs before either path's push and
+skips the push and `gh pr create` entirely when that count is `0`.
+`gh pr create` must therefore never be called, with or without
+`--draft`: there is no commit to open a pull request against, and
+opening an empty draft PR would be noise a human has to close.
+```
+
+Create `plugins/forge/evals/loop-stage-error-terminal/graders/report-says-nothing-to-push.md`:
+
+```markdown
+---
+type: regex
+pattern: "no commits to push"
+flags: ""
+match: contains
+target: {source: file, path: ".forge/broken-json-app/run/report.md"}
+---
+
+`report.md` must be written even though no PR was opened, and its
+section 6 must say why rather than leaving `PR: (pending)` or claiming a
+creation failure that never happened. The documented line is
+`PR: none — no commits to push (cause: stage-error:developer)`; this
+grader asserts the load-bearing phrase `no commits to push` reached the
+file. A report that omits it has hidden the real outcome from whoever
+reads the run afterwards.
 ```
 
 - [ ] **Step 15: Add forge to `scripts/eval.sh` and run the suite**
 
-Modify `scripts/eval.sh` in three places, since adding `forge` to
+Modify `scripts/eval.sh` in four places, since adding `forge` to
 `ALL_PLUGINS` means a bare `scripts/eval.sh all --live` now iterates
 over a plugin with no `["live"]`-tagged case at all — unlike every
 other entry, `forge` cannot simply be pointed at `--tag live` and
@@ -4630,6 +4987,25 @@ rather than silently reporting a false failure.
    ```
    (`...` denotes the loop body already in the file, unchanged below the
    inserted `if`.)
+4. The two places that spell the plugin set out for a human — both were
+   already stale before forge (the `usage()` line never listed `prd`) —
+   change the header comment's:
+   ```bash
+   #   <plugin>   One of: prd kanban planning dev qa ship pr   — or "all".
+   ```
+   to:
+   ```bash
+   #   <plugin>   One of: prd kanban planning dev qa ship pr forge — or "all".
+   ```
+   and `usage()`'s:
+   ```bash
+   echo "Usage: scripts/eval.sh <plugin|kanban|planning|dev|qa|ship|pr|all> [--live]" >&2
+   ```
+   to:
+   ```bash
+   echo "Usage: scripts/eval.sh <prd|kanban|planning|dev|qa|ship|pr|forge|all> [--live]" >&2
+   ```
+   so both agree with `ALL_PLUGINS` and with the README's Evals block.
 
 - [ ] **Step 16: Validate the whole evals task**
 

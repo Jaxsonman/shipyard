@@ -232,7 +232,8 @@ burning tokens forever.
 ready pull request; hitting a cap or an oscillation guard still pushes
 the branch and opens a **draft** PR labeled `forge:not-passed`, with the
 in-chat report leading with exactly what is still failing and its
-evidence — never a silent, misleading pass. Resume a dead run with
+evidence — never a silent, misleading pass. If the loop ends with
+nothing to push, forge reports and opens no PR. Resume a dead run with
 `/forge <slug>` again; it picks up from `.forge/<slug>/run/state.json`.
 
 ## How the plugins talk to each other

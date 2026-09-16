@@ -6,9 +6,15 @@ these — the loop is unattended after intent approval, so bring-up
 commands are derived fresh each round from the intent's **How to run**
 section (setup, seed, launch commands, env var names, ports) plus the
 first matching recipe below for anything "How to run" does not specify.
-Apply the first matching recipe in file order — docker-compose
-deliberately outranks node so a composed app is not mis-detected by its
-`package.json`. If neither "How to run" nor the matched recipe
+Apply the first matching recipe in file order. That order is load-
+bearing, not alphabetical, and two precedences are deliberate:
+**docker-compose outranks every language recipe**, so a composed app is
+not mis-detected by its `package.json`; and **CLI-only outranks
+node / npm**, so a package whose only entry point is a `bin` (no server,
+no port, nothing to launch) is brought up as a CLI rather than having
+`qa-orchestrator` wait 60 seconds for a health URL that will never turn
+green. A `package.json` reaches the node / npm recipe only after CLI-only
+has declined it. If neither "How to run" nor the matched recipe
 establishes a port-injection mechanism (see each recipe), bring-up is
 treated as failed: `qa-orchestrator` reports `FAIL` with one blocking
 finding carrying the bring-up command's output. Forge never guesses a
@@ -35,9 +41,30 @@ port, this is a bring-up failure — a hard-coded port cannot receive the
 port this round won, and forge has no human to ask to edit the compose
 file.
 
+## CLI-only
+
+**Detect:** a `bin` entry in `package.json` and no server entry point
+(no `scripts.dev`/`scripts.start` that opens a listener, no server
+dependency, no port reference), or a main package in any language that
+never opens a listener.
+
+**Bring-up:**
+- `setup`: per the matching language recipe below (`npm ci`, venv,
+  `go mod download`)
+- `seed`: omit unless present
+- `run`: omit — there is nothing to launch
+- `test`: per the matching language recipe below
+- `health`: omit
+- `mode`: `cli`
+
+**Port injection:** not applicable. In `cli` mode `qa-orchestrator` skips
+launch and health entirely; bring-up is setup + seed, and verifiers
+invoke the CLI directly.
+
 ## node / npm
 
-**Detect:** `package.json` at repo root (and no compose file).
+**Detect:** `package.json` at repo root (and no compose file, and the
+CLI-only recipe above did not already match it).
 
 **Bring-up:**
 - `setup`: `npm ci` — or `pnpm install --frozen-lockfile` if
@@ -100,20 +127,3 @@ and no test framework.
 - `mode`: `browser`
 
 **Port injection:** the `-l {PORT}` flag shown above.
-
-## CLI-only
-
-**Detect:** a `bin` entry in `package.json`, or a main package that never
-opens a listener (no server dependency, no port reference).
-
-**Bring-up:**
-- `setup`: per the language recipe above (`npm ci`, venv, `go mod download`)
-- `seed`: omit unless present
-- `run`: omit — there is nothing to launch
-- `test`: per the language recipe
-- `health`: omit
-- `mode`: `cli`
-
-**Port injection:** not applicable. In `cli` mode `qa-orchestrator` skips
-launch and health entirely; bring-up is setup + seed, and verifiers
-invoke the CLI directly.

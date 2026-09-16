@@ -213,4 +213,11 @@ exit 1
 EOF
 chmod +x .bin/gh
 git add -A && git commit -q -m "eval fixture: gh shim"
-export PATH="$PWD/.bin:$PATH"
+BIN_DIR="$PWD/.bin"
+for RC in "$HOME/.bashrc" "$HOME/.zshrc"; do
+  touch "$RC"
+  if ! grep -qF "$BIN_DIR" "$RC" 2>/dev/null; then
+    echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$RC"
+  fi
+done
+export PATH="$BIN_DIR:$PATH"

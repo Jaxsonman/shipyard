@@ -23,5 +23,9 @@ valid JSON — the plain text:
 
 > I'm still working on this — give me another moment.
 
+No dev round has committed anything to `forge/broken-json-app` — the
+branch is still exactly where `main` was when Step 0 created it.
+
 Per `skills/running-forge/SKILL.md`'s stage-error rule, decide what
-happens now and carry it out to completion.
+happens now and carry it out to completion, including whatever Terminal
+does about pushing and opening a PR.

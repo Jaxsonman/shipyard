@@ -163,6 +163,14 @@ commit sha this round), `summary`, `filesChanged[]`, `testsAdded[]`,
 `howToRun`, `selfCheck`, `deferred[]`, `fixListAddressed[]` (round 2+:
 the ids from the fix-list you addressed; round 1: `[]`).
 
+`howToRun` passes through the same redaction rule as every log excerpt
+in this loop, because it lands verbatim in `report.md`'s "How it works"
+section and therefore in the PR body: if a command in it carries a
+secret value — an env var assignment, a token, an `Authorization`
+header — keep the variable or header **name** and replace the value with
+`<redacted>`. A reader needs to know which variable to set, never what
+this environment's value for it was.
+
 Confirm `git status` is clean in the worktree before writing the handoff
 — anything uncommitted is a Step 3 verification you missed; resolve it
 first.

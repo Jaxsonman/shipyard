@@ -48,10 +48,12 @@ recipe's defaults.
    variable *name* with no value reachable in this environment is a
    bring-up failure — skip straight to the failure path below, never
    guess a value. Bound every setup, install, and seed command to 600
-   seconds: start it in the background, poll for exit every 5 seconds,
-   and at the deadline kill its process group and treat the expiry as
-   a bring-up failure whose evidence excerpt reads `timed out after
-   600s` followed by the last lines of its output.
+   seconds: start it in the background and in its own process group
+   (`set -m` or `setsid` where available) so the deadline kill reaches
+   every child, poll for exit every 5 seconds, and at the deadline kill
+   its process group and treat the expiry as a bring-up failure whose
+   evidence excerpt reads `timed out after 600s` followed by the last
+   lines of its output.
 2. **Port:** starting at port 4100, probe upward for a free port; bind a
    listener on the first free one and hold it while setup/seed finish,
    then release it and launch the run command in the same step so no
@@ -187,6 +189,20 @@ handles it. Merge:
    new this round: assign it `qa-<round>-<n>`, `<n>` starting at 1 and
    counting only this round's genuinely new findings, in whatever order
    you merged them.
+6. **A budget-exceeded verifier fails the round.** If any verifier's
+   `observations[]` contains an entry starting `budget-exceeded:`, the
+   round `verdict` is `"FAIL"` regardless of every severity present —
+   rule 3 does not get to call such a round a `"PASS"` — and each such
+   verifier contributes one synthesized finding: `severity` `"major"`,
+   `id` assigned by rule 5's scheme exactly like any other new finding,
+   `criterion` `"verification budget exceeded"`, `repro` the single
+   step `"verifier K stopped at its wall-clock budget before reaching:
+   <the observation's remainder — everything after `budget-exceeded:`>"`,
+   and `evidence` exactly one `kind: "command"` entry whose `command` is
+   `tail -n 20 round-N/qa/verifier-K/transcript.md` (that verifier's own
+   transcript path), `exitCode` `0`, and `excerpt` those lines, redacted
+   the same way every other excerpt is. An unfinished verifier is
+   unverified work, never a pass.
 
 Write `round-N/qa/report.json` in the exact shape in
 `${CLAUDE_PLUGIN_ROOT}/references/contracts.md`, `verifierFiles[]`

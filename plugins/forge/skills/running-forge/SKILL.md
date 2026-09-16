@@ -84,7 +84,28 @@ cd "$MAIN_ROOT"
 
 ## Step 0: Preflight
 
-`<slug>` comes from the command invocation. Check, in this exact order,
+`<slug>` comes from the command invocation. **Before any check below** —
+before reading, fetching, appending, or creating anything at all —
+validate it:
+
+```bash
+if printf '%s\n' "<slug>" | grep -Eq '^[a-z0-9][a-z0-9-]{0,63}$'; then
+  echo "slug-ok"
+else
+  echo "slug-invalid"
+  exit 1
+fi
+```
+
+Anything other than a printed `slug-ok` — `slug-invalid`, no output at
+all, or a non-zero exit for any reason — → stop: "slug must be lowercase
+letters, digits and dashes, starting with a letter or digit". The
+`else` branch is what makes this fail closed: every way the test can go
+wrong lands there rather than falling through to the checks below, which
+would otherwise interpolate an unvalidated `<slug>` into paths and
+branch names.
+
+Then check, in this exact order,
 and stop with a plain message on the first failure. Preflight writes
 nothing under `.forge/` and creates no branch or worktree before every
 check passes; it may append the exclude rule and fetch the base branch,
@@ -238,8 +259,9 @@ MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
 REPO_DIR="$(basename "$MAIN_ROOT")"
 WORKTREE="$(dirname "$MAIN_ROOT")/${REPO_DIR}-forge/<slug>"
 cd "$MAIN_ROOT"
-git branch forge/<slug> <baseBranch>
-git worktree add "$WORKTREE" forge/<slug>
+git branch "forge/<slug>" "<baseBranch>" || exit 1
+git worktree add "$WORKTREE" "forge/<slug>" || exit 1
+git -C "$WORKTREE" rev-parse --git-dir >/dev/null 2>&1 || exit 1
 mkdir -p "$WORKTREE/.forge/<slug>"
 cp .forge/<slug>/intent.md "$WORKTREE/.forge/<slug>/intent.md"
 cp -r .forge/<slug>/context "$WORKTREE/.forge/<slug>/context"
@@ -257,6 +279,19 @@ the top of this very block, so it should never be empty, but if it ever
 were, a bare `cd ""` silently no-ops and stays in the main checkout —
 these two lines turn that into a hard failure instead of a commit
 landing on the user's actual branch.)
+
+(The `|| exit 1` on `git branch` and `git worktree add`, plus the
+`rev-parse --git-dir` post-condition before anything else in the block,
+are what make creation fail closed: the branch must have been created,
+the worktree must have been added, and the added directory must actually
+be a working git worktree before a single file is copied into it.)
+
+**The orchestrator writes `state.json` only if that fence exited 0.** On
+a non-zero exit it stops with the fence's output verbatim and creates
+nothing further — no state file, no run directory, no dispatch — so a
+half-made branch or worktree never gets a run recorded against it. The
+user's next `/forge <slug>` then lands on Step 0 check 6's
+`state=absent` collision rule, which names exactly what to remove.
 
 Still from the main checkout root, write the initial state file, with
 `worktree` set to the freshly-recomputed `$WORKTREE`, and
@@ -298,6 +333,23 @@ expansion at all, it is the literal integer from check 4's printed
 output, substituted in by the orchestrator before this block runs. Every
 other heredoc in this skill that writes literal `<slug>`/`<baseBranch>`
 placeholders stays quoted.)
+
+Immediately after that heredoc — and after every later write of
+`state.json` that goes through a heredoc rather than an edit — run the
+sanity fence:
+
+```bash
+MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+cd "$MAIN_ROOT"
+grep -q '<' .forge/<slug>/run/state.json && exit 1 || true
+```
+
+A leftover `<placeholder>` means a substitution was missed; stop. No
+field this skill ever writes into `state.json` legitimately contains a
+`<` character, so a single match is proof that a literal like `<ahead>`
+or `<slug>` reached disk unsubstituted — a run started on that file
+would branch on nonsense. Do not repair it in place: stop, report the
+grep's output, and remove `.forge/<slug>/run/` before starting over.
 
 Continue to Step 1 with `devRound` about to become `1`.
 
@@ -668,8 +720,12 @@ passed to `gh pr create --body-file`), in exactly this section order:
 6. **PR link, branch, worktree state.** The PR URL, `forge/<slug>`, and
    — draft only — the worktree removal command. Written as the literal
    line `PR: (pending)` the first time this section is produced (below),
-   corrected afterward once `gh pr create` returns a URL, or to
-   "PR creation failed: <error>" if it never does.
+   corrected afterward once `gh pr create` (or Terminal's `gh pr view`
+   fallback) returns a URL, or to "PR creation failed: <error>" if
+   neither ever does. The one case where it is written right rather than
+   corrected is the nothing-to-push outcome, where it reads
+   `PR: none — no commits to push (cause: <cause>)` and no PR call runs
+   at all.
 
 This section is written **twice** per Terminal call, never once: first
 before any push or PR call (its section 6 cannot know the PR URL yet),
@@ -693,6 +749,42 @@ once here: `<pr_url_or_null>` means substitute the URL that fence's
 trailing `echo "$PR_URL"` printed, quoted as a JSON string; if that line
 was empty, substitute the bare `null` instead.
 
+**Nothing to push — checked once, before either path below.** A run can
+reach Terminal with an empty branch: a stage error on round 1, before
+the developer's first commit, is the ordinary way it happens. Run this
+fence first, whatever `state.terminal.kind` says:
+
+```bash
+MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+REPO_DIR="$(basename "$MAIN_ROOT")"
+WORKTREE="$(dirname "$MAIN_ROOT")/${REPO_DIR}-forge/<slug>"
+cd "$MAIN_ROOT"
+git -C "$WORKTREE" rev-list --count "<baseBranch>..forge/<slug>"
+```
+
+A printed `0` → **skip the push and `gh pr create` entirely** on
+whichever path below would have run them (the Ready path's step 3, the
+Draft path's step 2, and the label calls that ride with it). Instead:
+write `report.md` once per "Writing report.md" above — this is the one
+Terminal case where it is written once rather than twice, since no PR
+URL will ever arrive to correct — with its section 6 as the literal line
+
+```
+PR: none — no commits to push (cause: <cause>)
+```
+
+where `<cause>` is `state.terminal.cause`, or the literal word `none` on
+a ready outcome where that field is `null`. Then record
+`state.terminal.pr = null`, `state.phase = "terminal"`, save, and **keep
+the worktree** — on the ready path this means step 2's copy-out and step
+6's `git worktree remove` do not run either, because nothing was opened
+to remove it in favour of. Say it plainly in the in-chat report: the run
+produced no commits, so no branch was pushed and no PR was opened, and
+name the cause. A non-zero count → continue with the path below,
+unchanged. The fence itself failing (non-zero exit — a missing worktree,
+an unreadable base ref) is treated exactly like a printed `0`: fail
+closed rather than push a branch whose contents could not be counted.
+
 **Ready** (`state.terminal.kind == "ready"`, set by Step 5's `APPROVE`
 branch), in this exact order:
 
@@ -713,7 +805,8 @@ branch), in this exact order:
    (`state.json`/`report.md` already live at main-root and are never
    present under the worktree's copy, so this merges round-*/review-*
    directories in without touching either.)
-3. Push and open the PR — `$REPO` and `$TITLE` computed here, in this
+3. Push and open the PR (skipped entirely when the nothing-to-push
+   check above printed `0`) — `$REPO` and `$TITLE` computed here, in this
    same fence, not carried in from anywhere else:
    ```bash
    MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
@@ -722,9 +815,22 @@ branch), in this exact order:
    PROBLEM_LINE="$(sed -n '/^## Problem$/,/^## /{/^## /d;/./p;}' .forge/<slug>/intent.md | head -1)"
    TITLE="<slug>: $PROBLEM_LINE"
    git -C <worktree> push -u origin forge/<slug>
-   PR_URL="$(gh pr create --repo "$REPO" --base <baseBranch> --head forge/<slug> --title "$TITLE" --body-file .forge/<slug>/run/report.md)"
+   PR_URL="$(gh pr create --repo "$REPO" --base <baseBranch> --head forge/<slug> --title "$TITLE" --body-file .forge/<slug>/run/report.md)" || PR_URL=""
+   if [ -z "$PR_URL" ]; then
+     PR_URL="$(gh pr view "forge/<slug>" --repo "$REPO" --json url -q .url 2>/dev/null)" || PR_URL=""
+   fi
    echo "$PR_URL"
    ```
+   (`gh pr create` failing does not by itself mean no PR exists — the
+   commonest cause is that this exact branch already has one open, from a
+   resumed run whose earlier Terminal died after creating it. So a
+   failed create falls back to `gh pr view "forge/<slug>"`, and a
+   non-empty URL from either call is the PR: it is echoed as the same
+   trailing `PR_URL` line the steps below read. **Only when both come
+   back empty** is this a PR-creation failure — see "Push or PR creation
+   itself fails" below. This is what makes Terminal idempotent across a
+   re-entry: running it twice opens one PR, not two, and never reports a
+   failure for a PR that is sitting open.)
 4. Rewrite report.md's PR line with the real URL — read from step 3's
    printed output and substituted below as the literal `<pr_url>`, the
    same way check 4's `<ahead>` works, never as a `$PR_URL` shell
@@ -751,7 +857,8 @@ names which of `no-progress`, `qa-cap`, `review-cap`, or
 `stage-error:<agent>`), same write-then-correct order:
 
 1. Write `.forge/<slug>/run/report.md`, section 6 as `PR: (pending)`.
-2. `$REPO` and `$TITLE` computed here, in this same fence:
+2. `$REPO` and `$TITLE` computed here, in this same fence (the whole
+   fence is skipped when the nothing-to-push check above printed `0`):
    ```bash
    MAIN_ROOT="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
    cd "$MAIN_ROOT"
@@ -760,13 +867,22 @@ names which of `no-progress`, `qa-cap`, `review-cap`, or
    TITLE="<slug>: $PROBLEM_LINE"
    gh label create "forge:not-passed" --repo "$REPO" --color "B60205" --description "Forge run finished without a full pass — see the run report" --force
    git -C <worktree> push -u origin forge/<slug>
-   PR_URL="$(gh pr create --repo "$REPO" --base <baseBranch> --head forge/<slug> --draft --title "$TITLE" --body-file .forge/<slug>/run/report.md)"
-   gh pr edit "$PR_URL" --repo "$REPO" --add-label "forge:not-passed"
+   PR_URL="$(gh pr create --repo "$REPO" --base <baseBranch> --head forge/<slug> --draft --title "$TITLE" --body-file .forge/<slug>/run/report.md)" || PR_URL=""
+   if [ -z "$PR_URL" ]; then
+     PR_URL="$(gh pr view "forge/<slug>" --repo "$REPO" --json url -q .url 2>/dev/null)" || PR_URL=""
+   fi
+   [ -n "$PR_URL" ] && gh pr edit "$PR_URL" --repo "$REPO" --add-label "forge:not-passed"
    echo "$PR_URL"
    ```
    The label-create and label-add steps are best-effort — a failure in
    either is reported in `report.md`'s outcome line but never blocks the
    PR itself (skip straight to `gh pr create` if label creation failed).
+   The `gh pr view` fallback is the same one the ready path's step 3
+   uses and for the same reason: a failed `gh pr create` most often
+   means this branch already has an open PR from an earlier, half-
+   finished Terminal, and re-entering must find that PR rather than
+   report a failure or open a second one. Only when both calls come back
+   empty is this a PR-creation failure.
 3. Rewrite report.md's PR line with the literal `<pr_url>` read from step
    2's printed output, the same way the ready path's step 4 does.
 4. Record `state.terminal = {"kind": "draft", "cause": "<cause>", "pr":
@@ -774,7 +890,9 @@ names which of `no-progress`, `qa-cap`, `review-cap`, or
    step runs on this path, since nothing is removed — and print the
    removal command (`git worktree remove <worktree>`) in the report.
 
-**Push or PR creation itself fails** (network, auth, permissions): print
+**Push or PR creation itself fails** (network, auth, permissions — and,
+for PR creation, only once both `gh pr create` and the `gh pr view`
+fallback have come back empty): print
 the error verbatim in the report, correct report.md's PR line to
 "PR creation failed: <error>" instead of a URL, set
 `state.terminal.pr = null`, still set `phase = "terminal"` and the

@@ -116,8 +116,13 @@ scenario 2's (`devQaCap` set to 2 above).
   text.
 - [ ] **Scenario 2 — forced fail.** `/forge forced-fail-smoke` runs
   `devQaCap` rounds, each genuinely attempting and failing the
-  unsatisfiable criterion; `state.json` reaches `terminal.kind: "draft"`,
-  `terminal.cause: "qa-cap"`; a **draft** PR exists on `shipyard-e2e`
+  unsatisfiable criterion; `state.json` reaches `terminal.kind: "draft"`
+  with `terminal.cause` of **either `"qa-cap"` or `"no-progress"`** —
+  both are correct outcomes for a genuinely unsatisfiable criterion, and
+  which one lands depends on whether the QA reports came back
+  byte-identical (guard B fires and overrides the cap) or merely
+  same-id (guard A escalates and the run rides to the cap); a **draft**
+  PR exists on `shipyard-e2e`
   labeled `forge:not-passed`; the worktree
   `../shipyard-e2e-forge/forced-fail-smoke` was **kept**; the in-chat
   report's Outcome section leads with "Not passed" and inlines the
@@ -137,7 +142,25 @@ scenario 2's (`devQaCap` set to 2 above).
   manually once its draft PR has been inspected
   (`git worktree remove ../shipyard-e2e-forge/forced-fail-smoke`); close
   both PRs on `shipyard-e2e` once reviewed, since they are throwaway
-  smoke artifacts, not real features.
+  smoke artifacts, not real features. Then delete the branches both runs
+  pushed, so a re-run of this recipe starts from a clean scratch repo
+  instead of tripping Step 0's collision rule:
+
+  ```bash
+  git push origin --delete forge/full-pass-smoke forge/forced-fail-smoke
+  git branch -D forge/full-pass-smoke forge/forced-fail-smoke
+  ```
+
+  Finally remove the main-root run directories both scenarios wrote —
+  they are git-excluded, so nothing else will ever clean them up:
+
+  ```bash
+  rm -rf .forge/full-pass-smoke .forge/forced-fail-smoke
+  ```
+
+  (Delete the remote branches only after the PRs are closed; closing a
+  PR whose head branch is already gone is fiddlier than the other
+  order.)
 
 ## Outcome
 

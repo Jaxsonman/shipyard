@@ -4,7 +4,7 @@
 #
 # Usage: scripts/eval.sh <plugin|all> [--live]
 #
-#   <plugin>   One of: prd kanban planning dev qa ship pr   — or "all".
+#   <plugin>   One of: prd kanban planning dev qa ship pr forge — or "all".
 #   --live     Run the plugin's opt-in live case(s) (tag "live") instead of
 #              the default, board-free cases (tag "default"). Live cases
 #              talk to a real board and must never run unattended in CI.
@@ -28,7 +28,7 @@
 set -u
 
 usage() {
-  echo "Usage: scripts/eval.sh <plugin|kanban|planning|dev|qa|ship|pr|all> [--live]" >&2
+  echo "Usage: scripts/eval.sh <prd|kanban|planning|dev|qa|ship|pr|forge|all> [--live]" >&2
   exit 2
 }
 

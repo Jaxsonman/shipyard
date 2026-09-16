@@ -313,6 +313,17 @@ per the rule in `agents/qa-orchestrator.md`.
 `"blocking"` or `"major"`; a report with only `"minor"` findings, or
 none, is `"PASS"`.
 
+One kind of `findings[]` entry is not merged from any verifier but
+**synthesized** by `qa-orchestrator`: for every verifier whose
+`observations[]` carries an entry starting `budget-exceeded:` it writes
+one `"major"` finding with `criterion` `"verification budget exceeded"`,
+a `repro` naming what that verifier never reached, and one
+`kind: "command"` evidence entry running `tail -n 20` against that
+verifier's `round-N/qa/verifier-K/transcript.md`. Its presence forces
+this round's `verdict` to `"FAIL"` whatever the other severities are —
+a verifier that ran out of budget left work unverified, which is never a
+pass.
+
 ## `.forge/<slug>/run/review-R/review.json` (worktree)
 
 Written by `peer-reviewer`.

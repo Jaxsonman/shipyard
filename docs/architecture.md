@@ -16,6 +16,7 @@ One page on how the pieces fit. For the wire protocol itself, see
 | `ship` | `/ship` | Conductor over dev/qa |
 | `pr` | `/pr` | Autonomous worker, pipeline exit |
 | `dashboard` | `/dashboard` | Read-mostly board view |
+| `forge` | `/intent`, `/forge` | Autonomous, board-free |
 
 Each stage plugin is independently installable. `ship` owns no worker
 logic itself: it invokes `dev` and `qa`'s agents/skills cross-plugin.
@@ -85,6 +86,22 @@ repeats the previous round's (no progress) or QA's findings are
 byte-identical to the previous round's (oscillation). Before posting the
 review packet, `ship` dry-runs a merge against `baseBranch` and records
 any conflict there rather than surfacing it later at `pr` time.
+
+## Forge: a board-free workflow
+
+`forge` is deliberately independent of everything above: it never reads
+or writes the board, calls no other plugin's agent or skill, and needs
+no `kanban.config.json` or `ship.config.json`. Its only human step is an
+approved `Intent.md`; all pipeline state after that lives in files under
+`.forge/<slug>/` (a small `state.json` plus one JSON artifact per dev,
+QA, and review round), never in a ticket comment. The session model
+itself plays ship's role — `skills/running-forge/SKILL.md` is a
+dispatch-read-branch-print procedure with no board mechanics to own,
+which is what keeps its own reasoning cheap even on an expensive model.
+Where `ship` conducts `dev` and `qa` as separate plugins, `forge` ships
+its own four agents (`developer`, `qa-orchestrator`, `qa-verifier`,
+`peer-reviewer`) so it has zero runtime dependency on any other plugin
+in the marketplace.
 
 ## Human review gate and the `pr` exit
 

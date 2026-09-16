@@ -13,7 +13,8 @@
 # Every directory under plugins/ is synced — there is no per-plugin list, so a
 # plugin added later is picked up automatically. Vendored scripts with no
 # counterpart in shared/scripts/ are removed, so a rename does not leave a
-# stale copy behind.
+# stale copy behind. A plugin that ships no shared code opts out with an
+# empty `.no-shared-sync` marker file at its root (forge does).
 #
 # Usage: bash scripts/sync-shared.sh [--dest <dir>] [--quiet] [--help]
 #   --dest <dir>  Write the vendored tree under <dir> instead of the repo root.
@@ -61,6 +62,7 @@ say() { [ "$QUIET" -eq 1 ] || echo "$@"; }
 for plugin_dir in "$ROOT"/plugins/*/; do
   [ -d "$plugin_dir" ] || continue
   name="$(basename "$plugin_dir")"
+  if [ -e "$plugin_dir/.no-shared-sync" ]; then say "skipped plugins/$name (.no-shared-sync)"; continue; fi
 
   out_scripts="$DEST/plugins/$name/scripts"
   out_refs="$DEST/plugins/$name/references"

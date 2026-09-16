@@ -61,6 +61,13 @@
       "description": "Visual pipeline dashboard — local web UI for tickets, stages, per-stage stats, and board actions.",
       "category": "productivity",
       "keywords": ["dashboard", "ui", "pipeline", "sdlc", "github"]
+    },
+    {
+      "name": "forge",
+      "source": "./plugins/forge",
+      "description": "Intent-driven autonomous dev loop — approve an Intent.md, get a PR. Board-free; no other plugin required.",
+      "category": "productivity",
+      "keywords": ["forge", "autonomous", "intent", "dev-loop", "sdlc", "playwright"]
     }
   ]
 }

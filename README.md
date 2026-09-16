@@ -11,6 +11,10 @@ board-wide view over everything. The board (GitHub Issues or Jira) is the
 single source of truth for pipeline state; every plugin reads and writes it
 the same way, defined once in the contract below.
 
+`forge` is a second, independent workflow on the same marketplace: skip
+tickets and the board entirely — approve an `Intent.md` and an unattended
+developer/QA/review loop opens a PR for you. See its own section below.
+
 ## Install
 
 Shipyard is a [Claude Code plugin marketplace](https://docs.claude.com/en/docs/claude-code/plugin-marketplaces).
@@ -61,6 +65,7 @@ pin versions, so every new commit is an available update.
 | 6 | `pr` | ✅ Available | Open the PR for an approved ticket and hand off to your CI/CD |
 | n/a | `ship` | ✅ Available | Conductor, drives one planned ticket through the dev/QA loop |
 | n/a | `dashboard` | ✅ Available | Local web UI over the board: stages, timeline, approve/reassign |
+| n/a | `forge` | 🚧 In progress | Board-free autonomous loop — approve an Intent.md, get a PR |
 
 ## Usage
 
@@ -213,7 +218,9 @@ Run `bash scripts/sync-shared.sh` to regenerate the vendored copies under
 `plugins/*/scripts/` and `plugins/*/references/contract.md`. **Those
 copies must never be hand-edited.** Run the sync again after merging any
 branch that touched `shared/` or added a plugin; the pre-commit hook and CI
-fail on drift.
+fail on drift. A plugin that carries no board/contract logic of its own
+(`forge`) opts out with an empty `.no-shared-sync` marker file at its root,
+so the sync skips vendoring into it entirely.
 
 ## Backend support matrix
 

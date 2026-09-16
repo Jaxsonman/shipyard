@@ -1,0 +1,13 @@
+{
+  "name": "forge",
+  "description": "Intent-driven autonomous dev loop — approve an Intent.md, get a PR. Board-free; no other plugin required.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jaxson Mansouri",
+    "email": "mansouricobusiness@gmail.com"
+  },
+  "repository": "https://github.com/Jaxsonman/shipyard",
+  "license": "MIT",
+  "mcpServers": "./.mcp.json",
+  "keywords": ["forge", "autonomous", "intent", "dev-loop", "sdlc", "playwright"]
+}

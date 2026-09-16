@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "forge: two malformed dev-agent responses become a stage-error draft terminal"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

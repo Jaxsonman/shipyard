@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "forge: same finding id two rounds escalates the developer model, then hits devQaCap"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

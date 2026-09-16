@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "intent interview asks only about still-placeholder sections"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

@@ -10,7 +10,10 @@
 #              talk to a real board and must never run unattended in CI.
 #
 # Every case in plugins/<x>/evals/ carries tags: ["default"] except exactly
-# one opt-in "live" case per plugin, which carries tags: ["live"] only.
+# one opt-in "live" case per plugin, which carries tags: ["live"] only --
+# except forge, which is board-free by design and carries no "live" case;
+# scripts/eval.sh skips it under --live rather than reporting a false
+# failure for a case that was never meant to exist.
 # `--tag` is how we select one set without the other — the CLI does not
 # exclude tagged cases from a plain run, so the tag filter is load-bearing,
 # not decorative.
@@ -29,7 +32,7 @@ usage() {
   exit 2
 }
 
-ALL_PLUGINS="prd kanban planning dev qa ship pr"
+ALL_PLUGINS="prd kanban planning dev qa ship pr forge"
 MAX_COST_USD="${EVAL_MAX_COST_USD:-3}"
 THRESHOLD="${EVAL_THRESHOLD:-0.8}"
 
@@ -70,6 +73,10 @@ echo "eval.sh: reports under $REPORT_DIR" >&2
 overall_exit=0
 
 for p in $PLUGINS; do
+  if $LIVE && [ "$p" = "forge" ]; then
+    echo "forge: SKIP (board-free -- no [\"live\"] case; see docs/superpowers/reviews/2026-09-15-forge-acceptance-recipe.md)"
+    continue
+  fi
   dir="$REPO_ROOT/plugins/$p"
   eval_dir="$dir/evals"
   if [ ! -d "$eval_dir" ]; then

@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "forge: byte-identical QA reports two rounds stop the run early, below devQaCap"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

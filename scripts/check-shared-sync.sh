@@ -49,6 +49,7 @@ done < <(find "$TMP" -type f | sort)
 for plugin_dir in "$ROOT"/plugins/*/; do
   [ -d "$plugin_dir" ] || continue
   name="$(basename "$plugin_dir")"
+  if [ -e "$plugin_dir/.no-shared-sync" ]; then continue; fi
   for existing in "$plugin_dir"scripts/*; do
     [ -e "$existing" ] || continue
     rel="plugins/$name/scripts/$(basename "$existing")"

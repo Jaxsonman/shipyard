@@ -149,7 +149,7 @@ The orchestrator never keeps state in its head. Every branch decision reads `sta
 |---|---|---|---|---|
 | `developer` | all | `sonnet` | medium | `opus` when guard A fires |
 | `qa-orchestrator` | Agent, Read, Bash | `sonnet` | low | none |
-| `qa-verifier` | Bash, Read, Playwright MCP | `sonnet` | medium | none |
+| `qa-verifier` | Bash, Read, Write, Playwright MCP | `sonnet` | medium | none |
 | `peer-reviewer` | Read, Grep, Glob, Bash | `opus` | high | none |
 
 The orchestrator (the session model following `running-forge`) does no reasoning beyond dispatch, read JSON, branch, print. On a Fable session that stays cheap because there is nothing to think about.
@@ -245,3 +245,4 @@ The implementation plan (`docs/superpowers/plans/2026-09-15-forge-plugin.md`) re
 3. **qa-orchestrator has three modes** carried in the prompt: `full` (default), `bring-up`, `merge-only`. In `full` mode, if nested dispatch is unavailable it ends with the exact message `nested-dispatch-unavailable`; the loop then runs `bring-up`, dispatches the verifiers itself, and runs `merge-only`. The handshake shapes are in `references/contracts.md`.
 4. **Terminal ordering.** `report.md` is written first with `PR: (pending)`, then `gh pr create --body-file` runs, then the local copy's PR line is rewritten with the URL. The whole `.forge/` directory is git-excluded and `intent.md`/`context/` are force-added on the branch.
 5. **Repo conventions.** Agent frontmatter is `name` and `description` only; effort and tool scope are stated in each prompt body. Plugin-path changes land in two commits to satisfy the README pre-commit hook. `scripts/eval.sh --live` skips forge, which has no live case.
+6. Verifiers carry a 20-minute budget and developers a 60-minute budget; a budget-exceeded verifier fails its round.

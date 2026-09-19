@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: "forge: round-1 PASS, review APPROVE, ready PR opened"
+tags: ["default"]
+runs: 1
+context:
+  scaffold_script: "setup.sh"

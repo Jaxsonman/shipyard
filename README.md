@@ -11,6 +11,10 @@ board-wide view over everything. The board (GitHub Issues or Jira) is the
 single source of truth for pipeline state; every plugin reads and writes it
 the same way, defined once in the contract below.
 
+`forge` is a second, independent workflow on the same marketplace: skip
+tickets and the board entirely — approve an `Intent.md` and an unattended
+developer/QA/review loop opens a PR for you. See its own section below.
+
 ## Install
 
 Shipyard is a [Claude Code plugin marketplace](https://docs.claude.com/en/docs/claude-code/plugin-marketplaces).
@@ -32,11 +36,12 @@ Then install the stages you want:
 /plugin install ship@shipyard
 /plugin install pr@shipyard
 /plugin install dashboard@shipyard
+/plugin install forge@shipyard
 ```
 
-Verify with `/plugin`. It should list all eight as installed, and `/prd`,
-`/kanban`, `/spec`, `/plan`, `/dev`, `/qa`, `/ship`, `/pr`, and `/dashboard`
-should autocomplete as slash commands.
+Verify with `/plugin`. It should list all nine as installed, and `/prd`,
+`/kanban`, `/spec`, `/plan`, `/dev`, `/qa`, `/ship`, `/pr`, `/dashboard`,
+`/intent`, and `/forge` should autocomplete as slash commands.
 
 **Update:** `/plugin marketplace update shipyard` refreshes the manifest;
 follow with `/plugin update <name>@shipyard` per plugin. Shipyard doesn't
@@ -61,6 +66,7 @@ pin versions, so every new commit is an available update.
 | 6 | `pr` | ✅ Available | Open the PR for an approved ticket and hand off to your CI/CD |
 | n/a | `ship` | ✅ Available | Conductor, drives one planned ticket through the dev/QA loop |
 | n/a | `dashboard` | ✅ Available | Local web UI over the board: stages, timeline, approve/reassign |
+| n/a | `forge` | ✅ Available | Board-free autonomous loop — approve an Intent.md, get a PR |
 
 ## Usage
 
@@ -183,6 +189,53 @@ in the sidebar. Writes only Approve (`Awaiting Review` → hands off to
 `/pr`; `Needs Human` → resets to `ship:planned`) and Reassign. It never
 launches a dev round, QA pass, or `/pr`.
 
+## Forge — a second, independent workflow
+
+Forge does not use the board, tickets, or any other plugin at runtime.
+One human step, then an unattended loop:
+
+### `/intent`
+
+```
+/intent reef-tank-alerts
+```
+
+First run scaffolds `.forge/reef-tank-alerts/intent.md` from a template
+(Problem, Desired outcome, Done means, Constraints, Context, Out of
+scope, How to run) and a `context/` folder beside it, then stops so you
+can fill it in. Re-running interviews you one question at a time, but
+only for sections still holding template placeholder text — anything
+you already wrote is left alone — then reads the whole intent back and
+asks for approval. `/forge` refuses to start on an intent that is not
+`status: approved`.
+
+### `/forge`
+
+```
+/forge reef-tank-alerts
+```
+
+Preflights the intent and creates `forge/reef-tank-alerts` as a branch
+and sibling worktree, then loops: a `developer` agent builds against
+"Done means", a `qa-orchestrator` fans out verifiers (`acceptance`,
+`adversarial`, `regression` lenses, evidence-only findings) and merges
+their verdict, failures loop back to the developer, and once QA passes a
+`peer-reviewer` checks the diff for simplicity and correctness — a
+review that asks for changes goes through one more dev fix round and a
+regression-only QA pass before the reviewer looks again. Caps
+(`devQaCap` 3, `reviewCap` 2 by default, `.claude/forge.config.json`)
+and two oscillation guards (repeated findings escalate the developer's
+model; byte-identical reports stop the run early) keep a stuck run from
+burning tokens forever.
+
+**Where a run ends:** a full pass pushes `forge/<slug>` and opens a
+ready pull request; hitting a cap or an oscillation guard still pushes
+the branch and opens a **draft** PR labeled `forge:not-passed`, with the
+in-chat report leading with exactly what is still failing and its
+evidence — never a silent, misleading pass. If the loop ends with
+nothing to push, forge reports and opens no PR. Resume a dead run with
+`/forge <slug>` again; it picks up from `.forge/<slug>/run/state.json`.
+
 ## How the plugins talk to each other
 
 Every plugin parses the same labels, comment headers, metrics footer, and
@@ -213,7 +266,9 @@ Run `bash scripts/sync-shared.sh` to regenerate the vendored copies under
 `plugins/*/scripts/` and `plugins/*/references/contract.md`. **Those
 copies must never be hand-edited.** Run the sync again after merging any
 branch that touched `shared/` or added a plugin; the pre-commit hook and CI
-fail on drift.
+fail on drift. A plugin that carries no board/contract logic of its own
+(`forge`) opts out with an empty `.no-shared-sync` marker file at its root,
+so the sync skips vendoring into it entirely.
 
 ## Backend support matrix
 
@@ -236,14 +291,20 @@ The pre-commit hook and `.github/workflows/ci.yml` both run all four.
 
 ### Evals
 
-Every plugin (`prd`, `kanban`, `planning`, `dev`, `qa`, `ship`, `pr`) has a
-`claude plugin eval` suite under `plugins/<x>/evals/`: 2-4 deterministic,
-board-free cases plus exactly one opt-in `["live"]` case per plugin that
-talks to a real board (`Jaxsonman/shipyard-e2e`).
+Every plugin except `dashboard` has a `claude plugin eval` suite under
+`plugins/<x>/evals/`: `prd`, `kanban`, `planning`, `dev`, `qa`, `ship`,
+and `pr` each carry 2-4 deterministic, board-free cases plus exactly one
+opt-in `["live"]` case that talks to a real board
+(`Jaxsonman/shipyard-e2e`). `forge` is board-free by design, so its
+whole suite — the intent gate, the interview, and six stubbed-loop
+scenarios covering every branch in the loop procedure — is
+`["default"]`-tagged; there is no live board case to opt into. Its
+closest live-equivalent check is the end-to-end acceptance recipe under
+`docs/superpowers/reviews/`, run by hand against a scratch repo.
 
 ```bash
-scripts/eval.sh <prd|kanban|planning|dev|qa|ship|pr|all>   # default (board-free) cases
-scripts/eval.sh <plugin> --live                             # that plugin's opt-in live case
+scripts/eval.sh <prd|kanban|planning|dev|qa|ship|pr|forge|all>   # default (board-free) cases
+scripts/eval.sh <plugin> --live                                   # that plugin's opt-in live case (forge has none)
 ```
 
 Runs `claude plugin eval <plugin dir> --tag <default|live> --runs 1
